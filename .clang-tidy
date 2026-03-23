@@ -4,6 +4,10 @@ Checks: "*,
         -google-readability-avoid-underscore-in-googletest-name,
         -readability-redundant-access-specifiers,
         -readability-named-parameter,
-        -hicpp-named-parameter"
+        -hicpp-named-parameter,
+        -hicpp-special-member-functions,
+        -altera-unroll-loops,
+        -readability-magic-numbers,
+        -readability-function-cognitive-complexity"
 FormatStyle: none
 WarningsAsErrors: "*"

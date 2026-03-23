@@ -1,0 +1,9 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+find_dependency(swiss)
+
+include("${CMAKE_CURRENT_LIST_DIR}/flow-targets.cmake")
+
+check_required_components(flow)

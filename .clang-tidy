@@ -1,0 +1,9 @@
+Checks: "*,
+        -llvm*,
+        -fuchsia*,
+        -google-readability-avoid-underscore-in-googletest-name,
+        -readability-redundant-access-specifiers,
+        -readability-named-parameter,
+        -hicpp-named-parameter"
+FormatStyle: none
+WarningsAsErrors: "*"

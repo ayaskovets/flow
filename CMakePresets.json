@@ -1,0 +1,209 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 25,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "base",
+            "hidden": true,
+            "generator": "Unix Makefiles",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "installDir": "${sourceDir}/build/${presetName}/install",
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "CMAKE_COLOR_DIAGNOSTICS": "ON"
+            }
+        },
+        {
+            "name": "config-debug",
+            "hidden": true,
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_CXX_FLAGS": "-g -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wcast-align -Wcast-qual -Wnull-dereference -Woverloaded-virtual -Werror -fsanitize=address"
+            }
+        },
+        {
+            "name": "config-release",
+            "hidden": true,
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_CXX_FLAGS": "-O3 -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wcast-align -Wcast-qual -Wnull-dereference -Woverloaded-virtual -Werror"
+            }
+        },
+        {
+            "name": "with-tests",
+            "hidden": true,
+            "cacheVariables": {
+                "BUILD_TESTING": "ON"
+            }
+        },
+        {
+            "name": "without-tests",
+            "hidden": true,
+            "cacheVariables": {
+                "BUILD_TESTING": "OFF"
+            }
+        },
+        {
+            "name": "with-benchmarks",
+            "hidden": true,
+            "cacheVariables": {
+                "BUILD_BENCHMARKS": "ON"
+            }
+        },
+        {
+            "name": "without-benchmarks",
+            "hidden": true,
+            "cacheVariables": {
+                "BUILD_BENCHMARKS": "OFF"
+            }
+        },
+        {
+            "name": "debug",
+            "displayName": "Configure interface library (debug)",
+            "inherits": [
+                "base",
+                "config-debug",
+                "with-tests",
+                "with-benchmarks"
+            ]
+        },
+        {
+            "name": "release",
+            "displayName": "Configure interface library (release)",
+            "inherits": [
+                "base",
+                "config-debug",
+                "with-tests",
+                "with-benchmarks"
+            ]
+        },
+        {
+            "name": "install",
+            "displayName": "Configure/Install interface library (release)",
+            "inherits": [
+                "base",
+                "config-release",
+                "without-tests",
+                "without-benchmarks"
+            ]
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "debug",
+            "configurePreset": "debug"
+        },
+        {
+            "name": "release",
+            "configurePreset": "release"
+        },
+        {
+            "name": "install",
+            "configurePreset": "install",
+            "targets": "install"
+        }
+    ],
+    "testPresets": [
+        {
+            "name": "base-test",
+            "hidden": true,
+            "output": {
+                "outputOnFailure": true
+            },
+            "execution": {
+                "noTestsAction": "error",
+                "stopOnFailure": false
+            },
+            "filter": {
+                "exclude": {
+                    "label": "benchmark"
+                }
+            }
+        },
+        {
+            "name": "base-benchmark",
+            "hidden": true,
+            "output": {
+                "outputOnFailure": true,
+                "verbosity": "verbose"
+            },
+            "execution": {
+                "noTestsAction": "error",
+                "stopOnFailure": false
+            },
+            "filter": {
+                "include": {
+                    "label": "benchmark"
+                }
+            }
+        },
+        {
+            "name": "debug",
+            "configurePreset": "debug",
+            "inherits": "base-test"
+        },
+        {
+            "name": "release",
+            "configurePreset": "release",
+            "inherits": "base-test"
+        },
+        {
+            "name": "benchmark",
+            "configurePreset": "release",
+            "inherits": "base-benchmark"
+        }
+    ],
+    "workflowPresets": [
+        {
+            "name": "test",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "debug"
+                },
+                {
+                    "type": "build",
+                    "name": "debug"
+                },
+                {
+                    "type": "test",
+                    "name": "debug"
+                }
+            ]
+        },
+        {
+            "name": "benchmark",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "release"
+                },
+                {
+                    "type": "build",
+                    "name": "release"
+                },
+                {
+                    "type": "test",
+                    "name": "benchmark"
+                }
+            ]
+        },
+        {
+            "name": "install",
+            "steps": [
+                {
+                    "type": "configure",
+                    "name": "install"
+                },
+                {
+                    "type": "build",
+                    "name": "install"
+                }
+            ]
+        }
+    ]
+}

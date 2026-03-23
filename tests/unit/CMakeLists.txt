@@ -33,6 +33,7 @@ set(SOURCES
     lockless_mpmc_queue_test.cpp
     queue_test.cpp
     single_threaded_queue_test.cpp
+    templates.hpp
     waitfree_spsc_queue_test.cpp)
 
 # ------------------------------------------------------------------------------

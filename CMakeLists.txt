@@ -24,15 +24,16 @@ add_library(flow::flow ALIAS flow)
 # ------------------------------------------------------------------------------
 
 set(HEADERS
-    include/flow/lockfree_mpsc_queue.hpp
+    include/flow/locked_mpmc_queue.hpp
     include/flow/locked_std_deque.hpp
     include/flow/lockfree_mpmc_queue.hpp
+    include/flow/lockfree_mpsc_queue.hpp
     include/flow/lockfree_spmc_queue.hpp
-    include/flow/locked_mpmc_queue.hpp
-    include/flow/waitfree_spsc_queue.hpp
-    include/flow/queue.hpp
     include/flow/lockless_mpmc_queue.hpp
-    include/flow/single_threaded_queue.hpp)
+    include/flow/queue.hpp
+    include/flow/single_threaded_queue.hpp
+    include/flow/waitfree_spsc_queue.hpp
+)
 
 # ------------------------------------------------------------------------------
 # target

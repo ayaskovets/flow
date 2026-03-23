@@ -5,17 +5,21 @@ IndentWidth: 2
 ---
 Language: Cpp
 IncludeBlocks: Regroup
+SortIncludes: true
 IncludeCategories:
-  - Regex: '^<flow.*>'
+  - Regex: '^<flow/.+>'
     Priority: 1
     SortPriority: 1
-  - Regex: '^<.*>'
+  - Regex: '^<[a-z_]+>'
     Priority: 2
     SortPriority: 2
-  - Regex: '.*'
+  - Regex: '^<.+>'
     Priority: 3
     SortPriority: 3
-IncludeIsMainRegex: "(_test|_benchmark)?$"
+  - Regex: '^".*"'
+    Priority: 4
+    SortPriority: 4
+IncludeIsMainRegex: "(_test|_bench)?$"
 QualifierAlignment: Right
 ReferenceAlignment: Middle
 PointerAlignment: Middle

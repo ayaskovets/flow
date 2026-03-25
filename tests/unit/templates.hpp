@@ -241,7 +241,7 @@ constexpr void nonblocking(auto const & param) noexcept {
   std::vector<int> popped_items(items_size);
 
   std::atomic<int> push_value = 0;
-  auto const producer = [&] {
+  auto const producer         = [&] {
     latch.arrive_and_wait();
 
     while (true) {
@@ -255,7 +255,7 @@ constexpr void nonblocking(auto const & param) noexcept {
   };
 
   std::atomic<std::size_t> pop_index = 0;
-  auto const consumer = [&] {
+  auto const consumer                = [&] {
     latch.arrive_and_wait();
 
     while (true) {
@@ -298,7 +298,7 @@ constexpr void blocking(auto const & param) noexcept {
   std::vector<int> popped_items(items_size);
 
   std::atomic<int> push_value = 0;
-  auto const producer = [&] {
+  auto const producer         = [&] {
     latch.arrive_and_wait();
 
     while (true) {
@@ -311,7 +311,7 @@ constexpr void blocking(auto const & param) noexcept {
   };
 
   std::atomic<std::size_t> pop_index = 0;
-  auto const consumer = [&] {
+  auto const consumer                = [&] {
     latch.arrive_and_wait();
 
     while (true) {

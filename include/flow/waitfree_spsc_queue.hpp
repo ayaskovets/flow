@@ -18,33 +18,35 @@ namespace flow {
  * differentiate the empty state
  */
 template <typename Value, std::unsigned_integral Index = std::size_t,
-          Index Capacity = swiss::kDynamicExtent<Index>,
+          Index Capacity     = swiss::kDynamicExtent<Index>,
           typename Allocator = std::allocator<Value>>
 // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class waitfree_spsc_queue final : public swiss::non_copyable,
                                   public swiss::non_movable {
  public:
-  using value_type = Value;
-  using index_type = Index;
+  using value_type     = Value;
+  using index_type     = Index;
   using allocator_type = Allocator;
 
  public:
   constexpr explicit waitfree_spsc_queue(
-      allocator_type const & allocator = allocator_type())
+      allocator_type allocator = allocator_type())
     requires(Capacity != swiss::kDynamicExtent<index_type>)
-      : allocator_(allocator),
-        ring_buffer_(allocator_.allocate(Capacity + 1)),
-        capacity_() {
+      : writer_{.ring_buffer = allocator.allocate(Capacity + 1)},
+        reader_{.ring_buffer = writer_.ring_buffer},
+        allocator_(std::move(allocator)) {
     static_assert(Capacity > 0, "capacity must be greater than zero");
   }
 
   constexpr explicit waitfree_spsc_queue(
-      index_type capacity, allocator_type const & allocator = allocator_type())
+      index_type capacity, allocator_type allocator = allocator_type())
     requires(Capacity == swiss::kDynamicExtent<index_type>)
-      : allocator_(allocator),
-        ring_buffer_(allocator_.allocate(capacity + 1)),
-        capacity_(capacity) {
+      : writer_{.ring_buffer = allocator.allocate(capacity + 1),
+                .capacity{capacity}},
+        reader_{.ring_buffer = writer_.ring_buffer, .capacity{capacity}},
+        allocator_(std::move(allocator)) {
     if (capacity == 0) [[unlikely]] {
+      allocator_.deallocate(writer_.ring_buffer, capacity + 1);
       throw std::invalid_argument("capacity must be greater than zero");
     }
   }
@@ -55,14 +57,17 @@ class waitfree_spsc_queue final : public swiss::non_copyable,
    * destruction occurs
    */
   constexpr ~waitfree_spsc_queue() noexcept {
-    index_type const push_to = push_to_.load(std::memory_order::relaxed);
+    auto const push_to     = writer_.index.load(std::memory_order::relaxed);
+    auto const ring_buffer = writer_.ring_buffer;
+    auto const capacity    = *writer_.capacity;
 
-    for (index_type pop_from = pop_from_.load(std::memory_order::relaxed);
-         !empty(push_to, pop_from); pop_from = next(pop_from)) {
-      std::destroy_at(ring_buffer_ + pop_from);
+    auto pop_from = reader_.index.load(std::memory_order::relaxed);
+    while (!empty(push_to, pop_from)) {
+      std::destroy_at(ring_buffer + pop_from);
+      pop_from = next(capacity, pop_from);
     }
 
-    allocator_.deallocate(ring_buffer_, *capacity_ + 1);
+    allocator_.deallocate(ring_buffer, capacity + 1);
   }
 
  public:
@@ -70,18 +75,21 @@ class waitfree_spsc_queue final : public swiss::non_copyable,
   constexpr auto try_emplace(Args &&... args) noexcept -> bool
     requires(std::is_nothrow_constructible_v<Value, Args...>)
   {
-    index_type const push_to = push_to_.load(std::memory_order::relaxed);
-    index_type const next_push_to = next(push_to);
+    auto const push_to      = writer_.index.load(std::memory_order::relaxed);
+    auto const ring_buffer  = writer_.ring_buffer;
+    auto const capacity     = *writer_.capacity;
+    auto const next_push_to = next(capacity, push_to);
 
-    if (full(next_push_to, cached_pop_from_)) {
-      cached_pop_from_ = pop_from_.load(std::memory_order::acquire);
-      if (full(next_push_to, cached_pop_from_)) {
+    if (full(next_push_to, writer_.cache)) {
+      auto const cache = reader_.index.load(std::memory_order::acquire);
+      if (full(next_push_to, cache)) {
         return false;
       }
+      writer_.cache = cache;
     }
 
-    std::construct_at(ring_buffer_ + push_to, std::forward<Args>(args)...);
-    push_to_.store(next_push_to, std::memory_order::release);
+    std::construct_at(ring_buffer + push_to, std::forward<Args>(args)...);
+    writer_.index.store(next_push_to, std::memory_order::release);
 
     return true;
   }
@@ -94,15 +102,17 @@ class waitfree_spsc_queue final : public swiss::non_copyable,
   constexpr void emplace(Args &&... args) noexcept
     requires(std::is_nothrow_constructible_v<Value, Args...>)
   {
-    index_type const push_to = push_to_.load(std::memory_order::relaxed);
-    index_type const next_push_to = next(push_to);
+    auto const push_to      = writer_.index.load(std::memory_order::relaxed);
+    auto const ring_buffer  = writer_.ring_buffer;
+    auto const capacity     = *writer_.capacity;
+    auto const next_push_to = next(capacity, push_to);
 
-    while (full(next_push_to, cached_pop_from_)) {
-      cached_pop_from_ = pop_from_.load(std::memory_order::acquire);
+    while (full(next_push_to, writer_.cache)) {
+      writer_.cache = reader_.index.load(std::memory_order::acquire);
     }
 
-    std::construct_at(ring_buffer_ + push_to, std::forward<Args>(args)...);
-    push_to_.store(next_push_to, std::memory_order::release);
+    std::construct_at(ring_buffer + push_to, std::forward<Args>(args)...);
+    writer_.index.store(next_push_to, std::memory_order::release);
   }
 
   constexpr void push(value_type value) noexcept { emplace(std::move(value)); }
@@ -110,50 +120,58 @@ class waitfree_spsc_queue final : public swiss::non_copyable,
   constexpr auto try_pop(value_type & value) noexcept -> bool
     requires(std::is_nothrow_move_assignable_v<Value>)
   {
-    index_type const pop_from = pop_from_.load(std::memory_order::relaxed);
-    index_type const next_pop_from = next(pop_from);
+    auto const pop_from      = reader_.index.load(std::memory_order::relaxed);
+    auto const ring_buffer   = reader_.ring_buffer;
+    auto const capacity      = *reader_.capacity;
+    auto const next_pop_from = next(capacity, pop_from);
 
-    if (empty(cached_push_to_, pop_from)) {
-      cached_push_to_ = push_to_.load(std::memory_order::acquire);
-      if (empty(cached_push_to_, pop_from)) {
+    if (empty(reader_.cache, pop_from)) {
+      auto const cache = writer_.index.load(std::memory_order::acquire);
+      if (empty(cache, pop_from)) {
         return false;
       }
+      reader_.cache = cache;
     }
 
-    value = std::move(*(ring_buffer_ + pop_from));
-    std::destroy_at(ring_buffer_ + pop_from);
-    pop_from_.store(next_pop_from, std::memory_order::release);
+    value = std::move(*(ring_buffer + pop_from));
+    std::destroy_at(ring_buffer + pop_from);
+    reader_.index.store(next_pop_from, std::memory_order::release);
 
     return true;
   }
 
   constexpr auto pop() noexcept -> value_type {
-    index_type const pop_from = pop_from_.load(std::memory_order::relaxed);
-    index_type const next_pop_from = next(pop_from);
+    auto const pop_from      = reader_.index.load(std::memory_order::relaxed);
+    auto const ring_buffer   = reader_.ring_buffer;
+    auto const capacity      = *reader_.capacity;
+    auto const next_pop_from = next(capacity, pop_from);
 
-    while (empty(cached_push_to_, pop_from)) {
-      cached_push_to_ = push_to_.load(std::memory_order::acquire);
+    while (empty(reader_.cache, pop_from)) {
+      reader_.cache = writer_.index.load(std::memory_order::acquire);
     }
 
-    value_type value(std::move(*(ring_buffer_ + pop_from)));
-    std::destroy_at(ring_buffer_ + pop_from);
-    pop_from_.store(next_pop_from, std::memory_order::release);
+    value_type value(std::move(*(ring_buffer + pop_from)));
+    std::destroy_at(ring_buffer + pop_from);
+    reader_.index.store(next_pop_from, std::memory_order::release);
 
     return value;
   }
 
  public:
-  constexpr auto capacity() const noexcept -> index_type { return *capacity_; }
+  constexpr auto capacity() const noexcept -> index_type {
+    return *writer_.capacity;
+  }
 
   /**
    * @warning Approximate size
    */
   constexpr auto size() const noexcept -> index_type {
-    index_type const push_to = push_to_.load(std::memory_order::relaxed);
-    index_type const pop_from = pop_from_.load(std::memory_order::relaxed);
+    auto const push_to  = writer_.index.load(std::memory_order::relaxed);
+    auto const capacity = *writer_.capacity;
+    auto const pop_from = reader_.index.load(std::memory_order::relaxed);
 
     return pop_from <= push_to ? push_to - pop_from
-                               : *capacity_ + push_to + 1 - pop_from;
+                               : capacity + push_to + 1 - pop_from;
   }
 
  public:
@@ -162,23 +180,20 @@ class waitfree_spsc_queue final : public swiss::non_copyable,
   }
 
  private:
-  alignas(std::hardware_destructive_interference_size)
-      std::atomic<index_type> push_to_ = 0;
-  index_type cached_pop_from_ = 0;
+  struct alignas(std::hardware_destructive_interference_size) CacheLine final {
+    std::atomic<index_type> index = 0;
+    index_type cache              = 0;
+    // NOLINTNEXTLINE(cppcoreguidelines-avoid-const-or-ref-data-members)
+    Value * const ring_buffer;
+    swiss::conditionally_runtime<
+        index_type, Capacity == swiss::kDynamicExtent<index_type>,
+        // NOLINTNEXTLINE(cppcoreguidelines-avoid-const-or-ref-data-members)
+        Capacity> const capacity;
+  };
 
-  alignas(std::hardware_destructive_interference_size)
-      std::atomic<index_type> pop_from_ = 0;
-  index_type cached_push_to_ = 0;
-
+  CacheLine writer_;
+  CacheLine reader_;
   [[no_unique_address]] allocator_type allocator_;
-
-  // NOLINTNEXTLINE(cppcoreguidelines-avoid-const-or-ref-data-members)
-  Value * const ring_buffer_;
-
-  [[no_unique_address]] swiss::conditionally_runtime<
-      index_type, Capacity == swiss::kDynamicExtent<index_type>, Capacity> const
-      // NOLINTNEXTLINE(cppcoreguidelines-avoid-const-or-ref-data-members)
-      capacity_;
 
  private:
   constexpr auto full(index_type next_push_to,
@@ -191,8 +206,9 @@ class waitfree_spsc_queue final : public swiss::non_copyable,
     return push_to == pop_from;
   }
 
-  constexpr auto next(index_type index) const noexcept -> index_type {
-    return index == *capacity_ ? 0 : index + 1;
+  constexpr auto next(index_type capacity, index_type index) const noexcept
+      -> index_type {
+    return index == capacity ? 0 : index + 1;
   }
 };
 

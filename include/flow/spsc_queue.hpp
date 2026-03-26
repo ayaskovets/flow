@@ -67,7 +67,8 @@ class spsc_queue final : public swiss::non_copyable, public swiss::non_movable {
 
     auto pop_from = reader_.index.load(std::memory_order::relaxed);
     while (!empty(push_to, pop_from)) {
-      std::destroy_at(ring_buffer + pop_from);
+      std::allocator_traits<allocator_type>::destroy(allocator_,
+                                                     ring_buffer + pop_from);
       pop_from = next(capacity, pop_from);
     }
 
@@ -140,7 +141,10 @@ class spsc_queue final : public swiss::non_copyable, public swiss::non_movable {
     emplace(std::stop_token(), std::forward<Args>(args)...);
   }
 
-  constexpr void push(value_type value) noexcept { emplace(std::move(value)); }
+  constexpr void push(value_type value) noexcept(
+      std::is_nothrow_move_constructible_v<value_type>) {
+    emplace(std::move(value));
+  }
 
   constexpr auto try_pop(value_type & value) noexcept -> bool
     requires(std::is_nothrow_move_assignable_v<value_type> &&

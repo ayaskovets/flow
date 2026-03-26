@@ -24,14 +24,14 @@ add_executable(flow-benchmarks)
 # ------------------------------------------------------------------------------
 
 set(SOURCES
-    locked_mpmc_queue_bench.cpp
-    locked_std_deque_bench.cpp
-    lockfree_mpmc_queue_bench.cpp
-    lockfree_mpsc_queue_bench.cpp
-    lockfree_spmc_queue_bench.cpp
-    lockless_mpmc_queue_bench.cpp
-    single_threaded_queue_bench.cpp
-    waitfree_spsc_queue_bench.cpp
+    # locked_mpmc_queue_bench.cpp
+    # locked_std_deque_bench.cpp
+    # lockfree_mpmc_queue_bench.cpp
+    # lockfree_mpsc_queue_bench.cpp
+    # lockfree_spmc_queue_bench.cpp
+    # lockless_mpmc_queue_bench.cpp
+    # single_threaded_queue_bench.cpp
+    spsc_queue_bench.cpp
     templates.hpp
     main.cpp)
 

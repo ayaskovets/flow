@@ -8,6 +8,7 @@ Checks: "*,
         -hicpp-special-member-functions,
         -altera-unroll-loops,
         -readability-magic-numbers,
-        -readability-function-cognitive-complexity"
+        -readability-function-cognitive-complexity,
+        -dyperformance-unnecessary-value-param"
 FormatStyle: none
 WarningsAsErrors: "*"

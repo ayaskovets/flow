@@ -6,6 +6,7 @@
 #include <atomic>
 #include <latch>
 #include <ranges>
+#include <stop_token>
 #include <thread>
 
 #include <gtest/gtest.h>
@@ -136,6 +137,26 @@ constexpr void blocking_pop() noexcept {
   std::jthread const producer([&queue] { EXPECT_TRUE(queue.try_push({})); });
 
   EXPECT_EQ(queue.pop(), {});
+}
+
+template <flow::concepts::queue Queue>
+constexpr void blocking_push_stop_token() noexcept {
+  Queue queue(2);
+  queue.push({});
+  queue.push({});
+
+  std::jthread const consumer([&queue](std::stop_token stop_token) {
+    queue.push(stop_token, {});
+    queue.emplace(stop_token, typename Queue::value_type{});
+  });
+}
+
+template <flow::concepts::queue Queue>
+constexpr void blocking_pop_stop_token() noexcept {
+  Queue queue(2);
+
+  std::jthread const producer(
+      [&queue](std::stop_token stop_token) { queue.pop(stop_token); });
 }
 
 template <flow::concepts::queue Queue>

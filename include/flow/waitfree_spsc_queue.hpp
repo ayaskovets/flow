@@ -4,6 +4,7 @@
 #include <memory>
 #include <new>
 #include <stdexcept>
+#include <thread>
 
 #include <swiss/conditionally_runtime.hpp>
 #include <swiss/dynamic_extent.hpp>
@@ -52,11 +53,12 @@ class waitfree_spsc_queue final : public swiss::non_copyable,
   }
 
   /**
-   * @warning Destructor operations are not thread safe and it is assumed that
-   * there is only one thread doing any operations on the queue at the moment
-   * destruction occurs
+   * @warning Destructor is not thread safe and assumes that there is only one
+   * thread operating on the queue during the destruction
    */
-  constexpr ~waitfree_spsc_queue() noexcept {
+  constexpr ~waitfree_spsc_queue() noexcept
+    requires(std::is_nothrow_destructible_v<value_type>)
+  {
     auto const push_to     = writer_.index.load(std::memory_order::relaxed);
     auto const ring_buffer = writer_.ring_buffer;
     auto const capacity    = *writer_.capacity;
@@ -73,7 +75,7 @@ class waitfree_spsc_queue final : public swiss::non_copyable,
  public:
   template <typename... Args>
   constexpr auto try_emplace(Args &&... args) noexcept -> bool
-    requires(std::is_nothrow_constructible_v<Value, Args...>)
+    requires(std::is_nothrow_constructible_v<value_type, Args...>)
   {
     auto const push_to      = writer_.index.load(std::memory_order::relaxed);
     auto const ring_buffer  = writer_.ring_buffer;
@@ -100,7 +102,7 @@ class waitfree_spsc_queue final : public swiss::non_copyable,
 
   template <typename... Args>
   constexpr void emplace(Args &&... args) noexcept
-    requires(std::is_nothrow_constructible_v<Value, Args...>)
+    requires(std::is_nothrow_constructible_v<value_type, Args...>)
   {
     auto const push_to      = writer_.index.load(std::memory_order::relaxed);
     auto const ring_buffer  = writer_.ring_buffer;
@@ -109,6 +111,10 @@ class waitfree_spsc_queue final : public swiss::non_copyable,
 
     while (full(next_push_to, writer_.cache)) {
       writer_.cache = reader_.index.load(std::memory_order::acquire);
+      if (!full(next_push_to, writer_.cache)) {
+        break;
+      }
+      std::this_thread::yield();
     }
 
     std::construct_at(ring_buffer + push_to, std::forward<Args>(args)...);
@@ -118,7 +124,8 @@ class waitfree_spsc_queue final : public swiss::non_copyable,
   constexpr void push(value_type value) noexcept { emplace(std::move(value)); }
 
   constexpr auto try_pop(value_type & value) noexcept -> bool
-    requires(std::is_nothrow_move_assignable_v<Value>)
+    requires(std::is_nothrow_move_assignable_v<value_type> &&
+             std::is_nothrow_destructible_v<value_type>)
   {
     auto const pop_from      = reader_.index.load(std::memory_order::relaxed);
     auto const ring_buffer   = reader_.ring_buffer;
@@ -140,7 +147,10 @@ class waitfree_spsc_queue final : public swiss::non_copyable,
     return true;
   }
 
-  constexpr auto pop() noexcept -> value_type {
+  constexpr auto pop() noexcept -> value_type
+    requires(std::is_nothrow_move_constructible_v<value_type> &&
+             std::is_nothrow_destructible_v<value_type>)
+  {
     auto const pop_from      = reader_.index.load(std::memory_order::relaxed);
     auto const ring_buffer   = reader_.ring_buffer;
     auto const capacity      = *reader_.capacity;
@@ -148,6 +158,10 @@ class waitfree_spsc_queue final : public swiss::non_copyable,
 
     while (empty(reader_.cache, pop_from)) {
       reader_.cache = writer_.index.load(std::memory_order::acquire);
+      if (!empty(reader_.cache, pop_from)) {
+        break;
+      }
+      std::this_thread::yield();
     }
 
     value_type value(std::move(*(ring_buffer + pop_from)));
@@ -184,7 +198,7 @@ class waitfree_spsc_queue final : public swiss::non_copyable,
     std::atomic<index_type> index = 0;
     index_type cache              = 0;
     // NOLINTNEXTLINE(cppcoreguidelines-avoid-const-or-ref-data-members)
-    Value * const ring_buffer;
+    value_type * const ring_buffer;
     swiss::conditionally_runtime<
         index_type, Capacity == swiss::kDynamicExtent<index_type>,
         // NOLINTNEXTLINE(cppcoreguidelines-avoid-const-or-ref-data-members)

@@ -11,6 +11,7 @@
 #include <swiss/conditionally_runtime.hpp>
 #include <swiss/dynamic_extent.hpp>
 #include <swiss/mixins.hpp>
+#include <swiss/variadic_traits.hpp>
 
 namespace flow {
 
@@ -79,134 +80,56 @@ class spsc_queue final : public swiss::non_copyable, public swiss::non_movable {
   template <typename... Args>
   constexpr auto try_emplace(Args &&... args) noexcept(
       std::is_nothrow_constructible_v<value_type, Args...>) -> bool {
-    auto const push_to      = writer_.index.load(std::memory_order::relaxed);
-    auto const ring_buffer  = writer_.ring_buffer;
-    auto const capacity     = *writer_.capacity;
-    auto const next_push_to = next(capacity, push_to);
-
-    if (full(next_push_to, writer_.cache)) {
-      auto const cache = reader_.index.load(std::memory_order::acquire);
-      if (full(next_push_to, cache)) {
-        return false;
-      }
-      writer_.cache = cache;
-    }
-
-    std::allocator_traits<allocator_type>::construct(
-        allocator_, ring_buffer + push_to, std::forward<Args>(args)...);
-    writer_.index.store(next_push_to, std::memory_order::release);
-
-    return true;
+    return emplace_impl<false, false>(std::forward<Args>(args)...);
   }
 
   constexpr auto try_push(value_type value) noexcept(
       std::is_nothrow_move_constructible_v<value_type>) -> bool {
-    return try_emplace(std::move(value));
+    return emplace_impl<false, false>(std::move(value));
   }
 
   template <typename... Args>
-  // NOLINTNEXTLINE(performance-unnecessary-value-param)
   constexpr auto emplace(std::stop_token stop_token, Args &&... args) noexcept(
       std::is_nothrow_constructible_v<value_type, Args...>) -> bool {
-    auto const push_to      = writer_.index.load(std::memory_order::relaxed);
-    auto const ring_buffer  = writer_.ring_buffer;
-    auto const capacity     = *writer_.capacity;
-    auto const next_push_to = next(capacity, push_to);
-
-    while (full(next_push_to, writer_.cache)) {
-      if (stop_token.stop_requested()) {
-        return false;
-      }
-      writer_.cache = reader_.index.load(std::memory_order::acquire);
-      if (!full(next_push_to, writer_.cache)) {
-        break;
-      }
-      std::this_thread::yield();
-    }
-
-    std::allocator_traits<allocator_type>::construct(
-        allocator_, ring_buffer + push_to, std::forward<Args>(args)...);
-    writer_.index.store(next_push_to, std::memory_order::release);
-    return true;
+    return emplace_impl<true, true>(stop_token, std::forward<Args>(args)...);
   }
 
   constexpr auto push(std::stop_token stop_token, value_type value) noexcept(
       std::is_nothrow_move_constructible_v<value_type>) -> bool {
-    return emplace(stop_token, std::move(value));
+    return emplace_impl<true, true>(stop_token, std::move(value));
   }
 
   template <typename... Args>
   constexpr void emplace(Args &&... args) noexcept(
       std::is_nothrow_constructible_v<value_type, Args...>) {
-    emplace(std::stop_token(), std::forward<Args>(args)...);
+    emplace_impl<true, false>(std::forward<Args>(args)...);
   }
 
   constexpr void push(value_type value) noexcept(
       std::is_nothrow_move_constructible_v<value_type>) {
-    emplace(std::move(value));
+    emplace_impl<true, false>(std::move(value));
   }
 
   constexpr auto try_pop(value_type & value) noexcept -> bool
     requires(std::is_nothrow_move_assignable_v<value_type> &&
              std::is_nothrow_destructible_v<value_type>)
   {
-    auto const pop_from      = reader_.index.load(std::memory_order::relaxed);
-    auto const ring_buffer   = reader_.ring_buffer;
-    auto const capacity      = *reader_.capacity;
-    auto const next_pop_from = next(capacity, pop_from);
-
-    if (empty(reader_.cache, pop_from)) {
-      auto const cache = writer_.index.load(std::memory_order::acquire);
-      if (empty(cache, pop_from)) {
-        return false;
-      }
-      reader_.cache = cache;
-    }
-
-    value = std::move(*(ring_buffer + pop_from));
-    std::allocator_traits<allocator_type>::destroy(allocator_,
-                                                   ring_buffer + pop_from);
-    reader_.index.store(next_pop_from, std::memory_order::release);
-
-    return true;
+    return pop_impl<false, false>(value);
   }
 
-  // NOLINTNEXTLINE(performance-unnecessary-value-param)
   constexpr auto pop(std::stop_token stop_token) noexcept
       -> std::optional<value_type>
     requires(std::is_nothrow_move_constructible_v<value_type> &&
              std::is_nothrow_destructible_v<value_type>)
   {
-    auto const pop_from      = reader_.index.load(std::memory_order::relaxed);
-    auto const ring_buffer   = reader_.ring_buffer;
-    auto const capacity      = *reader_.capacity;
-    auto const next_pop_from = next(capacity, pop_from);
-
-    std::optional<value_type> value{};
-    while (empty(reader_.cache, pop_from)) {
-      if (stop_token.stop_requested()) {
-        return value;
-      }
-      reader_.cache = writer_.index.load(std::memory_order::acquire);
-      if (!empty(reader_.cache, pop_from)) {
-        break;
-      }
-      std::this_thread::yield();
-    }
-
-    value.emplace(std::move(*(ring_buffer + pop_from)));
-    std::allocator_traits<allocator_type>::destroy(allocator_,
-                                                   ring_buffer + pop_from);
-    reader_.index.store(next_pop_from, std::memory_order::release);
-
-    return value;
+    return pop_impl<true, true>(stop_token);
   }
 
   constexpr auto pop() noexcept -> value_type
     requires(std::is_nothrow_move_constructible_v<value_type> &&
              std::is_nothrow_destructible_v<value_type>)
   {
-    return *pop(std::stop_token());
+    return pop_impl<true, false>(std::monostate{});
   }
 
  public:
@@ -235,12 +158,12 @@ class spsc_queue final : public swiss::non_copyable, public swiss::non_movable {
   struct alignas(std::hardware_destructive_interference_size) CacheLine final {
     std::atomic<index_type> index = 0;
     index_type cache              = 0;
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-const-or-ref-data-members)
+    // NOLINTBEGIN(cppcoreguidelines-avoid-const-or-ref-data-members)
     value_type * const ring_buffer;
-    swiss::conditionally_runtime<
-        index_type, Capacity == swiss::kDynamicExtent<index_type>,
-        // NOLINTNEXTLINE(cppcoreguidelines-avoid-const-or-ref-data-members)
-        Capacity> const capacity;
+    swiss::conditionally_runtime<index_type,
+                                 Capacity == swiss::kDynamicExtent<index_type>,
+                                 Capacity> const capacity;
+    // NOLINTEND(cppcoreguidelines-avoid-const-or-ref-data-members)
   };
 
   CacheLine writer_;
@@ -261,6 +184,111 @@ class spsc_queue final : public swiss::non_copyable, public swiss::non_movable {
   constexpr auto next(index_type capacity, index_type index) const noexcept
       -> index_type {
     return index == capacity ? 0 : index + 1;
+  }
+
+  template <bool Blocking, bool Cancellable, typename... Args>
+  constexpr auto emplace_impl(Args &&... args) -> decltype(auto) {
+    auto const push_to      = writer_.index.load(std::memory_order::relaxed);
+    auto const next_push_to = next(*writer_.capacity, push_to);
+
+    if constexpr (Blocking) {
+      while (full(next_push_to, writer_.cache)) {
+        if constexpr (Cancellable) {
+          if (std::stop_token const & stop_token =
+                  swiss::variadic_nth<0>(std::forward<Args>(args)...);
+              stop_token.stop_requested()) {
+            return false;
+          }
+        }
+
+        writer_.cache = reader_.index.load(std::memory_order::acquire);
+        if (full(next_push_to, writer_.cache)) {
+          std::this_thread::yield();
+        }
+      }
+    } else {
+      if (full(next_push_to, writer_.cache)) {
+        auto const cache = reader_.index.load(std::memory_order::acquire);
+        if (full(next_push_to, cache)) {
+          return false;
+        }
+        writer_.cache = cache;
+      }
+    }
+
+    if constexpr (Cancellable && sizeof...(Args) > 0) {
+      [this, push_to](auto &&, auto &&... tail) {
+        std::allocator_traits<allocator_type>::construct(
+            allocator_, writer_.ring_buffer + push_to,
+            std::forward<decltype(tail)>(tail)...);
+      }(std::forward<Args>(args)...);
+    } else {
+      std::allocator_traits<allocator_type>::construct(
+          allocator_, writer_.ring_buffer + push_to,
+          std::forward<Args>(args)...);
+    }
+
+    writer_.index.store(next_push_to, std::memory_order::release);
+
+    if constexpr (!Blocking || Cancellable) {
+      return true;
+    }
+  }
+
+  template <bool Blocking, bool Cancellable, typename... Args>
+  constexpr auto pop_impl(Args &&... args) -> decltype(auto) {
+    auto const pop_from      = reader_.index.load(std::memory_order::relaxed);
+    auto const next_pop_from = next(*reader_.capacity, pop_from);
+
+    if constexpr (Blocking) {
+      while (empty(reader_.cache, pop_from)) {
+        if constexpr (Cancellable) {
+          if (std::stop_token const & stop_token =
+                  swiss::variadic_nth<0>(std::forward<Args>(args)...);
+              stop_token.stop_requested()) {
+            return std::optional<value_type>();
+          }
+        }
+
+        reader_.cache = writer_.index.load(std::memory_order::acquire);
+        if (empty(reader_.cache, pop_from)) {
+          std::this_thread::yield();
+        }
+      }
+    } else {
+      if (empty(reader_.cache, pop_from)) {
+        auto const cache = writer_.index.load(std::memory_order::acquire);
+        if (empty(cache, pop_from)) {
+          return false;
+        }
+        reader_.cache = cache;
+      }
+    }
+
+    if constexpr (Blocking) {
+      if constexpr (Cancellable) {
+        std::optional<value_type> value(
+            std::move(*(reader_.ring_buffer + pop_from)));
+        std::allocator_traits<allocator_type>::destroy(
+            allocator_, reader_.ring_buffer + pop_from);
+        reader_.index.store(next_pop_from, std::memory_order::release);
+        return value;
+      } else {
+        value_type value(std::move(*(reader_.ring_buffer + pop_from)));
+        std::allocator_traits<allocator_type>::destroy(
+            allocator_, reader_.ring_buffer + pop_from);
+        reader_.index.store(next_pop_from, std::memory_order::release);
+        return value;
+      }
+    } else {
+      auto & value = swiss::variadic_nth<0>(std::forward<Args>(args)...);
+      value        = std::move(*(reader_.ring_buffer + pop_from));
+      std::allocator_traits<allocator_type>::destroy(
+          allocator_, reader_.ring_buffer + pop_from);
+
+      reader_.index.store(next_pop_from, std::memory_order::release);
+      return true;
+    }
   }
 };
 

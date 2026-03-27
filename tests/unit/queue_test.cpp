@@ -1,3 +1,4 @@
+#include <flow/locked_deque.hpp>
 #include <flow/queue.hpp>
 #include <flow/spsc_queue.hpp>
 #include <flow/unsafe_queue.hpp>
@@ -5,6 +6,15 @@
 #include <gtest/gtest.h>
 
 namespace tests {
+
+TEST(queue, locked_deque) {
+  static_assert(
+      flow::concepts::noexcept_nonblocking_queue<flow::locked_deque<int>>);
+  static_assert(
+      flow::concepts::noexcept_blocking_queue<flow::locked_deque<int>>);
+  static_assert(flow::concepts::noexcept_cancellable_blocking_queue<
+                flow::locked_deque<int>>);
+}
 
 TEST(queue, spsc_queue) {
   static_assert(

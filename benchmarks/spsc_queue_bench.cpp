@@ -17,20 +17,20 @@ BENCHMARK_TEMPLATE_T(spsc_queue, nonblocking_throughput, int, queue_t<int>)
     ->UseRealTime()
     ->Threads(2);
 
-BENCHMARK_TEMPLATE_T(spsc_queue, nonblocking_throughput, shared_ptr_int,
-                     queue_t<std::shared_ptr<int>>)
-    /* queue_size, producers, consumers */
-    ->Args({63, 1, 1})
-    ->UseRealTime()
-    ->Threads(2);
-
 BENCHMARK_TEMPLATE_T(spsc_queue, blocking_throughput, int, queue_t<int>)
     /* queue_size, producers, consumers */
     ->Args({63, 1, 1})
     ->UseRealTime()
     ->Threads(2);
 
-BENCHMARK_TEMPLATE_T(spsc_queue, blocking_throughput, shared_ptr_int,
+BENCHMARK_TEMPLATE_T(spsc_queue, nonblocking_throughput, shared_ptr,
+                     queue_t<std::shared_ptr<int>>)
+    /* queue_size, producers, consumers */
+    ->Args({63, 1, 1})
+    ->UseRealTime()
+    ->Threads(2);
+
+BENCHMARK_TEMPLATE_T(spsc_queue, blocking_throughput, shared_ptr,
                      queue_t<std::shared_ptr<int>>)
     /* queue_size, producers, consumers */
     ->Args({63, 1, 1})

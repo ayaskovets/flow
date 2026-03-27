@@ -36,11 +36,11 @@ constexpr void size_capacity() noexcept {
 
   int value{};
   Queue queue(kQueueSize);
-  queue.push({});
-  queue.push({});
+  queue.push(value);
+  queue.push(value);
 
   for (std::size_t i = 0; i < kQueueSize * kQueueSize * 2; ++i) {
-    queue.push({});
+    queue.push(value);
     queue.pop(value);
     EXPECT_EQ(queue.size(), 2);
     EXPECT_EQ(queue.capacity(), kQueueSize);
@@ -146,21 +146,22 @@ constexpr void blocking_pop() noexcept {
   typename Queue::value_type value{};
   Queue queue(2);
 
-  std::jthread const producer([&] { EXPECT_TRUE(queue.try_push({})); });
+  std::jthread const producer([&] { EXPECT_TRUE(queue.try_push(value)); });
 
   queue.pop(value);
-  EXPECT_EQ(value, {});
+  EXPECT_EQ(value, typename Queue::value_type{});
 }
 
 template <flow::concepts::cancellable_blocking_queue Queue>
 constexpr void blocking_push_stop_token() noexcept {
+  typename Queue::value_type value{};
   Queue queue(2);
-  queue.push({});
-  queue.push({});
+  queue.push(value);
+  queue.push(value);
 
-  std::jthread const consumer([&queue](std::stop_token stop_token) {
-    queue.push(stop_token, {});
-    queue.emplace(stop_token, typename Queue::value_type{});
+  std::jthread const consumer([&](std::stop_token stop_token) {
+    queue.push(stop_token, value);
+    queue.emplace(stop_token, value);
   });
 }
 
@@ -384,9 +385,10 @@ template <flow::concepts::queue Queue>
 constexpr void queued_producers_nonblocking() noexcept {
   constexpr std::size_t kProducers = 16;
 
+  typename Queue::value_type value{};
   Queue queue(2);
-  queue.push({});
-  queue.push({});
+  queue.push(value);
+  queue.push(value);
 
   std::vector<std::jthread> producers;
   producers.reserve(kProducers);
@@ -394,14 +396,14 @@ constexpr void queued_producers_nonblocking() noexcept {
 
   for (std::size_t i = 0; i < kProducers; ++i) {
     producers.emplace_back([&] {
+      typename Queue::value_type value{};
       latch.count_down();
-      queue.push({});
+      queue.push(value);
     });
   }
 
   latch.arrive_and_wait();
   for (std::size_t i = 0; i < kProducers;) {
-    typename Queue::value_type value{};
     i += queue.try_pop(value);
   }
 }
@@ -412,8 +414,8 @@ constexpr void queued_producers_blocking() noexcept {
 
   typename Queue::value_type value{};
   Queue queue(2);
-  queue.push({});
-  queue.push({});
+  queue.push(value);
+  queue.push(value);
 
   std::vector<std::jthread> producers;
   producers.reserve(kProducers);
@@ -421,8 +423,9 @@ constexpr void queued_producers_blocking() noexcept {
 
   for (std::size_t i = 0; i < kProducers; ++i) {
     producers.emplace_back([&] {
+      typename Queue::value_type value{};
       latch.count_down();
-      queue.push({});
+      queue.push(value);
     });
   }
 
@@ -439,19 +442,20 @@ constexpr void queued_consumers_nonblocking() noexcept {
   typename Queue::value_type value{};
   Queue queue(2);
   std::vector<std::jthread> consumers;
+  consumers.reserve(kConsumers);
   std::latch latch(static_cast<std::ptrdiff_t>(kConsumers + 1));
 
   for (std::size_t i = 0; i < kConsumers; ++i) {
     consumers.emplace_back([&] {
+      typename Queue::value_type value{};
       latch.count_down();
-
       queue.pop(value);
     });
   }
 
   latch.arrive_and_wait();
   for (std::size_t i = 0; i < kConsumers;) {
-    i += queue.try_push({});
+    i += queue.try_push(value);
   }
 }
 
@@ -467,6 +471,7 @@ constexpr void queued_consumers_blocking() noexcept {
 
   for (std::size_t i = 0; i < kConsumers; ++i) {
     consumers.emplace_back([&] {
+      typename Queue::value_type value{};
       latch.count_down();
       queue.pop(value);
     });
@@ -474,7 +479,7 @@ constexpr void queued_consumers_blocking() noexcept {
 
   latch.arrive_and_wait();
   for (std::size_t i = 0; i < kConsumers; ++i) {
-    queue.push({});
+    queue.push(value);
   }
 }
 

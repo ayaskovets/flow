@@ -15,14 +15,14 @@
   }                                                                    \
   BENCHMARK(BM##_##benchmark_suite_name##_##benchmark_name)
 
-#define BENCHMARK_TEMPLATE_T(benchmark_suite_name, benchmark_name,       \
-                             benchmark_type, type, ...)                  \
-  constexpr void                                                         \
-      BM##_##benchmark_suite_name##_##benchmark_name##_##benchmark_type( \
-          benchmark::State & state) noexcept {                           \
-    templates::benchmark_name<type>(state __VA_OPT__(, ) __VA_ARGS__);   \
-  }                                                                      \
-  BENCHMARK(BM##_##benchmark_suite_name##_##benchmark_name##_##benchmark_type)
+#define BENCHMARK_TEMPLATE_T(benchmark_suite_name, benchmark_name,      \
+                             benchmark_tag, type, ...)                  \
+  constexpr void                                                        \
+      BM##_##benchmark_suite_name##_##benchmark_name##_##benchmark_tag( \
+          benchmark::State & state) noexcept {                          \
+    templates::benchmark_name<type>(state __VA_OPT__(, ) __VA_ARGS__);  \
+  }                                                                     \
+  BENCHMARK(BM##_##benchmark_suite_name##_##benchmark_name##_##benchmark_tag)
 
 namespace benchmarks::templates {
 
@@ -33,8 +33,7 @@ constexpr void nonblocking_throughput(benchmark::State & state) noexcept {
   auto const consumers  = state.range(2);
 
   if (producers + consumers != state.threads()) {
-    state.SkipWithError(
-        "Benchmark Threads() parameter must be = (producers + consumers)");
+    state.SkipWithMessage("Invalid (producers + consumers) for thread count");
     return;
   }
 
@@ -92,9 +91,7 @@ constexpr void blocking_throughput(benchmark::State & state) noexcept {
   auto const consumers  = state.range(2);
 
   if (producers + consumers != state.threads()) {
-    state.SkipWithError(
-        "Benchmark Threads() parameter must be equal to (consumers + "
-        "producers)");
+    state.SkipWithMessage("Invalid (producers + consumers) for thread count");
     return;
   }
 

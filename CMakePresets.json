@@ -76,7 +76,7 @@
             "displayName": "Configure interface library (release)",
             "inherits": [
                 "base",
-                "config-debug",
+                "config-release",
                 "with-tests",
                 "with-benchmarks"
             ]

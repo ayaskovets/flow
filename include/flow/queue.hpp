@@ -31,6 +31,17 @@ concept nonblocking_queue =
     };
 
 /**
+ * @brief Nonblocking queue with noexcept operations
+ */
+template <typename T>
+concept noexcept_nonblocking_queue =
+    nonblocking_queue<T> && requires(T queue, typename T::value_type value) {
+      requires noexcept(queue.try_emplace(std::move(value)));
+      requires noexcept(queue.try_push(std::move(value)));
+      requires noexcept(queue.try_pop(value));
+    };
+
+/**
  * @brief Generic queue that supports blocking operations
  */
 template <typename T>
@@ -42,18 +53,7 @@ concept blocking_queue =
     };
 
 /**
- * @brief Nonblocking queue with noexcept guarrantee for all its operations
- */
-template <typename T>
-concept noexcept_nonblocking_queue =
-    nonblocking_queue<T> && requires(T queue, typename T::value_type value) {
-      requires noexcept(queue.try_emplace(std::move(value)));
-      requires noexcept(queue.try_push(std::move(value)));
-      requires noexcept(queue.try_pop(value));
-    };
-
-/**
- * @brief Blocking queue with noexcept guarrantee for all its operations
+ * @brief Blocking queue with noexcept operations
  */
 template <typename T>
 concept noexcept_blocking_queue =

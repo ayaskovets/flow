@@ -36,7 +36,8 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
       : writer_{.ring_buffer = allocator.allocate(Capacity + 1)},
         reader_{.ring_buffer = writer_.ring_buffer},
         allocator_(std::move(allocator)) {
-    static_assert(Capacity > 0, "capacity must be greater than zero");
+    static_assert(Capacity > 0,
+                  "spsc_queue::spsc_queue(): invalid capacity < 1");
   }
 
   constexpr explicit spsc_queue(index_type capacity,
@@ -46,7 +47,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
                     [capacity, &allocator]() {
                       if (capacity == 0) [[unlikely]] {
                         throw std::invalid_argument(
-                            "capacity must be greater than zero");
+                            "spsc_queue::spsc_queue(): invalid capacity < 1");
                       }
                       return allocator.allocate(capacity + 1);
                     }(),

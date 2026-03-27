@@ -52,7 +52,7 @@ TEST_T(spsc_queue, non_copyable_item_type,
        flow::spsc_queue<std::unique_ptr<int>>);
 
 using allocator_queue_t =
-    flow::spsc_queue<int, std::size_t, 2,
+    flow::spsc_queue<int, std::size_t, swiss::kDynamicExtent<std::size_t>,
                      swiss::leak_detector_allocator<int, true>>;
 TEST_T(spsc_queue, allocator, allocator_queue_t);
 

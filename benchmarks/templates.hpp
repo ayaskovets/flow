@@ -52,15 +52,14 @@ constexpr void nonblocking_throughput(benchmark::State & state) noexcept {
   if (state.thread_index() < producers) {
     // NOLINTNEXTLINE(readability-identifier-length)
     for (auto const _ : state) {
-      typename Queue::value_type const value{};
-      if (queue->try_push(value)) {
+      if (queue->try_emplace()) {
         ++items;
       } else {
         std::this_thread::yield();
       }
     }
 
-    state.counters["try_push%"] =
+    state.counters["push%"] =
         benchmark::Counter(100.0 * static_cast<double>(items) /
                            static_cast<double>(state.iterations()) /
                            static_cast<double>(producers));
@@ -76,7 +75,7 @@ constexpr void nonblocking_throughput(benchmark::State & state) noexcept {
       }
     }
 
-    state.counters["try_pop%"] =
+    state.counters["pop%"] =
         benchmark::Counter(100.0 * static_cast<double>(items) /
                            static_cast<double>(state.iterations()) /
                            static_cast<double>(consumers));
@@ -112,8 +111,7 @@ constexpr void blocking_throughput(benchmark::State & state) noexcept {
   if (state.thread_index() < producers) {
     // NOLINTNEXTLINE(readability-identifier-length)
     for (auto const _ : state) {
-      typename Queue::value_type const value{};
-      queue->push(value);
+      queue->emplace();
     }
   } else {
     // NOLINTNEXTLINE(readability-identifier-length)

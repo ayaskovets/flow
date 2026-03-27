@@ -222,8 +222,8 @@ constexpr void non_copyable_item_type() noexcept {
 
   queue.push(std::move(value));
   queue.pop();
-  queue.try_push(std::move(value));
-  queue.try_pop(value);
+  EXPECT_TRUE(queue.try_push(std::move(value)));
+  EXPECT_TRUE(queue.try_pop(value));
 }
 
 template <flow::concepts::queue Queue>
@@ -234,7 +234,7 @@ constexpr void allocator() noexcept {
 
   EXPECT_TRUE(allocator.empty());
   {
-    Queue queue(allocator);
+    Queue queue(2, allocator);
     EXPECT_EQ(queue.get_allocator(), allocator);
 
     queue.push(1);

@@ -64,9 +64,9 @@ constexpr void nonblocking_throughput(benchmark::State & state) noexcept {
                            static_cast<double>(state.iterations()) /
                            static_cast<double>(producers));
   } else {
+    typename Queue::value_type value{};
     // NOLINTNEXTLINE(readability-identifier-length)
     for (auto const _ : state) {
-      typename Queue::value_type value{};
       if (queue->try_pop(value)) {
         benchmark::DoNotOptimize(value);
         ++items;
@@ -85,7 +85,7 @@ constexpr void nonblocking_throughput(benchmark::State & state) noexcept {
   }
 }
 
-template <flow::concepts::blocking_queue Queue>
+template <typename Queue>
 constexpr void blocking_throughput(benchmark::State & state) noexcept {
   auto const queue_size = static_cast<std::size_t>(state.range(0));
   auto const producers  = state.range(1);
@@ -114,9 +114,11 @@ constexpr void blocking_throughput(benchmark::State & state) noexcept {
       queue->emplace();
     }
   } else {
+    typename Queue::value_type value{};
     // NOLINTNEXTLINE(readability-identifier-length)
     for (auto const _ : state) {
-      benchmark::DoNotOptimize(queue->pop());
+      queue->pop(value);
+      benchmark::DoNotOptimize(value);
     }
 
     state.SetBytesProcessed(

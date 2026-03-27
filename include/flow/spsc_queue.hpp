@@ -3,7 +3,6 @@
 #include <atomic>
 #include <memory>
 #include <new>
-#include <optional>
 #include <stdexcept>
 #include <stop_token>
 #include <thread>
@@ -25,7 +24,7 @@ template <typename Value, std::unsigned_integral Index = std::size_t,
           Index Capacity     = swiss::kDynamicExtent<Index>,
           typename Allocator = std::allocator<Value>>
 // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
-class spsc_queue final : public swiss::non_copyable, public swiss::non_movable {
+class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
  public:
   using value_type     = Value;
   using index_type     = Index;
@@ -117,19 +116,19 @@ class spsc_queue final : public swiss::non_copyable, public swiss::non_movable {
     return pop_impl<false, false>(value);
   }
 
-  constexpr auto pop(std::stop_token stop_token) noexcept
-      -> std::optional<value_type>
-    requires(std::is_nothrow_move_constructible_v<value_type> &&
+  constexpr auto pop(std::stop_token stop_token, value_type & value) noexcept
+      -> bool
+    requires(std::is_nothrow_move_assignable_v<value_type> &&
              std::is_nothrow_destructible_v<value_type>)
   {
-    return pop_impl<true, true>(stop_token);
+    return pop_impl<true, true>(stop_token, value);
   }
 
-  constexpr auto pop() noexcept -> value_type
-    requires(std::is_nothrow_move_constructible_v<value_type> &&
+  constexpr void pop(value_type & value) noexcept
+    requires(std::is_nothrow_move_assignable_v<value_type> &&
              std::is_nothrow_destructible_v<value_type>)
   {
-    return pop_impl<true, false>(std::monostate{});
+    pop_impl<true, false>(value);
   }
 
  public:
@@ -246,7 +245,7 @@ class spsc_queue final : public swiss::non_copyable, public swiss::non_movable {
           if (std::stop_token const & stop_token =
                   swiss::variadic_nth<0>(std::forward<Args>(args)...);
               stop_token.stop_requested()) {
-            return std::optional<value_type>();
+            return false;
           }
         }
 
@@ -265,30 +264,14 @@ class spsc_queue final : public swiss::non_copyable, public swiss::non_movable {
       }
     }
 
-    if constexpr (Blocking) {
-      if constexpr (Cancellable) {
-        std::optional<value_type> value(
-            std::move(*(reader_.ring_buffer + pop_from)));
-        std::allocator_traits<allocator_type>::destroy(
-            allocator_, reader_.ring_buffer + pop_from);
-        reader_.index.store(next_pop_from, std::memory_order::release);
-        return value;
-      } else {
-        value_type value(std::move(*(reader_.ring_buffer + pop_from)));
-        std::allocator_traits<allocator_type>::destroy(
-            allocator_, reader_.ring_buffer + pop_from);
-        reader_.index.store(next_pop_from, std::memory_order::release);
-        return value;
-      }
-    } else {
-      auto & value = swiss::variadic_nth<0>(std::forward<Args>(args)...);
-      value        = std::move(*(reader_.ring_buffer + pop_from));
-      std::allocator_traits<allocator_type>::destroy(
-          allocator_, reader_.ring_buffer + pop_from);
+    auto & value =
+        swiss::variadic_nth<Cancellable ? 1 : 0>(std::forward<Args>(args)...);
+    value = std::move(*(reader_.ring_buffer + pop_from));
+    std::allocator_traits<allocator_type>::destroy(
+        allocator_, reader_.ring_buffer + pop_from);
 
-      reader_.index.store(next_pop_from, std::memory_order::release);
-      return true;
-    }
+    reader_.index.store(next_pop_from, std::memory_order::release);
+    return true;
   }
 };
 

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <concepts>
-#include <optional>
 #include <stop_token>
 
 namespace flow::concepts {
@@ -39,7 +38,7 @@ concept blocking_queue =
     queue<T> && requires(T queue, typename T::value_type value) {
       { queue.emplace(std::move(value)) } -> std::same_as<void>;
       { queue.push(std::move(value)) } -> std::same_as<void>;
-      { queue.pop() } -> std::same_as<typename T::value_type>;
+      { queue.pop(value) } -> std::same_as<void>;
     };
 
 /**
@@ -61,7 +60,7 @@ concept noexcept_blocking_queue =
     blocking_queue<T> && requires(T queue, typename T::value_type value) {
       requires noexcept(queue.emplace(std::move(value)));
       requires noexcept(queue.push(std::move(value)));
-      requires noexcept(queue.pop());
+      requires noexcept(queue.pop(value));
     };
 
 /**
@@ -73,9 +72,7 @@ concept cancellable_blocking_queue =
                                   std::stop_token stop_token) {
       { queue.emplace(stop_token, std::move(value)) } -> std::same_as<bool>;
       { queue.push(stop_token, std::move(value)) } -> std::same_as<bool>;
-      {
-        queue.pop(stop_token)
-      } -> std::same_as<std::optional<typename T::value_type>>;
+      { queue.pop(stop_token, value) } -> std::same_as<bool>;
     };
 
 /**
@@ -89,7 +86,7 @@ concept noexcept_cancellable_blocking_queue =
              std::stop_token stop_token) {
       requires noexcept(queue.emplace(stop_token, std::move(value)));
       requires noexcept(queue.push(stop_token, std::move(value)));
-      requires noexcept(queue.pop(stop_token));
+      requires noexcept(queue.pop(stop_token, value));
     };
 
 }  // namespace flow::concepts

@@ -34,13 +34,14 @@ template <flow::concepts::blocking_queue Queue>
 constexpr void size_capacity() noexcept {
   constexpr std::size_t kQueueSize = 8;
 
+  int value{};
   Queue queue(kQueueSize);
   queue.push({});
   queue.push({});
 
   for (std::size_t i = 0; i < kQueueSize * kQueueSize * 2; ++i) {
     queue.push({});
-    queue.pop();
+    queue.pop(value);
     EXPECT_EQ(queue.size(), 2);
     EXPECT_EQ(queue.capacity(), kQueueSize);
   }
@@ -72,16 +73,21 @@ constexpr void nonblocking_smoke() noexcept {
 template <flow::concepts::blocking_queue Queue>
   requires(std::same_as<typename Queue::value_type, int>)
 constexpr void blocking_smoke() noexcept {
+  int value{};
   Queue queue(3);
 
   queue.push(1);
   queue.push(2);
   queue.push(3);
-  EXPECT_EQ(queue.pop(), 1);
-  EXPECT_EQ(queue.pop(), 2);
-  EXPECT_EQ(queue.pop(), 3);
+  queue.pop(value);
+  EXPECT_EQ(value, 1);
+  queue.pop(value);
+  EXPECT_EQ(value, 2);
+  queue.pop(value);
+  EXPECT_EQ(value, 3);
   queue.push(4);
-  EXPECT_EQ(queue.pop(), 4);
+  queue.pop(value);
+  EXPECT_EQ(value, 4);
 }
 
 template <flow::concepts::queue Queue>
@@ -99,15 +105,18 @@ constexpr void mixed_smoke() noexcept {
   EXPECT_EQ(queue.size(), 2);
   EXPECT_FALSE(queue.try_emplace(3));
   EXPECT_EQ(queue.size(), 2);
-  EXPECT_EQ(queue.pop(), 1);
+  queue.pop(value);
+  EXPECT_EQ(value, 1);
   EXPECT_EQ(queue.size(), 1);
   queue.emplace(4);
   EXPECT_EQ(queue.size(), 2);
   EXPECT_FALSE(queue.try_push(5));
   EXPECT_EQ(queue.size(), 2);
-  EXPECT_EQ(queue.pop(), 2);
+  queue.pop(value);
+  EXPECT_EQ(value, 2);
   EXPECT_EQ(queue.size(), 1);
-  EXPECT_EQ(queue.pop(), 4);
+  queue.pop(value);
+  EXPECT_EQ(value, 4);
   EXPECT_EQ(queue.size(), 0);
   EXPECT_FALSE(queue.try_pop(value));
   EXPECT_EQ(queue.size(), 0);
@@ -116,27 +125,31 @@ constexpr void mixed_smoke() noexcept {
 template <flow::concepts::blocking_queue Queue>
   requires(std::same_as<typename Queue::value_type, int>)
 constexpr void blocking_push() noexcept {
+  int value{};
   Queue queue(2);
   queue.push(1);
   queue.push(2);
 
-  std::jthread const consumer([&queue] {
+  std::jthread const consumer([&] {
     int value{};
     EXPECT_TRUE(queue.try_pop(value));
     EXPECT_EQ(value, 1);
   });
 
   queue.push(3);
-  EXPECT_EQ(queue.pop(), 2);
+  queue.pop(value);
+  EXPECT_EQ(value, 2);
 }
 
 template <flow::concepts::blocking_queue Queue>
 constexpr void blocking_pop() noexcept {
+  typename Queue::value_type value{};
   Queue queue(2);
 
-  std::jthread const producer([&queue] { EXPECT_TRUE(queue.try_push({})); });
+  std::jthread const producer([&] { EXPECT_TRUE(queue.try_push({})); });
 
-  EXPECT_EQ(queue.pop(), {});
+  queue.pop(value);
+  EXPECT_EQ(value, {});
 }
 
 template <flow::concepts::cancellable_blocking_queue Queue>
@@ -153,10 +166,11 @@ constexpr void blocking_push_stop_token() noexcept {
 
 template <flow::concepts::cancellable_blocking_queue Queue>
 constexpr void blocking_pop_stop_token() noexcept {
+  typename Queue::value_type value{};
   Queue queue(2);
 
   std::jthread const producer(
-      [&queue](std::stop_token stop_token) { queue.pop(stop_token); });
+      [&](std::stop_token stop_token) { queue.pop(stop_token, value); });
 }
 
 template <flow::concepts::queue Queue>
@@ -168,10 +182,12 @@ constexpr void capacity_one() noexcept {
   EXPECT_FALSE(queue.try_pop(value));
   queue.push(1);
   EXPECT_FALSE(queue.try_push(3));
-  EXPECT_EQ(queue.pop(), 1);
+  queue.pop(value);
+  EXPECT_EQ(value, 1);
   queue.push(4);
   EXPECT_FALSE(queue.try_push(5));
-  EXPECT_EQ(queue.pop(), 4);
+  queue.pop(value);
+  EXPECT_EQ(value, 4);
   EXPECT_FALSE(queue.try_pop(value));
 }
 
@@ -204,13 +220,13 @@ constexpr void item_destructor() noexcept {
   EXPECT_EQ(value.use_count(), 2);
   queue.push(value);
   EXPECT_EQ(value.use_count(), 3);
-  queue.pop();
+  queue.pop(value);
   EXPECT_EQ(value.use_count(), 2);
   queue.push(value);
   EXPECT_EQ(value.use_count(), 3);
-  queue.pop();
+  queue.pop(value);
   EXPECT_EQ(value.use_count(), 2);
-  queue.pop();
+  queue.pop(value);
   EXPECT_EQ(value.use_count(), 1);
 }
 
@@ -221,7 +237,7 @@ constexpr void non_copyable_item_type() noexcept {
   Queue queue(2);
 
   queue.push(std::move(value));
-  queue.pop();
+  queue.pop(value);
   EXPECT_TRUE(queue.try_push(std::move(value)));
   EXPECT_TRUE(queue.try_pop(value));
 }
@@ -234,6 +250,7 @@ constexpr void allocator() noexcept {
 
   EXPECT_TRUE(allocator.empty());
   {
+    int value{};
     Queue queue(2, allocator);
     EXPECT_EQ(queue.get_allocator(), allocator);
 
@@ -241,9 +258,11 @@ constexpr void allocator() noexcept {
     EXPECT_FALSE(allocator.empty());
     queue.push(2);
     EXPECT_FALSE(allocator.empty());
-    EXPECT_EQ(queue.pop(), 1);
+    queue.pop(value);
+    EXPECT_EQ(value, 1);
     EXPECT_FALSE(allocator.empty());
-    EXPECT_EQ(queue.pop(), 2);
+    queue.pop(value);
+    EXPECT_EQ(value, 2);
     EXPECT_FALSE(allocator.empty());
   }
   EXPECT_TRUE(allocator.empty());
@@ -341,7 +360,7 @@ constexpr void blocking(auto const & param) noexcept {
       if (index >= items_size) {
         return;
       }
-      popped_items[index] = queue.pop();
+      queue.pop(popped_items[index]);
     }
   };
 
@@ -391,6 +410,7 @@ template <flow::concepts::blocking_queue Queue>
 constexpr void queued_producers_blocking() noexcept {
   constexpr std::size_t kProducers = 16;
 
+  typename Queue::value_type value{};
   Queue queue(2);
   queue.push({});
   queue.push({});
@@ -408,7 +428,7 @@ constexpr void queued_producers_blocking() noexcept {
 
   latch.arrive_and_wait();
   for (std::size_t i = 0; i < kProducers; ++i) {
-    queue.pop();
+    queue.pop(value);
   }
 }
 
@@ -416,6 +436,7 @@ template <flow::concepts::nonblocking_queue Queue>
 constexpr void queued_consumers_nonblocking() noexcept {
   constexpr std::size_t kConsumers = 16;
 
+  typename Queue::value_type value{};
   Queue queue(2);
   std::vector<std::jthread> consumers;
   std::latch latch(static_cast<std::ptrdiff_t>(kConsumers + 1));
@@ -423,7 +444,8 @@ constexpr void queued_consumers_nonblocking() noexcept {
   for (std::size_t i = 0; i < kConsumers; ++i) {
     consumers.emplace_back([&] {
       latch.count_down();
-      queue.pop();
+
+      queue.pop(value);
     });
   }
 
@@ -437,6 +459,7 @@ template <flow::concepts::queue Queue>
 constexpr void queued_consumers_blocking() noexcept {
   constexpr std::size_t kConsumers = 16;
 
+  typename Queue::value_type value{};
   Queue queue(2);
   std::vector<std::jthread> consumers;
   consumers.reserve(kConsumers);
@@ -445,7 +468,7 @@ constexpr void queued_consumers_blocking() noexcept {
   for (std::size_t i = 0; i < kConsumers; ++i) {
     consumers.emplace_back([&] {
       latch.count_down();
-      queue.pop();
+      queue.pop(value);
     });
   }
 
@@ -460,11 +483,13 @@ template <flow::concepts::queue Queue>
 constexpr void rollover() noexcept {
   constexpr std::size_t kQueueSize = 8;
 
+  int value{};
   Queue queue(kQueueSize);
 
   for (std::size_t i = 0; i < kQueueSize * kQueueSize * 2; ++i) {
     EXPECT_TRUE(queue.try_push(static_cast<int>(i)));
-    EXPECT_EQ(queue.pop(), static_cast<int>(i));
+    queue.pop(value);
+    EXPECT_EQ(value, static_cast<int>(i));
   }
 }
 

@@ -24,17 +24,7 @@ add_executable(flow-unit-tests)
 # sources
 # ------------------------------------------------------------------------------
 
-set(SOURCES
-    locked_mpmc_queue_test.cpp
-    locked_std_deque_test.cpp
-    lockfree_mpmc_queue_test.cpp
-    lockfree_mpsc_queue_test.cpp
-    lockfree_spmc_queue_test.cpp
-    lockless_mpmc_queue_test.cpp
-    queue_test.cpp
-    single_threaded_queue_test.cpp
-    templates.hpp
-    waitfree_spsc_queue_test.cpp)
+set(SOURCES queue_test.cpp spsc_queue_test.cpp templates.hpp)
 
 # ------------------------------------------------------------------------------
 # target

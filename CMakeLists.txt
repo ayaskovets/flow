@@ -32,8 +32,7 @@ set(HEADERS
     include/flow/lockless_mpmc_queue.hpp
     include/flow/queue.hpp
     include/flow/single_threaded_queue.hpp
-    include/flow/spsc_queue.hpp
-)
+    include/flow/spsc_queue.hpp)
 
 # ------------------------------------------------------------------------------
 # target

@@ -133,14 +133,14 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
   }
 
  public:
-  constexpr auto capacity() const noexcept -> index_type {
+  [[nodiscard]] constexpr auto capacity() const noexcept -> index_type {
     return *writer_.capacity;
   }
 
   /**
    * @warning Approximate size
    */
-  constexpr auto size() const noexcept -> index_type {
+  [[nodiscard]] constexpr auto size() const noexcept -> index_type {
     auto const push_to  = writer_.index.load(std::memory_order::relaxed);
     auto const capacity = *writer_.capacity;
     auto const pop_from = reader_.index.load(std::memory_order::relaxed);
@@ -171,17 +171,19 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
   [[no_unique_address]] allocator_type allocator_;
 
  private:
-  constexpr auto full(index_type next_push_to,
-                      index_type pop_from) const noexcept {
+  [[nodiscard]] constexpr auto full(index_type next_push_to,
+                                    index_type pop_from) const noexcept {
     return next_push_to == pop_from;
   }
 
-  constexpr auto empty(index_type push_to, index_type pop_from) const noexcept
+  [[nodiscard]] constexpr auto empty(index_type push_to,
+                                     index_type pop_from) const noexcept
       -> bool {
     return push_to == pop_from;
   }
 
-  constexpr auto next(index_type capacity, index_type index) const noexcept
+  [[nodiscard]] constexpr auto next(index_type capacity,
+                                    index_type index) const noexcept
       -> index_type {
     return index == capacity ? 0 : index + 1;
   }

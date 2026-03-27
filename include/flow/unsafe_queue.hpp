@@ -150,7 +150,7 @@ class unsafe_queue final : public swiss::non_copyable,
   [[no_unique_address]] allocator_type allocator_;
 
  private:
-  [[nodiscard]] constexpr auto full() const noexcept {
+  [[nodiscard]] constexpr auto full() const noexcept -> bool {
     return size_ == *capacity_;
   }
 

@@ -34,7 +34,7 @@ class locked_deque final : public swiss::non_copyable,
  public:
   constexpr explicit locked_deque(allocator_type allocator = allocator_type())
     requires(Capacity != swiss::kDynamicExtent<index_type>)
-      : deque_(allocator), capacity_() {
+      : deque_(std::move(allocator)), capacity_() {
     static_assert(Capacity > 0,
                   "locked_deque::locked_deque(): invalid capacity < 1");
   }
@@ -42,7 +42,7 @@ class locked_deque final : public swiss::non_copyable,
   constexpr explicit locked_deque(index_type capacity,
                                   allocator_type allocator = allocator_type())
     requires(Capacity == swiss::kDynamicExtent<index_type>)
-      : deque_(allocator), capacity_(capacity) {
+      : deque_(std::move(allocator)), capacity_(capacity) {
     if (capacity < 1) [[unlikely]] {
       throw std::invalid_argument(
           "locked_deque::locked_deque(): invalid capacity < 1");
@@ -141,7 +141,7 @@ class locked_deque final : public swiss::non_copyable,
   // NOLINTEND(cppcoreguidelines-avoid-const-or-ref-data-members)
 
  private:
-  [[nodiscard]] constexpr auto full() const noexcept {
+  [[nodiscard]] constexpr auto full() const noexcept -> bool {
     return deque_.size() == *capacity_;
   }
 

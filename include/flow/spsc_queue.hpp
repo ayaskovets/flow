@@ -172,7 +172,8 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
 
  private:
   [[nodiscard]] constexpr auto full(index_type next_push_to,
-                                    index_type pop_from) const noexcept {
+                                    index_type pop_from) const noexcept
+      -> bool {
     return next_push_to == pop_from;
   }
 

@@ -15,7 +15,7 @@
 namespace flow {
 
 /**
- * @brief Threadsafe queue for 1 producer and 1 consumer
+ * @brief Fixed-size threadsafe queue for 1 producer and 1 consumer
  * @note Implemented as a ring buffer with cached pop and push indices
  * @warning Allocated buffer always contains one additional element to
  * differentiate the empty state
@@ -231,7 +231,6 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     }
 
     writer_.index.store(next_push_to, std::memory_order::release);
-
     if constexpr (!Blocking || Cancellable) {
       return true;
     }

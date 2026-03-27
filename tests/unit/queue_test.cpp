@@ -1,5 +1,6 @@
 #include <flow/queue.hpp>
 #include <flow/spsc_queue.hpp>
+#include <flow/unsafe_queue.hpp>
 
 #include <gtest/gtest.h>
 
@@ -11,6 +12,12 @@ TEST(queue, spsc_queue) {
   static_assert(flow::concepts::noexcept_blocking_queue<flow::spsc_queue<int>>);
   static_assert(flow::concepts::noexcept_cancellable_blocking_queue<
                 flow::spsc_queue<int>>);
+}
+
+TEST(queue, unsafe_queue) {
+  static_assert(
+      flow::concepts::noexcept_nonblocking_queue<flow::unsafe_queue<int>>);
+  static_assert(flow::concepts::blocking_queue<flow::unsafe_queue<int>>);
 }
 
 }  // namespace tests

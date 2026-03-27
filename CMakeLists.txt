@@ -31,7 +31,7 @@ set(HEADERS
     include/flow/lockfree_spmc_queue.hpp
     include/flow/lockless_mpmc_queue.hpp
     include/flow/queue.hpp
-    include/flow/single_threaded_queue.hpp
+    include/flow/unsafe_queue.hpp
     include/flow/spsc_queue.hpp)
 
 # ------------------------------------------------------------------------------

@@ -24,7 +24,8 @@ add_executable(flow-unit-tests)
 # sources
 # ------------------------------------------------------------------------------
 
-set(SOURCES queue_test.cpp spsc_queue_test.cpp templates.hpp)
+set(SOURCES unsafe_queue_test.cpp queue_test.cpp spsc_queue_test.cpp
+            templates.hpp)
 
 # ------------------------------------------------------------------------------
 # target

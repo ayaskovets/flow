@@ -38,8 +38,9 @@ class locked_mpmc_queue final : public swiss::non_copyable,
       : ring_buffer_(allocator.allocate(Capacity + 1)),
         capacity_(),
         allocator_(std::move(allocator)) {
-    static_assert(Capacity > 0,
-                  "unsafe_queue::unsafe_queue(): invalid capacity < 1");
+    static_assert(
+        Capacity > 0,
+        "locked_mpmc_queue::locked_mpmc_queue(): invalid capacity < 1");
   }
 
   constexpr explicit locked_mpmc_queue(

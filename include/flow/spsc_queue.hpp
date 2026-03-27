@@ -62,18 +62,16 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
   constexpr ~spsc_queue() noexcept
     requires(std::is_nothrow_destructible_v<value_type>)
   {
-    auto const push_to     = writer_.index.load(std::memory_order::relaxed);
-    auto const ring_buffer = writer_.ring_buffer;
-    auto const capacity    = *writer_.capacity;
+    auto const push_to = writer_.index.load(std::memory_order::relaxed);
 
     auto pop_from = reader_.index.load(std::memory_order::relaxed);
     while (!empty(push_to, pop_from)) {
-      std::allocator_traits<allocator_type>::destroy(allocator_,
-                                                     ring_buffer + pop_from);
-      pop_from = next(capacity, pop_from);
+      std::allocator_traits<allocator_type>::destroy(
+          allocator_, writer_.ring_buffer + pop_from);
+      pop_from = next(*writer_.capacity, pop_from);
     }
 
-    allocator_.deallocate(ring_buffer, capacity + 1);
+    allocator_.deallocate(writer_.ring_buffer, *writer_.capacity + 1);
   }
 
  public:
@@ -142,11 +140,10 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
    */
   [[nodiscard]] constexpr auto size() const noexcept -> index_type {
     auto const push_to  = writer_.index.load(std::memory_order::relaxed);
-    auto const capacity = *writer_.capacity;
     auto const pop_from = reader_.index.load(std::memory_order::relaxed);
 
     return pop_from <= push_to ? push_to - pop_from
-                               : capacity + push_to + 1 - pop_from;
+                               : *writer_.capacity + push_to + 1 - pop_from;
   }
 
  public:

@@ -25,6 +25,7 @@ add_executable(flow-benchmarks)
 
 set(SOURCES
     locked_deque_bench.cpp
+    locked_mpmc_queue_bench.cpp
     main.cpp
     spsc_queue_bench.cpp
     templates.hpp)

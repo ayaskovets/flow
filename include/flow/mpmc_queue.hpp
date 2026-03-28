@@ -202,8 +202,8 @@ class mpmc_queue final : public swiss::non_copyable, public swiss::non_movable {
 
   [[nodiscard]] constexpr auto at(
       typename Allocator::value_type * const ring_buffer, index_type capacity,
-      index_type index) const noexcept
-      -> std::pair<value_type, std::atomic<index_type>> * {
+      index_type index) const noexcept ->
+      typename allocator_type::value_type * {
     return ring_buffer + (index & capacity - 1);
   }
 

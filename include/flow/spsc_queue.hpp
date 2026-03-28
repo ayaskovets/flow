@@ -67,11 +67,11 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     auto pop_from = reader_.index.load(std::memory_order::relaxed);
     while (!empty(push_to, pop_from)) {
       std::allocator_traits<allocator_type>::destroy(
-          allocator_, writer_.ring_buffer + pop_from);
-      pop_from = next(*writer_.capacity, pop_from);
+          allocator_, reader_.ring_buffer + pop_from);
+      pop_from = next(*reader_.capacity, pop_from);
     }
 
-    allocator_.deallocate(writer_.ring_buffer, *writer_.capacity + 1);
+    allocator_.deallocate(reader_.ring_buffer, *reader_.capacity + 1);
   }
 
  public:

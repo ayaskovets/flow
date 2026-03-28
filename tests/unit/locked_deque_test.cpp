@@ -68,11 +68,11 @@ TEST_P_T(locked_deque_workload, nonblocking, flow::locked_deque<int>);
 TEST_P_T(locked_deque_workload, blocking, flow::locked_deque<int>);
 
 INSTANTIATE_TEST_SUITE_P(locked_deque_workload, locked_deque_workload,
-                         ::testing::Values(std::make_tuple(5, 3, 1, 1),
-                                           std::make_tuple(20, 10, 2, 1),
-                                           std::make_tuple(100, 10, 4, 1),
-                                           std::make_tuple(100, 10, 1, 4),
-                                           std::make_tuple(10000, 100, 4, 4)));
+                         ::testing::Values(std::make_tuple(1000, 4, 1, 1),
+                                           std::make_tuple(1000, 16, 2, 2),
+                                           std::make_tuple(1000, 32, 4, 1),
+                                           std::make_tuple(1000, 64, 1, 4),
+                                           std::make_tuple(1000, 128, 4, 4)));
 
 TEST_T(locked_deque, queued_producers_nonblocking, flow::locked_deque<int>);
 

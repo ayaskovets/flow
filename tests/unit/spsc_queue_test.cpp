@@ -66,11 +66,11 @@ TEST_P_T(spsc_queue_workload, nonblocking, flow::spsc_queue<int>);
 TEST_P_T(spsc_queue_workload, blocking, flow::spsc_queue<int>);
 
 INSTANTIATE_TEST_SUITE_P(spsc_queue_workload, spsc_queue_workload,
-                         ::testing::Values(std::make_tuple(5, 4, 1, 1),
-                                           std::make_tuple(20, 16, 1, 1),
-                                           std::make_tuple(100, 16, 1, 1),
-                                           std::make_tuple(30, 8, 1, 1),
-                                           std::make_tuple(10000, 128, 1, 1)));
+                         ::testing::Values(std::make_tuple(1000, 4, 1, 1),
+                                           std::make_tuple(1000, 16, 1, 1),
+                                           std::make_tuple(1000, 32, 1, 1),
+                                           std::make_tuple(1000, 64, 1, 1),
+                                           std::make_tuple(1000, 128, 1, 1)));
 
 TEST(spsc_queue, queued_producers_nonblocking) { GTEST_SKIP(); }
 

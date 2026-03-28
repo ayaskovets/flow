@@ -194,16 +194,29 @@ class mpmc_queue final : public swiss::non_copyable, public swiss::non_movable {
   [[no_unique_address]] allocator_type allocator_;
 
  private:
-  [[nodiscard]] constexpr auto full(index_type next_push_to,
-                                    index_type pop_from) const noexcept
-      -> bool {
-    return next_push_to == pop_from;
-  }
-
   [[nodiscard]] constexpr auto empty(index_type push_to,
                                      index_type pop_from) const noexcept
       -> bool {
     return push_to == pop_from;
+  }
+
+  [[nodiscard]] constexpr auto at(
+      typename Allocator::value_type * const ring_buffer, index_type capacity,
+      index_type index) const noexcept
+      -> std::pair<value_type, std::atomic<index_type>> * {
+    return ring_buffer + (index & capacity - 1);
+  }
+
+  [[nodiscard]] constexpr auto vacant(index_type push_to,
+                                      index_type seqnum) const noexcept
+      -> bool {
+    return push_to == seqnum;
+  }
+
+  [[nodiscard]] constexpr auto occupied(index_type pop_from,
+                                        index_type seqnum) const noexcept
+      -> bool {
+    return pop_from + 1 == seqnum;
   }
 
   [[nodiscard]] constexpr auto next(index_type index) const noexcept
@@ -215,7 +228,7 @@ class mpmc_queue final : public swiss::non_copyable, public swiss::non_movable {
   template <bool Blocking, bool Cancellable, typename... Args>
   constexpr auto emplace_impl(Args &&... args) -> decltype(auto) {
     auto push_to = writer_.index.load(std::memory_order::relaxed);
-    auto entry   = writer_.ring_buffer + (push_to & (*writer_.capacity - 1));
+    auto entry   = at(writer_.ring_buffer, *writer_.capacity, push_to);
 
     if constexpr (Blocking) {
       while (true) {
@@ -227,20 +240,22 @@ class mpmc_queue final : public swiss::non_copyable, public swiss::non_movable {
           }
         }
 
-        auto & [_, seqnum] = *entry;
-        if (push_to != seqnum.load(std::memory_order::acquire)) {
-          std::this_thread::yield();
-          push_to = writer_.index.load(std::memory_order::relaxed);
-        } else if (writer_.index.compare_exchange_weak(
+        auto const seqnum = entry->second.load(std::memory_order::acquire);
+        auto const vac    = vacant(push_to, seqnum);
+        if (vac && writer_.index.compare_exchange_weak(
                        push_to, next(push_to), std::memory_order::relaxed)) {
           break;
         }
 
-        entry = writer_.ring_buffer + (push_to & (*writer_.capacity - 1));
+        std::this_thread::yield();
+        if (!vac) {
+          push_to = writer_.index.load(std::memory_order::relaxed);
+        }
+        entry = at(writer_.ring_buffer, *writer_.capacity, push_to);
       }
     } else {
-      auto & [_, seqnum] = *entry;
-      if (push_to != seqnum.load(std::memory_order::acquire) ||
+      auto const seqnum = entry->second.load(std::memory_order::acquire);
+      if (!vacant(push_to, seqnum) ||
           !writer_.index.compare_exchange_strong(push_to, next(push_to),
                                                  std::memory_order::relaxed)) {
         return false;
@@ -265,7 +280,7 @@ class mpmc_queue final : public swiss::non_copyable, public swiss::non_movable {
   template <bool Blocking, bool Cancellable, typename... Args>
   constexpr auto pop_impl(Args &&... args) -> decltype(auto) {
     auto pop_from = reader_.index.load(std::memory_order::relaxed);
-    auto entry    = reader_.ring_buffer + (pop_from & (*reader_.capacity - 1));
+    auto entry    = at(reader_.ring_buffer, *reader_.capacity, pop_from);
 
     if constexpr (Blocking) {
       while (true) {
@@ -277,20 +292,22 @@ class mpmc_queue final : public swiss::non_copyable, public swiss::non_movable {
           }
         }
 
-        auto & [_, seqnum] = *entry;
-        if (pop_from + 1 != seqnum.load(std::memory_order::acquire)) {
-          std::this_thread::yield();
-          pop_from = reader_.index.load(std::memory_order::relaxed);
-        } else if (reader_.index.compare_exchange_weak(
+        auto const seqnum = entry->second.load(std::memory_order::acquire);
+        auto const occ    = occupied(pop_from, seqnum);
+        if (occ && reader_.index.compare_exchange_weak(
                        pop_from, next(pop_from), std::memory_order::relaxed)) {
           break;
         }
 
-        entry = reader_.ring_buffer + (pop_from & (*reader_.capacity - 1));
+        std::this_thread::yield();
+        if (!occ) {
+          pop_from = reader_.index.load(std::memory_order::relaxed);
+        }
+        entry = at(reader_.ring_buffer, *reader_.capacity, pop_from);
       }
     } else {
-      auto & [_, seqnum] = *entry;
-      if (pop_from + 1 != seqnum.load(std::memory_order::acquire) ||
+      auto const seqnum = entry->second.load(std::memory_order::acquire);
+      if (!occupied(pop_from, seqnum) ||
           !reader_.index.compare_exchange_strong(pop_from, next(pop_from),
                                                  std::memory_order::relaxed)) {
         return false;
@@ -302,6 +319,7 @@ class mpmc_queue final : public swiss::non_copyable, public swiss::non_movable {
         swiss::variadic_nth<Cancellable ? 1 : 0>(std::forward<Args>(args)...);
     value = std::move(item);
     std::destroy_at(&item);
+
     seqnum.store(pop_from + *reader_.capacity, std::memory_order::release);
     return true;
   }

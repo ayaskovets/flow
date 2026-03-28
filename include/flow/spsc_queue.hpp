@@ -157,9 +157,9 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     index_type cache              = 0;
     // NOLINTBEGIN(cppcoreguidelines-avoid-const-or-ref-data-members)
     value_type * const ring_buffer;
-    swiss::conditionally_runtime<index_type,
-                                 Capacity == swiss::kDynamicExtent<index_type>,
-                                 Capacity> const capacity;
+    [[no_unique_address]] swiss::conditionally_runtime<
+        index_type, Capacity == swiss::kDynamicExtent<index_type>,
+        Capacity> const capacity;
     // NOLINTEND(cppcoreguidelines-avoid-const-or-ref-data-members)
   };
 

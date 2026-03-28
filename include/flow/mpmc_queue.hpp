@@ -182,7 +182,7 @@ class mpmc_queue final : public swiss::non_copyable, public swiss::non_movable {
   struct alignas(std::hardware_destructive_interference_size) CacheLine final {
     std::atomic<index_type> index = 0;
     // NOLINTBEGIN(cppcoreguidelines-avoid-const-or-ref-data-members)
-    typename Allocator::value_type * const ring_buffer;
+    typename allocator_type::value_type * const ring_buffer;
     [[no_unique_address]] swiss::conditionally_runtime<
         index_type, Capacity == swiss::kDynamicExtent<index_type>,
         Capacity> const capacity;
@@ -201,8 +201,8 @@ class mpmc_queue final : public swiss::non_copyable, public swiss::non_movable {
   }
 
   [[nodiscard]] constexpr auto at(
-      typename Allocator::value_type * const ring_buffer, index_type capacity,
-      index_type index) const noexcept ->
+      typename allocator_type::value_type * const ring_buffer,
+      index_type capacity, index_type index) const noexcept ->
       typename allocator_type::value_type * {
     return ring_buffer + (index & capacity - 1);
   }

@@ -207,16 +207,16 @@ class mpmc_queue final : public swiss::non_copyable, public swiss::non_movable {
     return ring_buffer + (index & capacity - 1);
   }
 
-  [[nodiscard]] constexpr auto vacant(index_type push_to,
+  [[nodiscard]] constexpr auto vacant(index_type index,
                                       index_type seqnum) const noexcept
       -> bool {
-    return push_to == seqnum;
+    return index == seqnum;
   }
 
-  [[nodiscard]] constexpr auto occupied(index_type pop_from,
+  [[nodiscard]] constexpr auto occupied(index_type index,
                                         index_type seqnum) const noexcept
       -> bool {
-    return pop_from + 1 == seqnum;
+    return index + 1 == seqnum;
   }
 
   [[nodiscard]] constexpr auto next(index_type index) const noexcept

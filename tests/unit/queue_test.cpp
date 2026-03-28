@@ -1,5 +1,6 @@
 #include <flow/locked_deque.hpp>
 #include <flow/locked_mpmc_queue.hpp>
+#include <flow/mpmc_queue.hpp>
 #include <flow/queue.hpp>
 #include <flow/spsc_queue.hpp>
 #include <flow/unsafe_queue.hpp>
@@ -24,6 +25,14 @@ TEST(queue, locked_mpmc_queue) {
       flow::concepts::noexcept_blocking_queue<flow::locked_mpmc_queue<int>>);
   static_assert(flow::concepts::noexcept_cancellable_blocking_queue<
                 flow::locked_mpmc_queue<int>>);
+}
+
+TEST(queue, mpmc_queue) {
+  static_assert(
+      flow::concepts::noexcept_nonblocking_queue<flow::mpmc_queue<int>>);
+  static_assert(flow::concepts::noexcept_blocking_queue<flow::mpmc_queue<int>>);
+  static_assert(flow::concepts::noexcept_cancellable_blocking_queue<
+                flow::mpmc_queue<int>>);
 }
 
 TEST(queue, spsc_queue) {

@@ -51,13 +51,15 @@ template <flow::concepts::nonblocking_queue Queue>
   requires(std::same_as<typename Queue::value_type, int>)
 constexpr void nonblocking_smoke() noexcept {
   int value{};
-  Queue queue(3);
+  Queue queue(4);
 
   EXPECT_FALSE(queue.try_pop(value));
+  EXPECT_TRUE(queue.try_push(0));
   EXPECT_TRUE(queue.try_push(1));
   EXPECT_TRUE(queue.try_push(2));
   EXPECT_TRUE(queue.try_push(3));
-  EXPECT_FALSE(queue.try_push(4));
+  EXPECT_TRUE(queue.try_pop(value));
+  EXPECT_EQ(value, 0);
   EXPECT_TRUE(queue.try_pop(value));
   EXPECT_EQ(value, 1);
   EXPECT_TRUE(queue.try_pop(value));
@@ -65,20 +67,23 @@ constexpr void nonblocking_smoke() noexcept {
   EXPECT_TRUE(queue.try_pop(value));
   EXPECT_EQ(value, 3);
   EXPECT_FALSE(queue.try_pop(value));
-  EXPECT_TRUE(queue.try_push(5));
+  EXPECT_TRUE(queue.try_push(4));
   EXPECT_TRUE(queue.try_pop(value));
-  EXPECT_EQ(value, 5);
+  EXPECT_EQ(value, 4);
 }
 
 template <flow::concepts::blocking_queue Queue>
   requires(std::same_as<typename Queue::value_type, int>)
 constexpr void blocking_smoke() noexcept {
   int value{};
-  Queue queue(3);
+  Queue queue(4);
 
+  queue.push(0);
   queue.push(1);
   queue.push(2);
   queue.push(3);
+  queue.pop(value);
+  EXPECT_EQ(value, 0);
   queue.pop(value);
   EXPECT_EQ(value, 1);
   queue.pop(value);
@@ -246,7 +251,9 @@ constexpr void non_copyable_item_type() noexcept {
 template <flow::concepts::blocking_queue Queue>
   requires(std::same_as<typename Queue::value_type, int>)
 constexpr void allocator() noexcept {
-  swiss::leak_detector_allocator<typename Queue::value_type, true> allocator;
+  swiss::leak_detector_allocator<typename Queue::allocator_type::value_type,
+                                 true>
+      allocator;
   allocator.clear();
 
   EXPECT_TRUE(allocator.empty());

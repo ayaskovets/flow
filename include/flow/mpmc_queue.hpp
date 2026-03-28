@@ -240,8 +240,9 @@ class mpmc_queue final : public swiss::non_copyable, public swiss::non_movable {
           }
         }
 
-        auto const seqnum = entry->second.load(std::memory_order::acquire);
-        auto const vac    = vacant(push_to, seqnum);
+        auto const & [_, seqnum] = *entry;
+        auto const vac =
+            vacant(push_to, seqnum.load(std::memory_order::acquire));
         if (vac && writer_.index.compare_exchange_weak(
                        push_to, next(push_to), std::memory_order::relaxed)) {
           break;
@@ -254,8 +255,8 @@ class mpmc_queue final : public swiss::non_copyable, public swiss::non_movable {
         entry = at(writer_.ring_buffer, *writer_.capacity, push_to);
       }
     } else {
-      auto const seqnum = entry->second.load(std::memory_order::acquire);
-      if (!vacant(push_to, seqnum) ||
+      auto const & [_, seqnum] = *entry;
+      if (!vacant(push_to, seqnum.load(std::memory_order::acquire)) ||
           !writer_.index.compare_exchange_strong(push_to, next(push_to),
                                                  std::memory_order::relaxed)) {
         return false;
@@ -292,8 +293,9 @@ class mpmc_queue final : public swiss::non_copyable, public swiss::non_movable {
           }
         }
 
-        auto const seqnum = entry->second.load(std::memory_order::acquire);
-        auto const occ    = occupied(pop_from, seqnum);
+        auto const & [_, seqnum] = *entry;
+        auto const occ =
+            occupied(pop_from, seqnum.load(std::memory_order::acquire));
         if (occ && reader_.index.compare_exchange_weak(
                        pop_from, next(pop_from), std::memory_order::relaxed)) {
           break;
@@ -306,8 +308,8 @@ class mpmc_queue final : public swiss::non_copyable, public swiss::non_movable {
         entry = at(reader_.ring_buffer, *reader_.capacity, pop_from);
       }
     } else {
-      auto const seqnum = entry->second.load(std::memory_order::acquire);
-      if (!occupied(pop_from, seqnum) ||
+      auto const & [_, seqnum] = *entry;
+      if (!occupied(pop_from, seqnum.load(std::memory_order::acquire)) ||
           !reader_.index.compare_exchange_strong(pop_from, next(pop_from),
                                                  std::memory_order::relaxed)) {
         return false;

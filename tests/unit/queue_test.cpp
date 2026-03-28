@@ -1,5 +1,5 @@
 #include <flow/locked_deque.hpp>
-#include <flow/locked_mpmc_queue.hpp>
+#include <flow/locked_ring_buffer.hpp>
 #include <flow/mpmc_queue.hpp>
 #include <flow/queue.hpp>
 #include <flow/spsc_queue.hpp>
@@ -18,13 +18,13 @@ TEST(queue, locked_deque) {
                 flow::locked_deque<int>>);
 }
 
-TEST(queue, locked_mpmc_queue) {
+TEST(queue, locked_ring_buffer) {
+  static_assert(flow::concepts::noexcept_nonblocking_queue<
+                flow::locked_ring_buffer<int>>);
   static_assert(
-      flow::concepts::noexcept_nonblocking_queue<flow::locked_mpmc_queue<int>>);
-  static_assert(
-      flow::concepts::noexcept_blocking_queue<flow::locked_mpmc_queue<int>>);
+      flow::concepts::noexcept_blocking_queue<flow::locked_ring_buffer<int>>);
   static_assert(flow::concepts::noexcept_cancellable_blocking_queue<
-                flow::locked_mpmc_queue<int>>);
+                flow::locked_ring_buffer<int>>);
 }
 
 TEST(queue, mpmc_queue) {

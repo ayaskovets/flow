@@ -17,6 +17,8 @@ namespace flow {
 /**
  * @brief Locked ring buffer for many producers and many consumers
  * @note Implemented as a ring buffer
+ * @note Provides mostly the same performance as a locked std::deque but with a
+ * pre-allocated memory buffer
  * @warning Allocated buffer always contains one additional element to
  * differentiate the empty state
  */
@@ -24,15 +26,15 @@ template <typename Value, std::unsigned_integral Index = std::size_t,
           Index Capacity     = swiss::kDynamicExtent<Index>,
           typename Allocator = std::allocator<Value>>
 // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
-class locked_mpmc_queue final : public swiss::non_copyable,
-                                public swiss::non_movable {
+class locked_ring_buffer final : public swiss::non_copyable,
+                                 public swiss::non_movable {
  public:
   using value_type     = Value;
   using index_type     = Index;
   using allocator_type = Allocator;
 
  public:
-  constexpr explicit locked_mpmc_queue(
+  constexpr explicit locked_ring_buffer(
       allocator_type allocator = allocator_type())
     requires(Capacity != swiss::kDynamicExtent<index_type>)
       : ring_buffer_(allocator.allocate(Capacity + 1)),
@@ -40,16 +42,17 @@ class locked_mpmc_queue final : public swiss::non_copyable,
         allocator_(std::move(allocator)) {
     static_assert(
         Capacity > 0,
-        "locked_mpmc_queue::locked_mpmc_queue(): invalid capacity < 1");
+        "locked_ring_buffer::locked_ring_buffer(): invalid capacity < 1");
   }
 
-  constexpr explicit locked_mpmc_queue(
+  constexpr explicit locked_ring_buffer(
       index_type capacity, allocator_type allocator = allocator_type())
     requires(Capacity == swiss::kDynamicExtent<index_type>)
       : ring_buffer_([capacity, &allocator]() {
           if (capacity == 0) [[unlikely]] {
             throw std::invalid_argument(
-                "locked_mpmc_queue::locked_mpmc_queue(): invalid capacity < 1");
+                "locked_ring_buffer::locked_ring_buffer(): invalid capacity < "
+                "1");
           }
           return allocator.allocate(capacity + 1);
         }()),
@@ -59,7 +62,7 @@ class locked_mpmc_queue final : public swiss::non_copyable,
   /**
    * @warning Destructor requires exlusive access to the queue
    */
-  constexpr ~locked_mpmc_queue() noexcept {
+  constexpr ~locked_ring_buffer() noexcept {
     std::lock_guard const lock(mutex_);
 
     while (!empty()) {

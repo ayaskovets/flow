@@ -23,12 +23,8 @@ add_executable(flow-benchmarks)
 # sources
 # ------------------------------------------------------------------------------
 
-set(SOURCES
-    locked_deque_bench.cpp
-    locked_mpmc_queue_bench.cpp
-    main.cpp
-    spsc_queue_bench.cpp
-    templates.hpp)
+set(SOURCES locked_deque_bench.cpp locked_ring_buffer_bench.cpp main.cpp
+            mpmc_queue_bench.cpp spsc_queue_bench.cpp templates.hpp)
 
 # ------------------------------------------------------------------------------
 # target

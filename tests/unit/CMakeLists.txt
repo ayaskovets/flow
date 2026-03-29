@@ -25,6 +25,7 @@ add_executable(flow-unit-tests)
 # ------------------------------------------------------------------------------
 
 set(SOURCES
+    cas128_mpmc_queue_test.cpp
     locked_deque_test.cpp
     locked_ring_buffer_test.cpp
     mpmc_queue_test.cpp

@@ -20,10 +20,6 @@ namespace flow {
  * @note Implemented as a ring buffer with a sequence number for each element as
  * a means to mitigate the ABA problem which could happen when Index overflows
  * @note Capacity for this queue must be a power of 2 for efficient division
- * @warning This queue does not handle integer overflow well, but using 64-bit
- * unsigned integers as indices makes the problem virtually nonexistent because
- * even handling 1B messages per second overflow would occur once every 584
- * years (for Index = std::size_t)
  * @warning std::allocator_traits construction/destruction is not supported
  */
 template <typename Value, std::unsigned_integral Index = std::size_t,
@@ -48,7 +44,7 @@ class mpmc_queue final : public swiss::non_copyable, public swiss::non_movable {
     static_assert(swiss::is_power_of_two(Capacity),
                   "mpmc_queue::mpmc_queue(): capacity must be 2^n");
 
-    for (std::size_t i = 0; i < Capacity; ++i) {
+    for (index_type i = 0; i < Capacity; ++i) {
       auto & [_, seqnum] = *(writer_.ring_buffer + i);
       seqnum.store(i, std::memory_order::relaxed);
     }
@@ -75,7 +71,7 @@ class mpmc_queue final : public swiss::non_copyable, public swiss::non_movable {
                 .capacity{capacity}},
         reader_{.ring_buffer = writer_.ring_buffer, .capacity{capacity}},
         allocator_(std::move(allocator)) {
-    for (std::size_t i = 0; i < capacity; ++i) {
+    for (index_type i = 0; i < capacity; ++i) {
       auto & [_, seqnum] = *(writer_.ring_buffer + i);
       seqnum.store(i, std::memory_order::relaxed);
     }
@@ -216,7 +212,11 @@ class mpmc_queue final : public swiss::non_copyable, public swiss::non_movable {
   [[nodiscard]] constexpr auto occupied(index_type index,
                                         index_type seqnum) const noexcept
       -> bool {
-    return index + 1 == seqnum;
+    /**
+     * @note Cast here is required for types that are converted to int on
+     * addition like std::uint8_t, std::uint16_t etc.
+     */
+    return static_cast<index_type>(index + 1) == seqnum;
   }
 
   [[nodiscard]] constexpr auto next(index_type index) const noexcept

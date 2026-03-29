@@ -70,6 +70,7 @@ TEST(unsafe_queue, queued_consumers_nonblocking) { GTEST_SKIP(); }
 
 TEST(unsafe_queue, queued_consumers_blocking) { GTEST_SKIP(); }
 
-TEST_T(unsafe_queue, rollover, flow::unsafe_queue<int>);
+using uint8_index_queue_t = flow::unsafe_queue<int, std::uint8_t>;
+TEST_T(unsafe_queue, rollover, uint8_index_queue_t);
 
 }  // namespace tests

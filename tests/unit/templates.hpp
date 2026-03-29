@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <atomic>
 #include <latch>
+#include <limits>
 #include <ranges>
 #include <stop_token>
 #include <thread>
@@ -498,10 +499,13 @@ constexpr void rollover() noexcept {
   int value{};
   Queue queue(kQueueSize);
 
-  for (std::size_t i = 0; i < kQueueSize * kQueueSize * 2; ++i) {
-    EXPECT_TRUE(queue.try_push(static_cast<int>(i)));
-    EXPECT_TRUE(queue.try_pop(value));
-    EXPECT_EQ(value, static_cast<int>(i));
+  for (std::size_t _ = 0; _ < 3; ++_) {
+    for (std::size_t i = 0;
+         i < std::numeric_limits<typename Queue::index_type>::max(); ++i) {
+      EXPECT_TRUE(queue.try_push(static_cast<int>(i)));
+      EXPECT_TRUE(queue.try_pop(value));
+      EXPECT_EQ(value, static_cast<int>(i));
+    }
   }
 }
 

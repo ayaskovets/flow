@@ -82,6 +82,7 @@ TEST_T(locked_deque, queued_consumers_nonblocking, flow::locked_deque<int>);
 
 TEST_T(locked_deque, queued_consumers_blocking, flow::locked_deque<int>);
 
-TEST_T(locked_deque, rollover, flow::locked_deque<int>);
+using uint8_index_queue_t = flow::locked_deque<int, std::uint8_t>;
+TEST_T(locked_deque, rollover, uint8_index_queue_t);
 
 }  // namespace tests

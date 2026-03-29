@@ -94,6 +94,7 @@ TEST_T(locked_ring_buffer, queued_consumers_nonblocking,
 TEST_T(locked_ring_buffer, queued_consumers_blocking,
        flow::locked_ring_buffer<int>);
 
-TEST_T(locked_ring_buffer, rollover, flow::locked_ring_buffer<int>);
+using uint8_index_queue_t = flow::locked_ring_buffer<int, std::uint8_t>;
+TEST_T(locked_ring_buffer, rollover, uint8_index_queue_t);
 
 }  // namespace tests

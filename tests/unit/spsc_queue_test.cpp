@@ -80,6 +80,7 @@ TEST(spsc_queue, queued_consumers_nonblocking) { GTEST_SKIP(); }
 
 TEST(spsc_queue, queued_consumers_blocking) { GTEST_SKIP(); }
 
-TEST_T(spsc_queue, rollover, flow::spsc_queue<int>);
+using uint8_index_queue_t = flow::spsc_queue<int, std::uint8_t>;
+TEST_T(spsc_queue, rollover, uint8_index_queue_t);
 
 }  // namespace tests

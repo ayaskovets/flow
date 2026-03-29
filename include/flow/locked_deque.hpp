@@ -172,7 +172,7 @@ class locked_deque final : public swiss::non_copyable,
       }
     }
 
-    if constexpr (Cancellable && sizeof...(Args) > 0) {
+    if constexpr (Cancellable) {
       [this](auto &&, auto &&... tail) {
         deque_.emplace_back(std::forward<decltype(tail)>(tail)...);
       }(std::forward<Args>(args)...);

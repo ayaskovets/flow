@@ -216,7 +216,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
       }
     }
 
-    if constexpr (Cancellable && sizeof...(Args) > 0) {
+    if constexpr (Cancellable) {
       [this, push_to](auto &&, auto &&... tail) {
         std::allocator_traits<allocator_type>::construct(
             allocator_, writer_.ring_buffer + push_to,

@@ -203,7 +203,7 @@ class locked_ring_buffer final : public swiss::non_copyable,
       }
     }
 
-    if constexpr (Cancellable && sizeof...(Args) > 0) {
+    if constexpr (Cancellable) {
       [this](auto &&, auto &&... tail) {
         std::allocator_traits<allocator_type>::construct(
             allocator_, ring_buffer_ + push_to_,

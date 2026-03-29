@@ -264,7 +264,7 @@ class mpmc_queue final : public swiss::non_copyable, public swiss::non_movable {
     }
 
     auto & [item, seqnum] = *entry;
-    if constexpr (Cancellable && sizeof...(Args) > 0) {
+    if constexpr (Cancellable) {
       [&item](auto &&, auto &&... tail) {
         std::construct_at(&item, std::forward<decltype(tail)>(tail)...);
       }(std::forward<Args>(args)...);

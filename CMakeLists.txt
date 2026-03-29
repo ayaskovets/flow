@@ -26,7 +26,7 @@ add_library(flow::flow ALIAS flow)
 set(HEADERS
     include/flow/locked_deque.hpp
     include/flow/locked_ring_buffer.hpp
-    include/flow/lockfree_mpmc_queue.hpp
+    include/flow/cas128_mpmc_queue.hpp
     include/flow/lockfree_mpsc_queue.hpp
     include/flow/lockfree_spmc_queue.hpp
     include/flow/mpmc_queue.hpp

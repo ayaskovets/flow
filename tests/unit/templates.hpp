@@ -500,7 +500,7 @@ constexpr void rollover() noexcept {
 
   for (std::size_t i = 0; i < kQueueSize * kQueueSize * 2; ++i) {
     EXPECT_TRUE(queue.try_push(static_cast<int>(i)));
-    queue.pop(value);
+    EXPECT_TRUE(queue.try_pop(value));
     EXPECT_EQ(value, static_cast<int>(i));
   }
 }

@@ -141,8 +141,8 @@ class unsafe_queue final : public swiss::non_copyable,
   index_type push_to_  = 0;
   index_type pop_from_ = 0;
   index_type size_     = 0;
-  value_type * ring_buffer_;
   // NOLINTBEGIN(cppcoreguidelines-avoid-const-or-ref-data-members)
+  value_type * const ring_buffer_;
   [[no_unique_address]] swiss::conditionally_runtime<
       index_type, Capacity == swiss::kDynamicExtent<index_type>, Capacity> const
       capacity_;

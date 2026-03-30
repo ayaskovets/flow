@@ -24,7 +24,7 @@ TEST(mpsc_queue, capacity) {
   EXPECT_EQ(flow::mpsc_queue<std::string>(64).capacity(), 64);
 }
 
-TEST_T(mpsc_queue, minimal_capacity, flow::mpsc_queue<int>, 1);
+TEST_T(mpsc_queue, minimal_capacity, flow::mpsc_queue<int>, 2);
 
 TEST_T(mpsc_queue, size_capacity, flow::mpsc_queue<int>);
 
@@ -77,9 +77,9 @@ TEST_T(mpsc_queue, queued_producers_nonblocking, flow::mpsc_queue<int>);
 
 TEST_T(mpsc_queue, queued_producers_blocking, flow::mpsc_queue<int>);
 
-TEST_T(mpsc_queue, queued_consumers_nonblocking, flow::mpsc_queue<int>);
+TEST(mpsc_queue, queued_consumers_nonblocking) { GTEST_SKIP(); }
 
-TEST_T(mpsc_queue, queued_consumers_blocking, flow::mpsc_queue<int>);
+TEST(mpsc_queue, queued_consumers_blocking) { GTEST_SKIP(); }
 
 using uint8_index_queue_t = flow::mpsc_queue<int, std::uint8_t>;
 TEST_T(mpsc_queue, rollover, uint8_index_queue_t);

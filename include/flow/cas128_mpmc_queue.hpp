@@ -18,8 +18,9 @@ namespace flow {
 
 /**
  * @brief Threadsafe queue for many producers and many consumers
- * @note Implemented with 128-bit CAS. The last bit of seqnum indicates whether
- * the element is occupied. Allocated value must be an always-lockfree atomic
+ * @note Implementation requires both value and index be trivally copyable and a
+ * lockfree CAS operation for {value, index} pair. For std::size_t index this
+ * pretty much means 128-bit CAS
  * @warning std::allocator_traits construction/destruction is not supported
  */
 template <typename Value, std::unsigned_integral Index = std::size_t,

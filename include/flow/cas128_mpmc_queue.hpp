@@ -163,7 +163,7 @@ class cas128_mpmc_queue final : public swiss::non_copyable,
 
  public:
   [[nodiscard]] constexpr auto capacity() const noexcept -> index_type {
-    return *writer_.capacity;
+    return *reader_.capacity;
   }
 
   /**

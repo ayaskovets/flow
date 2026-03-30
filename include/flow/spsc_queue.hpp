@@ -132,7 +132,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
 
  public:
   [[nodiscard]] constexpr auto capacity() const noexcept -> index_type {
-    return *writer_.capacity;
+    return *reader_.capacity;
   }
 
   /**
@@ -143,7 +143,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     auto const pop_from = reader_.index.load(std::memory_order::relaxed);
 
     return pop_from <= push_to ? push_to - pop_from
-                               : *writer_.capacity + push_to + 1 - pop_from;
+                               : *reader_.capacity + push_to + 1 - pop_from;
   }
 
  public:

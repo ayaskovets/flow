@@ -166,9 +166,6 @@ class cas128_mpmc_queue final : public swiss::non_copyable,
     return *reader_.capacity;
   }
 
-  /**
-   * @brief Approximate size
-   */
   [[nodiscard]] constexpr auto size() const noexcept -> index_type {
     index_type const push_to  = writer_.index.load(std::memory_order::relaxed);
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);

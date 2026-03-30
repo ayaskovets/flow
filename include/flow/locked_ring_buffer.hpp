@@ -135,9 +135,6 @@ class locked_ring_buffer final : public swiss::non_copyable,
     return *capacity_;
   }
 
-  /**
-   * @warning Approximate size
-   */
   [[nodiscard]] constexpr auto size() const noexcept -> index_type {
     std::lock_guard const lock(mutex_);
     return pop_from_ <= push_to_ ? push_to_ - pop_from_

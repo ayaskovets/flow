@@ -135,9 +135,6 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     return *reader_.capacity;
   }
 
-  /**
-   * @warning Approximate size
-   */
   [[nodiscard]] constexpr auto size() const noexcept -> index_type {
     auto const push_to  = writer_.index.load(std::memory_order::relaxed);
     auto const pop_from = reader_.index.load(std::memory_order::relaxed);

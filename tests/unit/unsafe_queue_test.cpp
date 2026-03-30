@@ -9,9 +9,9 @@ namespace tests {
 
 TEST(unsafe_queue, size) {
   // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
-  static_assert(sizeof(flow::unsafe_queue<int, std::size_t, 10>) == 32);
+  static_assert(sizeof(flow::unsafe_queue<int, std::size_t, 10>) == 24);
   static_assert(alignof(flow::unsafe_queue<int, std::size_t, 10>) == 8);
-  static_assert(sizeof(flow::unsafe_queue<int>) == 40);
+  static_assert(sizeof(flow::unsafe_queue<int>) == 32);
   static_assert(alignof(flow::unsafe_queue<int>) == 8);
   // NOLINTEND(cppcoreguidelines-avoid-magic-numbers)
 }

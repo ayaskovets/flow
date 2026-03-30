@@ -59,7 +59,6 @@ class unsafe_queue final : public swiss::non_copyable,
                                                      ring_buffer_ + pop_from_);
 
       pop_from_ = next(pop_from_);
-      size_ -= 1;
     }
 
     allocator_.deallocate(ring_buffer_, *capacity_ + 1);
@@ -77,7 +76,6 @@ class unsafe_queue final : public swiss::non_copyable,
         allocator_, ring_buffer_ + push_to_, std::forward<Args>(args)...);
 
     push_to_ = next(push_to_);
-    size_ += 1;
     return true;
   }
 
@@ -113,11 +111,10 @@ class unsafe_queue final : public swiss::non_copyable,
                                                    ring_buffer_ + pop_from_);
 
     pop_from_ = next(pop_from_);
-    size_ -= 1;
     return true;
   }
 
-  constexpr auto pop(value_type & value) -> void {
+  constexpr void pop(value_type & value) {
     if (!try_pop(value)) {
       throw std::runtime_error("unsafe_queue::pop(): empty");
     }
@@ -129,7 +126,8 @@ class unsafe_queue final : public swiss::non_copyable,
   }
 
   [[nodiscard]] constexpr auto size() const noexcept -> index_type {
-    return size_;
+    return pop_from_ <= push_to_ ? push_to_ - pop_from_
+                                 : *capacity_ + push_to_ + 1 - pop_from_;
   }
 
  public:
@@ -140,7 +138,6 @@ class unsafe_queue final : public swiss::non_copyable,
  private:
   index_type push_to_  = 0;
   index_type pop_from_ = 0;
-  index_type size_     = 0;
   // NOLINTBEGIN(cppcoreguidelines-avoid-const-or-ref-data-members)
   value_type * const ring_buffer_;
   [[no_unique_address]] swiss::conditionally_runtime<
@@ -151,11 +148,11 @@ class unsafe_queue final : public swiss::non_copyable,
 
  private:
   [[nodiscard]] constexpr auto full() const noexcept -> bool {
-    return size_ == *capacity_;
+    return next(push_to_) == pop_from_;
   }
 
   [[nodiscard]] constexpr auto empty() const noexcept -> bool {
-    return size_ == 0;
+    return push_to_ == pop_from_;
   }
 
   [[nodiscard]] constexpr auto next(index_type index) const noexcept

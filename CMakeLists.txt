@@ -27,8 +27,8 @@ set(HEADERS
     include/flow/locked_deque.hpp
     include/flow/locked_ring_buffer.hpp
     include/flow/cas128_mpmc_queue.hpp
-    include/flow/lockfree_mpsc_queue.hpp
-    include/flow/lockfree_spmc_queue.hpp
+    include/flow/mpsc_queue.hpp
+    include/flow/spmc_queue.hpp
     include/flow/mpmc_queue.hpp
     include/flow/queue.hpp
     include/flow/spsc_queue.hpp

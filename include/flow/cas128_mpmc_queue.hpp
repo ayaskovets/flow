@@ -4,21 +4,17 @@
 #include <memory>
 #include <new>
 #include <stdexcept>
+#include <stop_token>
 #include <thread>
 
 #include <swiss/conditionally_runtime.hpp>
 #include <swiss/dynamic_extent.hpp>
 #include <swiss/mixins.hpp>
 #include <swiss/predicates.hpp>
+#include <swiss/trivial_pair.hpp>
 #include <swiss/variadic_traits.hpp>
 
 namespace flow {
-
-template <typename Value, std::unsigned_integral Index>
-struct test {
-  Value value;
-  Index index;
-};
 
 /**
  * @brief Threadsafe queue for many producers and many consumers
@@ -27,8 +23,9 @@ struct test {
  * @warning std::allocator_traits construction/destruction is not supported
  */
 template <typename Value, std::unsigned_integral Index = std::size_t,
-          Index Capacity     = swiss::kDynamicExtent<Index>,
-          typename Allocator = std::allocator<std::atomic<test<Value, Index>>>>
+          Index Capacity = swiss::kDynamicExtent<Index>,
+          typename Allocator =
+              std::allocator<std::atomic<swiss::trivial_pair<Value, Index>>>>
   requires(static_cast<bool>(Allocator::value_type::is_always_lock_free))
 // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class cas128_mpmc_queue final : public swiss::non_copyable,
@@ -52,12 +49,12 @@ class cas128_mpmc_queue final : public swiss::non_copyable,
         swiss::is_power_of_two(Capacity),
         "cas128_mpmc_queue::cas128_mpmc_queue(): capacity must be 2^n");
 
-    for (std::size_t i = 0; i < Capacity; ++i) {
+    for (index_type i = 0; i < Capacity; ++i) {
       auto entry = at(writer_.ring_buffer, *writer_.capacity, i);
       entry->store([i]() {
         typename allocator_type::value_type::value_type entry;
         auto & [_, seqnum] = entry;
-        seqnum             = i << 1U;
+        seqnum             = static_cast<index_type>(i << 1);
         return entry;
       }());
     }
@@ -84,12 +81,12 @@ class cas128_mpmc_queue final : public swiss::non_copyable,
                 .capacity{capacity}},
         reader_{.ring_buffer = writer_.ring_buffer, .capacity{capacity}},
         allocator_(std::move(allocator)) {
-    for (std::size_t i = 0; i < capacity; ++i) {
+    for (index_type i = 0; i < capacity; ++i) {
       auto entry = at(writer_.ring_buffer, *writer_.capacity, i);
       entry->store([i]() {
         typename allocator_type::value_type::value_type entry;
         auto & [_, seqnum] = entry;
-        seqnum             = i << 1U;
+        seqnum             = static_cast<index_type>(i << 1);
         return entry;
       }());
     }
@@ -101,35 +98,43 @@ class cas128_mpmc_queue final : public swiss::non_copyable,
 
  public:
   template <typename... Args>
-  constexpr auto try_emplace(Args &&... args) noexcept(
-      std::is_nothrow_constructible_v<value_type, Args...>) -> bool {
+  constexpr auto try_emplace(Args &&... args) noexcept -> bool
+    requires(std::is_nothrow_constructible_v<value_type, Args...>)
+  {
     return emplace_impl<false, false>(std::forward<Args>(args)...);
   }
 
-  constexpr auto try_push(value_type value) noexcept(
-      std::is_nothrow_move_constructible_v<value_type>) -> bool {
+  constexpr auto try_push(value_type value) noexcept -> bool
+    requires(std::is_nothrow_move_constructible_v<value_type>)
+  {
     return emplace_impl<false, false>(std::move(value));
   }
 
   template <typename... Args>
-  constexpr auto emplace(std::stop_token stop_token, Args &&... args) noexcept(
-      std::is_nothrow_constructible_v<value_type, Args...>) -> bool {
+  constexpr auto emplace(std::stop_token stop_token, Args &&... args) noexcept
+      -> bool
+    requires(std::is_nothrow_constructible_v<value_type, Args...>)
+  {
     return emplace_impl<true, true>(stop_token, std::forward<Args>(args)...);
   }
 
-  constexpr auto push(std::stop_token stop_token, value_type value) noexcept(
-      std::is_nothrow_move_constructible_v<value_type>) -> bool {
+  constexpr auto push(std::stop_token stop_token, value_type value) noexcept
+      -> bool
+    requires(std::is_nothrow_move_constructible_v<value_type>)
+  {
     return emplace_impl<true, true>(stop_token, std::move(value));
   }
 
   template <typename... Args>
-  constexpr void emplace(Args &&... args) noexcept(
-      std::is_nothrow_constructible_v<value_type, Args...>) {
+  constexpr void emplace(Args &&... args) noexcept
+    requires(std::is_nothrow_constructible_v<value_type, Args...>)
+  {
     emplace_impl<true, false>(std::forward<Args>(args)...);
   }
 
-  constexpr void push(value_type value) noexcept(
-      std::is_nothrow_move_constructible_v<value_type>) {
+  constexpr void push(value_type value) noexcept
+    requires(std::is_nothrow_move_constructible_v<value_type>)
+  {
     emplace_impl<true, false>(std::move(value));
   }
 
@@ -199,17 +204,17 @@ class cas128_mpmc_queue final : public swiss::non_copyable,
     return ring_buffer + (index & capacity - 1);
   }
 
-  // [[nodiscard]] constexpr auto vacant(index_type push_to,
-  //                                     index_type seqnum) const noexcept
-  //     -> bool {
-  //   return (push_to << 1) == seqnum;
-  // }
+  [[nodiscard]] constexpr auto vacant(index_type push_to,
+                                      index_type seqnum) const noexcept
+      -> bool {
+    return static_cast<index_type>(push_to << 1) == seqnum;
+  }
 
-  // [[nodiscard]] constexpr auto occupied(index_type pop_from,
-  //                                       index_type seqnum) const noexcept
-  //     -> bool {
-  //   return pop_from + 1 == seqnum;
-  // }
+  [[nodiscard]] constexpr auto occupied(index_type pop_from,
+                                        index_type seqnum) const noexcept
+      -> bool {
+    return seqnum == static_cast<index_type>((pop_from << 1) | 1);
+  }
 
   [[nodiscard]] constexpr auto next(index_type index) const noexcept
       -> index_type {
@@ -240,7 +245,7 @@ class cas128_mpmc_queue final : public swiss::non_copyable,
           }
         }
 
-        // std::this_thread::yield();
+        std::this_thread::yield();
       }
       if constexpr (Cancellable) {
         return true;
@@ -251,11 +256,11 @@ class cas128_mpmc_queue final : public swiss::non_copyable,
       auto expected = entry->load(std::memory_order::acquire);
       auto const & [_, seqnum] = expected;
 
-      if (seqnum == (push_to << 1)) {
-        typename allocator_type::value_type::value_type desired;
+      if (vacant(push_to, seqnum)) {
+        typename allocator_type::value_type::value_type desired{};
         auto & [item, _seqnum] = desired;
         std::construct_at(&item, std::forward<Args>(args)...);
-        std::construct_at(&_seqnum, push_to << 1 | 1);
+        _seqnum = static_cast<index_type>(push_to << 1 | 1);
 
         if (!entry->compare_exchange_strong(expected, desired,
                                             std::memory_order::release,
@@ -269,12 +274,11 @@ class cas128_mpmc_queue final : public swiss::non_copyable,
         return true;
       }
 
-      // TODO: invalid conditions?
       if (seqnum == ((push_to << 1) | 1) ||
           seqnum == ((push_to + *writer_.capacity) << 1)) {
-        writer_.index.compare_exchange_strong(push_to, next(push_to),
-                                              std::memory_order::release,
-                                              std::memory_order::acquire);
+        writer_.index.compare_exchange_weak(push_to, next(push_to),
+                                            std::memory_order::release,
+                                            std::memory_order::acquire);
       }
       return false;
     }
@@ -303,7 +307,7 @@ class cas128_mpmc_queue final : public swiss::non_copyable,
           }
         }
 
-        // std::this_thread::yield();
+        std::this_thread::yield();
       }
       if constexpr (Cancellable) {
         return true;
@@ -314,8 +318,8 @@ class cas128_mpmc_queue final : public swiss::non_copyable,
       auto expected = entry->load(std::memory_order::acquire);
       auto & [item, seqnum] = expected;
 
-      if (seqnum == ((pop_from << 1) | 1)) {
-        typename allocator_type::value_type::value_type desired;
+      if (occupied(pop_from, seqnum)) {
+        typename allocator_type::value_type::value_type desired{};
         auto & [_, _seqnum] = desired;
         std::construct_at(&_seqnum, (pop_from + *reader_.capacity) << 1);
 
@@ -334,11 +338,10 @@ class cas128_mpmc_queue final : public swiss::non_copyable,
         return true;
       }
 
-      // TODO: invalid conditions?
       if ((seqnum | 1) == (((pop_from + *reader_.capacity) << 1) | 1)) {
-        reader_.index.compare_exchange_strong(pop_from, next(pop_from),
-                                              std::memory_order::release,
-                                              std::memory_order::acquire);
+        reader_.index.compare_exchange_weak(pop_from, next(pop_from),
+                                            std::memory_order::release,
+                                            std::memory_order::acquire);
       }
       return false;
     }

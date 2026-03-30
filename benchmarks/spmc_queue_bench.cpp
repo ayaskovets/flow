@@ -14,44 +14,28 @@ using queue_t =
 BENCHMARK_TEMPLATE_T(spmc_queue, nonblocking_throughput, int, queue_t<int>)
     /* queue_size, producers, consumers */
     ->Args({64, 1, 1})
-    ->Args({128, 1, 2})
-    ->Args({512, 1, 4})
     ->UseRealTime()
-    ->Threads(2)
-    ->Threads(4)
-    ->Threads(8);
+    ->Threads(2);
 
 BENCHMARK_TEMPLATE_T(spmc_queue, blocking_throughput, int, queue_t<int>)
     /* queue_size, producers, consumers */
     ->Args({64, 1, 1})
-    ->Args({128, 1, 2})
-    ->Args({512, 1, 4})
     ->UseRealTime()
-    ->Threads(2)
-    ->Threads(4)
-    ->Threads(8);
+    ->Threads(2);
 
 BENCHMARK_TEMPLATE_T(spmc_queue, nonblocking_throughput, shared_ptr,
                      queue_t<std::shared_ptr<int>>)
     /* queue_size, producers, consumers */
     ->Args({64, 1, 1})
-    ->Args({128, 1, 2})
-    ->Args({512, 1, 4})
     ->UseRealTime()
-    ->Threads(2)
-    ->Threads(4)
-    ->Threads(8);
+    ->Threads(2);
 
 BENCHMARK_TEMPLATE_T(spmc_queue, blocking_throughput, shared_ptr,
                      queue_t<std::shared_ptr<int>>)
     /* queue_size, producers, consumers */
     ->Args({64, 1, 1})
-    ->Args({128, 1, 2})
-    ->Args({512, 1, 4})
     ->UseRealTime()
-    ->Threads(2)
-    ->Threads(4)
-    ->Threads(8);
+    ->Threads(2);
 
 // NOLINTEND(misc-use-internal-linkage,cppcoreguidelines-avoid-magic-numbers)
 }  // namespace benchmarks

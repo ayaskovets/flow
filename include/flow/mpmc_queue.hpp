@@ -99,35 +99,43 @@ class mpmc_queue final : public swiss::non_copyable, public swiss::non_movable {
 
  public:
   template <typename... Args>
-  constexpr auto try_emplace(Args &&... args) noexcept(
-      std::is_nothrow_constructible_v<value_type, Args...>) -> bool {
+  constexpr auto try_emplace(Args &&... args) noexcept -> bool
+    requires(std::is_nothrow_constructible_v<value_type, Args...>)
+  {
     return emplace_impl<false, false>(std::forward<Args>(args)...);
   }
 
-  constexpr auto try_push(value_type value) noexcept(
-      std::is_nothrow_move_constructible_v<value_type>) -> bool {
+  constexpr auto try_push(value_type value) noexcept -> bool
+    requires(std::is_nothrow_move_constructible_v<value_type>)
+  {
     return emplace_impl<false, false>(std::move(value));
   }
 
   template <typename... Args>
-  constexpr auto emplace(std::stop_token stop_token, Args &&... args) noexcept(
-      std::is_nothrow_constructible_v<value_type, Args...>) -> bool {
+  constexpr auto emplace(std::stop_token stop_token, Args &&... args) noexcept
+      -> bool
+    requires(std::is_nothrow_constructible_v<value_type, Args...>)
+  {
     return emplace_impl<true, true>(stop_token, std::forward<Args>(args)...);
   }
 
-  constexpr auto push(std::stop_token stop_token, value_type value) noexcept(
-      std::is_nothrow_move_constructible_v<value_type>) -> bool {
+  constexpr auto push(std::stop_token stop_token, value_type value) noexcept
+      -> bool
+    requires(std::is_nothrow_move_constructible_v<value_type>)
+  {
     return emplace_impl<true, true>(stop_token, std::move(value));
   }
 
   template <typename... Args>
-  constexpr void emplace(Args &&... args) noexcept(
-      std::is_nothrow_constructible_v<value_type, Args...>) {
+  constexpr void emplace(Args &&... args) noexcept
+    requires(std::is_nothrow_constructible_v<value_type, Args...>)
+  {
     emplace_impl<true, false>(std::forward<Args>(args)...);
   }
 
-  constexpr void push(value_type value) noexcept(
-      std::is_nothrow_move_constructible_v<value_type>) {
+  constexpr void push(value_type value) noexcept
+    requires(std::is_nothrow_move_constructible_v<value_type>)
+  {
     emplace_impl<true, false>(std::move(value));
   }
 

@@ -84,7 +84,7 @@ constexpr void nonblocking_throughput(benchmark::State & state) noexcept {
   }
 }
 
-template <typename Queue>
+template <flow::concepts::blocking_queue Queue>
 constexpr void blocking_throughput(benchmark::State & state) noexcept {
   auto const queue_size = static_cast<std::size_t>(state.range(0));
   auto const producers  = state.range(1);

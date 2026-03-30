@@ -52,9 +52,9 @@ class cas128_mpmc_queue final : public swiss::non_copyable,
     for (index_type i = 0; i < Capacity; ++i) {
       auto entry = at(writer_.ring_buffer, *writer_.capacity, i);
       entry->store([i]() {
-        typename allocator_type::value_type::value_type entry;
+        typename allocator_type::value_type::value_type entry{};
         auto & [_, seqnum] = entry;
-        seqnum             = static_cast<index_type>(i << 1);
+        seqnum             = i;
         return entry;
       }());
     }
@@ -84,9 +84,9 @@ class cas128_mpmc_queue final : public swiss::non_copyable,
     for (index_type i = 0; i < capacity; ++i) {
       auto entry = at(writer_.ring_buffer, *writer_.capacity, i);
       entry->store([i]() {
-        typename allocator_type::value_type::value_type entry;
+        typename allocator_type::value_type::value_type entry{};
         auto & [_, seqnum] = entry;
-        seqnum             = static_cast<index_type>(i << 1);
+        seqnum             = i;
         return entry;
       }());
     }
@@ -207,13 +207,13 @@ class cas128_mpmc_queue final : public swiss::non_copyable,
   [[nodiscard]] constexpr auto vacant(index_type push_to,
                                       index_type seqnum) const noexcept
       -> bool {
-    return static_cast<index_type>(push_to << 1) == seqnum;
+    return push_to == seqnum;
   }
 
   [[nodiscard]] constexpr auto occupied(index_type pop_from,
                                         index_type seqnum) const noexcept
       -> bool {
-    return seqnum == static_cast<index_type>((pop_from << 1) | 1);
+    return static_cast<index_type>(pop_from + 1) == seqnum;
   }
 
   [[nodiscard]] constexpr auto next(index_type index) const noexcept
@@ -256,31 +256,25 @@ class cas128_mpmc_queue final : public swiss::non_copyable,
       auto expected = entry->load(std::memory_order::acquire);
       auto const & [_, seqnum] = expected;
 
-      if (vacant(push_to, seqnum)) {
-        typename allocator_type::value_type::value_type desired{};
-        auto & [item, _seqnum] = desired;
-        std::construct_at(&item, std::forward<Args>(args)...);
-        _seqnum = static_cast<index_type>(push_to << 1 | 1);
-
-        if (!entry->compare_exchange_strong(expected, desired,
-                                            std::memory_order::release,
-                                            std::memory_order::acquire)) {
-          return false;
-        }
-
-        writer_.index.compare_exchange_strong(push_to, next(push_to),
-                                              std::memory_order::release,
-                                              std::memory_order::acquire);
-        return true;
+      if (!vacant(push_to, seqnum)) {
+        return false;
       }
 
-      if (seqnum == ((push_to << 1) | 1) ||
-          seqnum == ((push_to + *writer_.capacity) << 1)) {
-        writer_.index.compare_exchange_weak(push_to, next(push_to),
+      typename allocator_type::value_type::value_type desired{};
+      auto & [item, _seqnum] = desired;
+      std::construct_at(&item, std::forward<Args>(args)...);
+      _seqnum = push_to + 1;
+
+      if (!entry->compare_exchange_strong(expected, desired,
+                                          std::memory_order::release,
+                                          std::memory_order::acquire)) {
+        return false;
+      }
+
+      writer_.index.compare_exchange_strong(push_to, next(push_to),
                                             std::memory_order::release,
                                             std::memory_order::acquire);
-      }
-      return false;
+      return true;
     }
   }
 
@@ -318,32 +312,27 @@ class cas128_mpmc_queue final : public swiss::non_copyable,
       auto expected = entry->load(std::memory_order::acquire);
       auto & [item, seqnum] = expected;
 
-      if (occupied(pop_from, seqnum)) {
-        typename allocator_type::value_type::value_type desired{};
-        auto & [_, _seqnum] = desired;
-        std::construct_at(&_seqnum, (pop_from + *reader_.capacity) << 1);
-
-        if (!entry->compare_exchange_strong(expected, desired,
-                                            std::memory_order::release,
-                                            std::memory_order::acquire)) {
-          return false;
-        }
-
-        auto & value = swiss::variadic_nth<0>(std::forward<Args>(args)...);
-        value        = std::move(item);
-        reader_.index.compare_exchange_strong(pop_from, next(pop_from),
-                                              std::memory_order::release,
-                                              std::memory_order::acquire);
-
-        return true;
+      if (!occupied(pop_from, seqnum)) {
+        return false;
       }
 
-      if ((seqnum | 1) == (((pop_from + *reader_.capacity) << 1) | 1)) {
-        reader_.index.compare_exchange_weak(pop_from, next(pop_from),
+      typename allocator_type::value_type::value_type desired{};
+      auto & [_, _seqnum] = desired;
+      _seqnum             = pop_from + *reader_.capacity;
+
+      if (!entry->compare_exchange_strong(expected, desired,
+                                          std::memory_order::release,
+                                          std::memory_order::acquire)) {
+        return false;
+      }
+
+      auto & value = swiss::variadic_nth<0>(std::forward<Args>(args)...);
+      value        = std::move(item);
+      reader_.index.compare_exchange_strong(pop_from, next(pop_from),
                                             std::memory_order::release,
                                             std::memory_order::acquire);
-      }
-      return false;
+
+      return true;
     }
   }
 };

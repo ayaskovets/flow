@@ -14,8 +14,6 @@ namespace flow {
  * @brief Fixed-size queue for single-threaded usage
  * @note Implemented as a ring buffer
  * @warning Not thread-safe
- * @warning Allocated buffer always contains one additional element to
- * differentiate the empty state
  */
 template <typename Value, std::unsigned_integral Index = std::size_t,
           Index Capacity     = swiss::kDynamicExtent<Index>,
@@ -31,7 +29,7 @@ class unsafe_queue final : public swiss::non_copyable,
  public:
   constexpr explicit unsafe_queue(allocator_type allocator = allocator_type())
     requires(Capacity != swiss::kDynamicExtent<index_type>)
-      : ring_buffer_(allocator.allocate(Capacity + 1)),
+      : ring_buffer_(allocator.allocate(Capacity)),
         capacity_(),
         allocator_(std::move(allocator)) {
     static_assert(Capacity > 0,
@@ -46,7 +44,7 @@ class unsafe_queue final : public swiss::non_copyable,
             throw std::invalid_argument(
                 "unsafe_queue::unsafe_queue(): invalid capacity < 1");
           }
-          return allocator.allocate(capacity + 1);
+          return allocator.allocate(capacity);
         }()),
         capacity_(capacity),
         allocator_(std::move(allocator)) {}
@@ -57,11 +55,10 @@ class unsafe_queue final : public swiss::non_copyable,
     while (!empty()) {
       std::allocator_traits<allocator_type>::destroy(allocator_,
                                                      ring_buffer_ + pop_from_);
-
-      pop_from_ = next(pop_from_);
+      size_ -= 1;
     }
 
-    allocator_.deallocate(ring_buffer_, *capacity_ + 1);
+    allocator_.deallocate(ring_buffer_, *capacity_);
   }
 
  public:
@@ -73,9 +70,9 @@ class unsafe_queue final : public swiss::non_copyable,
     }
 
     std::allocator_traits<allocator_type>::construct(
-        allocator_, ring_buffer_ + push_to_, std::forward<Args>(args)...);
+        allocator_, ring_buffer_ + push_to(), std::forward<Args>(args)...);
 
-    push_to_ = next(push_to_);
+    size_ += 1;
     return true;
   }
 
@@ -111,6 +108,7 @@ class unsafe_queue final : public swiss::non_copyable,
                                                    ring_buffer_ + pop_from_);
 
     pop_from_ = next(pop_from_);
+    size_ -= 1;
     return true;
   }
 
@@ -126,8 +124,7 @@ class unsafe_queue final : public swiss::non_copyable,
   }
 
   [[nodiscard]] constexpr auto size() const noexcept -> index_type {
-    return pop_from_ <= push_to_ ? push_to_ - pop_from_
-                                 : *capacity_ + push_to_ + 1 - pop_from_;
+    return size_;
   }
 
  public:
@@ -136,8 +133,8 @@ class unsafe_queue final : public swiss::non_copyable,
   }
 
  private:
-  index_type push_to_  = 0;
   index_type pop_from_ = 0;
+  index_type size_     = 0;
   // NOLINTBEGIN(cppcoreguidelines-avoid-const-or-ref-data-members)
   value_type * const ring_buffer_;
   [[no_unique_address]] swiss::conditionally_runtime<
@@ -147,17 +144,22 @@ class unsafe_queue final : public swiss::non_copyable,
   [[no_unique_address]] allocator_type allocator_;
 
  private:
+  [[nodiscard]] constexpr auto push_to() const noexcept -> index_type {
+    return pop_from_ + size_ >= *capacity_ ? pop_from_ + size_ - *capacity_
+                                           : pop_from_ + size_;
+  }
+
   [[nodiscard]] constexpr auto full() const noexcept -> bool {
-    return next(push_to_) == pop_from_;
+    return size_ == *capacity_;
   }
 
   [[nodiscard]] constexpr auto empty() const noexcept -> bool {
-    return push_to_ == pop_from_;
+    return size_ == 0;
   }
 
   [[nodiscard]] constexpr auto next(index_type index) const noexcept
       -> index_type {
-    return index == *capacity_ ? 0 : index + 1;
+    return index == *capacity_ - 1 ? 0 : index + 1;
   }
 };
 

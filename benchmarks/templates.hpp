@@ -52,7 +52,7 @@ constexpr void nonblocking_throughput(benchmark::State & state) noexcept {
     // NOLINTNEXTLINE(readability-identifier-length)
     for (auto const _ : state) {
       if (queue->try_emplace()) {
-        ++items;
+        items += 1;
       } else {
         std::this_thread::yield();
       }
@@ -68,7 +68,7 @@ constexpr void nonblocking_throughput(benchmark::State & state) noexcept {
     for (auto const _ : state) {
       if (queue->try_pop(value)) {
         benchmark::DoNotOptimize(value);
-        ++items;
+        items += 1;
       } else {
         std::this_thread::yield();
       }

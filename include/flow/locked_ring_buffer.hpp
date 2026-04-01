@@ -49,7 +49,7 @@ class locked_ring_buffer final : public swiss::non_copyable,
       index_type capacity, allocator_type allocator = allocator_type())
     requires(Capacity == swiss::kDynamicExtent<index_type>)
       : ring_buffer_([capacity, &allocator]() {
-          if (capacity == 0) [[unlikely]] {
+          if (capacity == 0) {
             throw std::invalid_argument(
                 "locked_ring_buffer::locked_ring_buffer(): invalid capacity < "
                 "1");

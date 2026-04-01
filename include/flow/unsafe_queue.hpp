@@ -42,7 +42,7 @@ class unsafe_queue final : public swiss::non_copyable,
                                   allocator_type allocator = allocator_type())
     requires(Capacity == swiss::kDynamicExtent<index_type>)
       : ring_buffer_([capacity, &allocator]() {
-          if (capacity == 0) [[unlikely]] {
+          if (capacity == 0) {
             throw std::invalid_argument(
                 "unsafe_queue::unsafe_queue(): invalid capacity < 1");
           }

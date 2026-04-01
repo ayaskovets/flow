@@ -66,13 +66,13 @@ class cas128_mpmc_queue final : public swiss::non_copyable,
     requires(Capacity == swiss::kDynamicExtent<index_type>)
       : writer_{.ring_buffer =
                     [capacity, &allocator]() {
-                      if (capacity < 2) [[unlikely]] {
+                      if (capacity < 2) {
                         throw std::invalid_argument(
                             "cas128_mpmc_queue::cas128_mpmc_queue(): "
                             "invalid capacity "
                             "< 2");
                       }
-                      if (!swiss::is_power_of_two(capacity)) [[unlikely]] {
+                      if (!swiss::is_power_of_two(capacity)) {
                         throw std::invalid_argument(
                             "cas128_mpmc_queue::cas128_mpmc_queue(): "
                             "capacity must be 2^n");

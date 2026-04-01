@@ -45,7 +45,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     requires(Capacity == swiss::kDynamicExtent<index_type>)
       : writer_{.ring_buffer =
                     [capacity, &allocator]() {
-                      if (capacity == 0) [[unlikely]] {
+                      if (capacity == 0) {
                         throw std::invalid_argument(
                             "spsc_queue::spsc_queue(): invalid capacity < 1");
                       }

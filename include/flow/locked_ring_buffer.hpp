@@ -148,14 +148,11 @@ class locked_ring_buffer final : public swiss::non_copyable,
   }
 
  private:
-  alignas(std::hardware_destructive_interference_size) index_type push_to_ = 0;
+  mutable std::mutex mutex_;
   std::condition_variable_any push_available_cv_;
-
-  alignas(std::hardware_destructive_interference_size) index_type pop_from_ = 0;
+  index_type push_to_ = 0;
   std::condition_variable_any pop_available_cv_;
-
-  alignas(
-      std::hardware_destructive_interference_size) mutable std::mutex mutex_;
+  index_type pop_from_ = 0;
   // NOLINTBEGIN(cppcoreguidelines-avoid-const-or-ref-data-members)
   value_type * const ring_buffer_;
   [[no_unique_address]] swiss::conditionally_runtime<

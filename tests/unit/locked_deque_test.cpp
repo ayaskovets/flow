@@ -60,7 +60,7 @@ TEST_T(locked_deque, allocator, allocator_queue_t);
 
 class locked_deque_workload
     : public ::testing::TestWithParam<std::tuple<
-          std::size_t /* items_size */, std::size_t /* queue_size */,
+          std::size_t /* items_size */, std::size_t /* queue_capacity */,
           std::size_t /* producers */, std::size_t /* consumers */>> {};
 
 TEST_P_T(locked_deque_workload, nonblocking, flow::locked_deque<int>);

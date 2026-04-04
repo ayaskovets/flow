@@ -13,7 +13,7 @@ using queue_t = flow::cas128_mpmc_queue<Value, std::size_t,
 
 BENCHMARK_TEMPLATE_T(cas128_mpmc_queue, nonblocking_throughput, int,
                      queue_t<int>)
-    /* queue_size, producers, consumers */
+    /* queue_capacity, producers, consumers */
     ->Args({64, 1, 1})
     ->Args({128, 2, 2})
     ->Args({512, 4, 4})
@@ -23,7 +23,7 @@ BENCHMARK_TEMPLATE_T(cas128_mpmc_queue, nonblocking_throughput, int,
     ->Threads(8);
 
 BENCHMARK_TEMPLATE_T(cas128_mpmc_queue, blocking_throughput, int, queue_t<int>)
-    /* queue_size, producers, consumers */
+    /* queue_capacity, producers, consumers */
     ->Args({64, 1, 1})
     ->Args({128, 2, 2})
     ->Args({512, 4, 4})

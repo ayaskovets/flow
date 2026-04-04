@@ -12,7 +12,7 @@ using queue_t =
     flow::mpmc_queue<Value, std::size_t, swiss::kDynamicExtent<std::size_t>>;
 
 BENCHMARK_TEMPLATE_T(mpmc_queue, nonblocking_throughput, int, queue_t<int>)
-    /* queue_size, producers, consumers */
+    /* queue_capacity, producers, consumers */
     ->Args({64, 1, 1})
     ->Args({128, 2, 2})
     ->Args({512, 4, 4})
@@ -22,7 +22,7 @@ BENCHMARK_TEMPLATE_T(mpmc_queue, nonblocking_throughput, int, queue_t<int>)
     ->Threads(8);
 
 BENCHMARK_TEMPLATE_T(mpmc_queue, blocking_throughput, int, queue_t<int>)
-    /* queue_size, producers, consumers */
+    /* queue_capacity, producers, consumers */
     ->Args({64, 1, 1})
     ->Args({128, 2, 2})
     ->Args({512, 4, 4})
@@ -33,7 +33,7 @@ BENCHMARK_TEMPLATE_T(mpmc_queue, blocking_throughput, int, queue_t<int>)
 
 BENCHMARK_TEMPLATE_T(mpmc_queue, nonblocking_throughput, shared_ptr,
                      queue_t<std::shared_ptr<int>>)
-    /* queue_size, producers, consumers */
+    /* queue_capacity, producers, consumers */
     ->Args({64, 1, 1})
     ->Args({128, 2, 2})
     ->Args({512, 4, 4})
@@ -44,7 +44,7 @@ BENCHMARK_TEMPLATE_T(mpmc_queue, nonblocking_throughput, shared_ptr,
 
 BENCHMARK_TEMPLATE_T(mpmc_queue, blocking_throughput, shared_ptr,
                      queue_t<std::shared_ptr<int>>)
-    /* queue_size, producers, consumers */
+    /* queue_capacity, producers, consumers */
     ->Args({64, 1, 1})
     ->Args({128, 2, 2})
     ->Args({512, 4, 4})

@@ -13,68 +13,99 @@
 namespace tests {
 
 TEST(queue, cas128_mpmc_queue) {
-  static_assert(
-      flow::concepts::noexcept_nonblocking_queue<flow::cas128_mpmc_queue<int>>);
-  static_assert(
-      flow::concepts::noexcept_blocking_queue<flow::cas128_mpmc_queue<int>>);
-  static_assert(flow::concepts::noexcept_cancellable_blocking_queue<
-                flow::cas128_mpmc_queue<int>>);
+  using queue_t = flow::cas128_mpmc_queue<int>;
+
+  static_assert(flow::concepts::queue<queue_t>);
+  static_assert(flow::concepts::nonblocking_queue<queue_t>);
+  static_assert(flow::concepts::noexcept_nonblocking_queue<queue_t>);
+  static_assert(flow::concepts::blocking_queue<queue_t>);
+  static_assert(flow::concepts::noexcept_blocking_queue<queue_t>);
+  static_assert(flow::concepts::cancellable_blocking_queue<queue_t>);
+  static_assert(flow::concepts::noexcept_cancellable_blocking_queue<queue_t>);
 }
 
 TEST(queue, locked_deque) {
-  static_assert(
-      flow::concepts::noexcept_nonblocking_queue<flow::locked_deque<int>>);
-  static_assert(
-      flow::concepts::noexcept_blocking_queue<flow::locked_deque<int>>);
-  static_assert(flow::concepts::noexcept_cancellable_blocking_queue<
-                flow::locked_deque<int>>);
+  using queue_t = flow::locked_deque<int>;
+
+  static_assert(flow::concepts::queue<queue_t>);
+  static_assert(flow::concepts::nonblocking_queue<queue_t>);
+  static_assert(flow::concepts::noexcept_nonblocking_queue<queue_t>);
+  static_assert(flow::concepts::blocking_queue<queue_t>);
+  static_assert(flow::concepts::noexcept_blocking_queue<queue_t>);
+  static_assert(flow::concepts::cancellable_blocking_queue<queue_t>);
+  static_assert(flow::concepts::noexcept_cancellable_blocking_queue<queue_t>);
 }
 
 TEST(queue, locked_ring_buffer) {
-  static_assert(flow::concepts::noexcept_nonblocking_queue<
-                flow::locked_ring_buffer<int>>);
-  static_assert(
-      flow::concepts::noexcept_blocking_queue<flow::locked_ring_buffer<int>>);
-  static_assert(flow::concepts::noexcept_cancellable_blocking_queue<
-                flow::locked_ring_buffer<int>>);
+  using queue_t = flow::locked_ring_buffer<int>;
+
+  static_assert(flow::concepts::queue<queue_t>);
+  static_assert(flow::concepts::nonblocking_queue<queue_t>);
+  static_assert(flow::concepts::noexcept_nonblocking_queue<queue_t>);
+  static_assert(flow::concepts::blocking_queue<queue_t>);
+  static_assert(flow::concepts::noexcept_blocking_queue<queue_t>);
+  static_assert(flow::concepts::cancellable_blocking_queue<queue_t>);
+  static_assert(flow::concepts::noexcept_cancellable_blocking_queue<queue_t>);
 }
 
 TEST(queue, mpsc_queue) {
-  static_assert(
-      flow::concepts::noexcept_nonblocking_queue<flow::mpsc_queue<int>>);
-  static_assert(flow::concepts::noexcept_blocking_queue<flow::mpsc_queue<int>>);
-  static_assert(flow::concepts::noexcept_cancellable_blocking_queue<
-                flow::mpsc_queue<int>>);
+  using queue_t = flow::mpsc_queue<int>;
+
+  static_assert(flow::concepts::queue<queue_t>);
+  static_assert(flow::concepts::nonblocking_queue<queue_t>);
+  static_assert(flow::concepts::noexcept_nonblocking_queue<queue_t>);
+  static_assert(flow::concepts::blocking_queue<queue_t>);
+  static_assert(flow::concepts::noexcept_blocking_queue<queue_t>);
+  static_assert(flow::concepts::cancellable_blocking_queue<queue_t>);
+  static_assert(flow::concepts::noexcept_cancellable_blocking_queue<queue_t>);
 }
 
 TEST(queue, mpmc_queue) {
-  static_assert(
-      flow::concepts::noexcept_nonblocking_queue<flow::mpmc_queue<int>>);
-  static_assert(flow::concepts::noexcept_blocking_queue<flow::mpmc_queue<int>>);
-  static_assert(flow::concepts::noexcept_cancellable_blocking_queue<
-                flow::mpmc_queue<int>>);
+  using queue_t = flow::mpmc_queue<int>;
+
+  static_assert(flow::concepts::queue<queue_t>);
+  static_assert(flow::concepts::nonblocking_queue<queue_t>);
+  static_assert(flow::concepts::noexcept_nonblocking_queue<queue_t>);
+  static_assert(flow::concepts::blocking_queue<queue_t>);
+  static_assert(flow::concepts::noexcept_blocking_queue<queue_t>);
+  static_assert(flow::concepts::cancellable_blocking_queue<queue_t>);
+  static_assert(flow::concepts::noexcept_cancellable_blocking_queue<queue_t>);
 }
 
 TEST(queue, spmc_queue) {
-  static_assert(
-      flow::concepts::noexcept_nonblocking_queue<flow::spmc_queue<int>>);
-  static_assert(flow::concepts::noexcept_blocking_queue<flow::spmc_queue<int>>);
-  static_assert(flow::concepts::noexcept_cancellable_blocking_queue<
-                flow::spmc_queue<int>>);
+  using queue_t = flow::spmc_queue<int>;
+
+  static_assert(flow::concepts::queue<queue_t>);
+  static_assert(flow::concepts::nonblocking_queue<queue_t>);
+  static_assert(flow::concepts::noexcept_nonblocking_queue<queue_t>);
+  static_assert(flow::concepts::blocking_queue<queue_t>);
+  static_assert(flow::concepts::noexcept_blocking_queue<queue_t>);
+  static_assert(flow::concepts::cancellable_blocking_queue<queue_t>);
+  static_assert(flow::concepts::noexcept_cancellable_blocking_queue<queue_t>);
 }
 
 TEST(queue, spsc_queue) {
-  static_assert(
-      flow::concepts::noexcept_nonblocking_queue<flow::spsc_queue<int>>);
-  static_assert(flow::concepts::noexcept_blocking_queue<flow::spsc_queue<int>>);
-  static_assert(flow::concepts::noexcept_cancellable_blocking_queue<
-                flow::spsc_queue<int>>);
+  using queue_t = flow::spsc_queue<int>;
+
+  static_assert(flow::concepts::queue<queue_t>);
+  static_assert(flow::concepts::nonblocking_queue<queue_t>);
+  static_assert(flow::concepts::noexcept_nonblocking_queue<queue_t>);
+  static_assert(flow::concepts::blocking_queue<queue_t>);
+  static_assert(flow::concepts::noexcept_blocking_queue<queue_t>);
+  static_assert(flow::concepts::cancellable_blocking_queue<queue_t>);
+  static_assert(flow::concepts::noexcept_cancellable_blocking_queue<queue_t>);
 }
 
 TEST(queue, unsafe_queue) {
-  static_assert(
-      flow::concepts::noexcept_nonblocking_queue<flow::unsafe_queue<int>>);
-  static_assert(flow::concepts::blocking_queue<flow::unsafe_queue<int>>);
+  using queue_t = flow::unsafe_queue<int>;
+
+  static_assert(flow::concepts::queue<queue_t>);
+  static_assert(flow::concepts::nonblocking_queue<queue_t>);
+  static_assert(flow::concepts::noexcept_nonblocking_queue<queue_t>);
+  static_assert(flow::concepts::blocking_queue<queue_t>);
+  static_assert(!flow::concepts::noexcept_blocking_queue<queue_t>);
+  static_assert(!flow::concepts::cancellable_blocking_queue<queue_t>);
+  static_assert(!flow::concepts::noexcept_cancellable_blocking_queue<queue_t>);
 }
 
 }  // namespace tests

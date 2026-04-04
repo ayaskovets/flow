@@ -59,7 +59,7 @@ TEST_T(mpsc_queue, allocator, allocator_queue_t);
 
 class mpsc_queue_workload
     : public ::testing::TestWithParam<std::tuple<
-          std::size_t /* items_size */, std::size_t /* queue_size */,
+          std::size_t /* items_size */, std::size_t /* queue_capacity */,
           std::size_t /* producers */, std::size_t /* consumers */>> {};
 
 TEST_P_T(mpsc_queue_workload, nonblocking, flow::mpsc_queue<int>);

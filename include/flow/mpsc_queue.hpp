@@ -9,6 +9,7 @@
 
 #include <swiss/conditionally_runtime.hpp>
 #include <swiss/dynamic_extent.hpp>
+#include <swiss/functional.hpp>
 #include <swiss/mixins.hpp>
 #include <swiss/predicates.hpp>
 #include <swiss/variadic_traits.hpp>
@@ -54,7 +55,7 @@ class mpsc_queue final : public swiss::non_copyable, public swiss::non_movable {
                                 allocator_type allocator = allocator_type())
     requires(Capacity == swiss::kDynamicExtent<index_type>)
       : writer_{.ring_buffer =
-                    [capacity, &allocator]() {
+                    [capacity, &allocator] {
                       if (capacity < 2) {
                         throw std::invalid_argument(
                             "mpsc_queue::mpsc_queue(): "
@@ -259,7 +260,9 @@ class mpsc_queue final : public swiss::non_copyable, public swiss::non_movable {
         }
         entry = at(writer_.ring_buffer, *writer_.capacity, push_to);
       }
-    } else {
+    }
+
+    if constexpr (!Blocking) {
       auto const & [_, seqnum] = *entry;
       if (!vacant(push_to, seqnum.load(std::memory_order::acquire)) ||
           !writer_.index.compare_exchange_strong(push_to, next(push_to),
@@ -270,10 +273,14 @@ class mpsc_queue final : public swiss::non_copyable, public swiss::non_movable {
 
     auto & [item, seqnum] = *entry;
     if constexpr (Cancellable) {
-      [&item](auto &&, auto &&... tail) {
-        std::construct_at(&item, std::forward<decltype(tail)>(tail)...);
-      }(std::forward<Args>(args)...);
-    } else {
+      swiss::invoke_tail(
+          [&item](auto &&... tail) {
+            std::construct_at(&item, std::forward<decltype(tail)>(tail)...);
+          },
+          std::forward<Args>(args)...);
+    }
+
+    if constexpr (!Cancellable) {
       std::construct_at(&item, std::forward<Args>(args)...);
     }
 
@@ -306,7 +313,9 @@ class mpsc_queue final : public swiss::non_copyable, public swiss::non_movable {
 
         std::this_thread::yield();
       }
-    } else {
+    }
+
+    if constexpr (!Blocking) {
       auto const & [_, seqnum] = *entry;
       if (!occupied(pop_from, seqnum.load(std::memory_order::acquire))) {
         return false;

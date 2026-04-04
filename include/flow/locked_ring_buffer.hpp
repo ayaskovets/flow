@@ -9,6 +9,7 @@
 
 #include <swiss/conditionally_runtime.hpp>
 #include <swiss/dynamic_extent.hpp>
+#include <swiss/functional.hpp>
 #include <swiss/mixins.hpp>
 #include <swiss/variadic_traits.hpp>
 
@@ -48,7 +49,7 @@ class locked_ring_buffer final : public swiss::non_copyable,
   constexpr explicit locked_ring_buffer(
       index_type capacity, allocator_type allocator = allocator_type())
     requires(Capacity == swiss::kDynamicExtent<index_type>)
-      : ring_buffer_([capacity, &allocator]() {
+      : ring_buffer_([capacity, &allocator] {
           if (capacity == 0) {
             throw std::invalid_argument(
                 "locked_ring_buffer::locked_ring_buffer(): invalid capacity < "
@@ -180,76 +181,97 @@ class locked_ring_buffer final : public swiss::non_copyable,
  private:
   template <bool Blocking, bool Cancellable, typename... Args>
   constexpr auto emplace_impl(Args &&... args) -> decltype(auto) {
-    std::unique_lock lock(mutex_, std::defer_lock);
+    auto const emplace_and_notify = [this](auto &&... args) {
+      if constexpr (Cancellable) {
+        swiss::invoke_tail(
+            [this](auto &&... tail) {
+              std::allocator_traits<allocator_type>::construct(
+                  allocator_, ring_buffer_ + push_to_,
+                  std::forward<decltype(tail)>(tail)...);
+            },
+            std::forward<Args>(args)...);
+      }
+
+      if constexpr (!Cancellable) {
+        std::allocator_traits<allocator_type>::construct(
+            allocator_, ring_buffer_ + push_to_, std::forward<Args>(args)...);
+      }
+
+      push_to_ = next(push_to_);
+      pop_available_cv_.notify_all();
+    };
+
     if constexpr (Blocking) {
-      lock.lock();
+      std::unique_lock lock(mutex_);
 
       if constexpr (Cancellable) {
         std::stop_token const & stop_token =
             swiss::variadic_nth<0>(std::forward<Args>(args)...);
         if (!push_available_cv_.wait(lock, stop_token,
-                                     [this]() { return !full(); })) {
+                                     [this] { return !full(); })) {
           return false;
         }
-      } else {
-        push_available_cv_.wait(lock, [this]() { return !full(); });
+        emplace_and_notify(std::forward<Args>(args)...);
+        return true;
       }
-    } else {
+
+      if constexpr (!Cancellable) {
+        push_available_cv_.wait(lock, [this] { return !full(); });
+        emplace_and_notify(std::forward<Args>(args)...);
+      }
+    }
+
+    if constexpr (!Blocking) {
+      std::unique_lock lock(mutex_, std::defer_lock);
       if (!lock.try_lock() || full()) {
         return false;
       }
-    }
-
-    if constexpr (Cancellable) {
-      [this](auto &&, auto &&... tail) {
-        std::allocator_traits<allocator_type>::construct(
-            allocator_, ring_buffer_ + push_to_,
-            std::forward<decltype(tail)>(tail)...);
-      }(std::forward<Args>(args)...);
-    } else {
-      std::allocator_traits<allocator_type>::construct(
-          allocator_, ring_buffer_ + push_to_, std::forward<Args>(args)...);
-    }
-
-    push_to_ = next(push_to_);
-    pop_available_cv_.notify_all();
-    if constexpr (!Blocking || Cancellable) {
+      emplace_and_notify(std::forward<Args>(args)...);
       return true;
     }
   }
 
   template <bool Blocking, bool Cancellable, typename... Args>
   constexpr auto pop_impl(Args &&... args) -> decltype(auto) {
-    std::unique_lock lock(mutex_, std::defer_lock);
+    auto const pop_and_notify = [this](auto &&... args) {
+      auto & value = swiss::variadic_nth<Cancellable ? 1 : 0>(
+          std::forward<decltype(args)>(args)...);
+      value = std::move(*(ring_buffer_ + pop_from_));
+      std::allocator_traits<allocator_type>::destroy(allocator_,
+                                                     ring_buffer_ + pop_from_);
+
+      pop_from_ = next(pop_from_);
+      push_available_cv_.notify_all();
+    };
 
     if constexpr (Blocking) {
-      lock.lock();
+      std::unique_lock lock(mutex_);
 
       if constexpr (Cancellable) {
         std::stop_token const & stop_token =
             swiss::variadic_nth<0>(std::forward<Args>(args)...);
         if (!pop_available_cv_.wait(lock, stop_token,
-                                    [this]() { return !empty(); })) {
+                                    [this] { return !empty(); })) {
           return false;
         }
-      } else {
-        pop_available_cv_.wait(lock, [this]() { return !empty(); });
+        pop_and_notify(std::forward<Args>(args)...);
+        return true;
       }
-    } else {
-      if (!lock.try_lock() || empty()) {
-        return false;
+
+      if constexpr (!Cancellable) {
+        pop_available_cv_.wait(lock, [this] { return !empty(); });
+        pop_and_notify(std::forward<Args>(args)...);
       }
     }
 
-    auto & value =
-        swiss::variadic_nth<Cancellable ? 1 : 0>(std::forward<Args>(args)...);
-    value = std::move(*(ring_buffer_ + pop_from_));
-    std::allocator_traits<allocator_type>::destroy(allocator_,
-                                                   ring_buffer_ + pop_from_);
-
-    pop_from_ = next(pop_from_);
-    push_available_cv_.notify_all();
-    return true;
+    if constexpr (!Blocking) {
+      std::unique_lock lock(mutex_, std::defer_lock);
+      if (!lock.try_lock() || empty()) {
+        return false;
+      }
+      pop_and_notify(std::forward<Args>(args)...);
+      return true;
+    }
   }
 };
 

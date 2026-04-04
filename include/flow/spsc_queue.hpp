@@ -9,6 +9,7 @@
 
 #include <swiss/conditionally_runtime.hpp>
 #include <swiss/dynamic_extent.hpp>
+#include <swiss/functional.hpp>
 #include <swiss/mixins.hpp>
 #include <swiss/variadic_traits.hpp>
 
@@ -44,7 +45,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
                                 allocator_type allocator = allocator_type())
     requires(Capacity == swiss::kDynamicExtent<index_type>)
       : writer_{.ring_buffer =
-                    [capacity, &allocator]() {
+                    [capacity, &allocator] {
                       if (capacity == 0) {
                         throw std::invalid_argument(
                             "spsc_queue::spsc_queue(): invalid capacity < 1");
@@ -203,7 +204,9 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
           std::this_thread::yield();
         }
       }
-    } else {
+    }
+
+    if constexpr (!Blocking) {
       if (full(next_push_to, writer_.cache)) {
         auto const cache = reader_.index.load(std::memory_order::acquire);
         if (full(next_push_to, cache)) {
@@ -214,12 +217,16 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     }
 
     if constexpr (Cancellable) {
-      [this, push_to](auto &&, auto &&... tail) {
-        std::allocator_traits<allocator_type>::construct(
-            allocator_, writer_.ring_buffer + push_to,
-            std::forward<decltype(tail)>(tail)...);
-      }(std::forward<Args>(args)...);
-    } else {
+      swiss::invoke_tail(
+          [this, push_to](auto &&... tail) {
+            std::allocator_traits<allocator_type>::construct(
+                allocator_, writer_.ring_buffer + push_to,
+                std::forward<decltype(tail)>(tail)...);
+          },
+          std::forward<Args>(args)...);
+    }
+
+    if constexpr (!Cancellable) {
       std::allocator_traits<allocator_type>::construct(
           allocator_, writer_.ring_buffer + push_to,
           std::forward<Args>(args)...);
@@ -251,7 +258,9 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
           std::this_thread::yield();
         }
       }
-    } else {
+    }
+
+    if constexpr (!Blocking) {
       if (empty(reader_.cache, pop_from)) {
         auto const cache = writer_.index.load(std::memory_order::acquire);
         if (empty(cache, pop_from)) {

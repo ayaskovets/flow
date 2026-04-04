@@ -9,6 +9,7 @@
 
 #include <swiss/conditionally_runtime.hpp>
 #include <swiss/dynamic_extent.hpp>
+#include <swiss/functional.hpp>
 #include <swiss/mixins.hpp>
 #include <swiss/predicates.hpp>
 #include <swiss/trivial_pair.hpp>
@@ -52,7 +53,7 @@ class cas128_mpmc_queue final : public swiss::non_copyable,
 
     for (index_type i = 0; i < Capacity; ++i) {
       auto entry = at(writer_.ring_buffer, *writer_.capacity, i);
-      entry->store([i]() {
+      entry->store([i] {
         typename allocator_type::value_type::value_type entry{};
         auto & [_, seqnum] = entry;
         seqnum             = i;
@@ -65,7 +66,7 @@ class cas128_mpmc_queue final : public swiss::non_copyable,
       index_type capacity, allocator_type allocator = allocator_type())
     requires(Capacity == swiss::kDynamicExtent<index_type>)
       : writer_{.ring_buffer =
-                    [capacity, &allocator]() {
+                    [capacity, &allocator] {
                       if (capacity < 2) {
                         throw std::invalid_argument(
                             "cas128_mpmc_queue::cas128_mpmc_queue(): "
@@ -84,7 +85,7 @@ class cas128_mpmc_queue final : public swiss::non_copyable,
         allocator_(std::move(allocator)) {
     for (index_type i = 0; i < capacity; ++i) {
       auto entry = at(writer_.ring_buffer, *writer_.capacity, i);
-      entry->store([i]() {
+      entry->store([i] {
         typename allocator_type::value_type::value_type entry{};
         auto & [_, seqnum] = entry;
         seqnum             = i;
@@ -223,32 +224,35 @@ class cas128_mpmc_queue final : public swiss::non_copyable,
   template <bool Blocking, bool Cancellable, typename... Args>
   constexpr auto emplace_impl(Args &&... args) -> decltype(auto) {
     if constexpr (Blocking) {
-      auto const try_emplace = [this](Args &&... args) {
-        if constexpr (Cancellable) {
-          return [this](auto &&, auto &&... tail) {
-            return this->emplace_impl<false, false>(
-                std::forward<decltype(tail)>(tail)...);
-          }(std::forward<Args>(args)...);
-        } else {
-          return this->emplace_impl<false, false>(std::forward<Args>(args)...);
-        }
-      };
-
-      while (!try_emplace(std::forward<Args>(args)...)) {
+      while (true) {
         if constexpr (Cancellable) {
           if (std::stop_token const & stop_token =
                   swiss::variadic_nth<0>(std::forward<Args>(args)...);
               stop_token.stop_requested()) {
             return false;
           }
+
+          if (swiss::invoke_tail(
+                  [this](auto &&... tail) {
+                    return this->emplace_impl<false, false>(
+                        std::forward<decltype(tail)>(tail)...);
+                  },
+                  std::forward<Args>(args)...)) {
+            return true;
+          }
+        }
+
+        if constexpr (!Cancellable) {
+          if (cas128_mpmc_queue::try_emplace(std::forward<Args>(args)...)) {
+            return true;
+          }
         }
 
         std::this_thread::yield();
       }
-      if constexpr (Cancellable) {
-        return true;
-      }
-    } else {
+    }
+
+    if constexpr (!Blocking) {
       auto push_to  = writer_.index.load(std::memory_order::relaxed);
       auto entry    = at(writer_.ring_buffer, *writer_.capacity, push_to);
       auto expected = entry->load(std::memory_order::acquire);
@@ -279,32 +283,31 @@ class cas128_mpmc_queue final : public swiss::non_copyable,
   template <bool Blocking, bool Cancellable, typename... Args>
   constexpr auto pop_impl(Args &&... args) -> decltype(auto) {
     if constexpr (Blocking) {
-      auto const try_pop = [this](Args &&... args) {
-        if constexpr (Cancellable) {
-          return [this](auto &&, auto &&... tail) {
-            return this->pop_impl<false, false>(
-                std::forward<decltype(tail)>(tail)...);
-          }(std::forward<Args>(args)...);
-        } else {
-          return this->pop_impl<false, false>(std::forward<Args>(args)...);
-        }
-      };
-
-      while (!try_pop(std::forward<Args>(args)...)) {
+      while (true) {
         if constexpr (Cancellable) {
           if (std::stop_token const & stop_token =
                   swiss::variadic_nth<0>(std::forward<Args>(args)...);
               stop_token.stop_requested()) {
             return false;
           }
+
+          if (swiss::invoke_tail(this, &cas128_mpmc_queue::try_pop,
+                                 std::forward<Args>(args)...)) {
+            return true;
+          }
+        }
+
+        if constexpr (!Cancellable) {
+          if (cas128_mpmc_queue::try_pop(std::forward<Args>(args)...)) {
+            return true;
+          }
         }
 
         std::this_thread::yield();
       }
-      if constexpr (Cancellable) {
-        return true;
-      }
-    } else {
+    }
+
+    if constexpr (!Blocking) {
       auto pop_from = reader_.index.load(std::memory_order::relaxed);
       auto entry    = at(reader_.ring_buffer, *reader_.capacity, pop_from);
       auto expected = entry->load(std::memory_order::acquire);

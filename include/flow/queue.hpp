@@ -6,7 +6,7 @@
 namespace flow::concepts {
 
 /**
- * @brief Generic queue with custom allocator support homogeneous typed items
+ * @brief Generic queue with custom allocator support and typed items
  */
 template <typename T>
 concept queue = requires(T queue, typename T::value_type) {
@@ -64,7 +64,7 @@ concept noexcept_blocking_queue =
     };
 
 /**
- * @brief Blocking queue with cancellation tokens support
+ * @brief Blocking queue that supports cancellation tokens
  */
 template <typename T>
 concept cancellable_blocking_queue =
@@ -76,8 +76,8 @@ concept cancellable_blocking_queue =
     };
 
 /**
- * @brief Blocking queue with cancellation tokens support and noexcept
- * guarrantee
+ * @brief Blocking queue that supports cancellation tokens with noexcept
+ * operations
  */
 template <typename T>
 concept noexcept_cancellable_blocking_queue =

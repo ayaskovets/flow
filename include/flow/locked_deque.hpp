@@ -9,6 +9,7 @@
 
 #include <swiss/conditionally_runtime.hpp>
 #include <swiss/dynamic_extent.hpp>
+#include <swiss/functional.hpp>
 #include <swiss/mixins.hpp>
 #include <swiss/variadic_traits.hpp>
 
@@ -152,74 +153,95 @@ class locked_deque final : public swiss::non_copyable,
  private:
   template <bool Blocking, bool Cancellable, typename... Args>
   constexpr auto emplace_impl(Args &&... args) -> decltype(auto) {
-    std::unique_lock lock(mutex_, std::defer_lock);
+    auto const emplace_and_notify = [this](auto &&... args) {
+      if constexpr (Cancellable) {
+        swiss::invoke_tail(
+            [this](auto &&... tail) {
+              deque_.emplace_back(std::forward<decltype(tail)>(tail)...);
+            },
+            std::forward<Args>(args)...);
+      }
+
+      if constexpr (!Cancellable) {
+        deque_.emplace_back(std::forward<Args>(args)...);
+      }
+
+      pop_available_cv_.notify_all();
+    };
+
     if constexpr (Blocking) {
-      lock.lock();
+      std::unique_lock lock(mutex_);
 
       if constexpr (Cancellable) {
         std::stop_token const & stop_token =
             swiss::variadic_nth<0>(std::forward<Args>(args)...);
         if (!push_available_cv_.wait(lock, stop_token,
-                                     [this]() { return !full(); })) {
+                                     [this] { return !full(); })) {
           return false;
         }
-      } else {
-        push_available_cv_.wait(lock, [this]() { return !full(); });
+        emplace_and_notify(std::forward<Args>(args)...);
+        return true;
       }
-    } else {
+
+      if constexpr (!Cancellable) {
+        push_available_cv_.wait(lock, [this] { return !full(); });
+        emplace_and_notify(std::forward<Args>(args)...);
+      }
+    }
+
+    if constexpr (!Blocking) {
+      std::unique_lock lock(mutex_, std::defer_lock);
       if (!lock.try_lock() || full()) {
         return false;
       }
-    }
-
-    if constexpr (Cancellable) {
-      [this](auto &&, auto &&... tail) {
-        deque_.emplace_back(std::forward<decltype(tail)>(tail)...);
-      }(std::forward<Args>(args)...);
-    } else {
-      deque_.emplace_back(std::forward<decltype(args)>(args)...);
-    }
-
-    pop_available_cv_.notify_all();
-    if constexpr (!Blocking || Cancellable) {
+      emplace_and_notify(std::forward<Args>(args)...);
       return true;
     }
   }
 
   template <bool Blocking, bool Cancellable, typename... Args>
   constexpr auto pop_impl(Args &&... args) -> decltype(auto) {
-    std::unique_lock lock(mutex_, std::defer_lock);
+    auto const pop_and_notify = [this](auto &&... args) {
+      /**
+       * @warning Exception safety of this code is totally dependent ot
+       * pop_front() being noexcept
+       */
+      auto & value =
+          swiss::variadic_nth<Cancellable ? 1 : 0>(std::forward<Args>(args)...);
+      value = std::move(deque_.front());
+      deque_.pop_front();
+
+      push_available_cv_.notify_all();
+    };
 
     if constexpr (Blocking) {
-      lock.lock();
+      std::unique_lock lock(mutex_);
 
       if constexpr (Cancellable) {
         std::stop_token const & stop_token =
             swiss::variadic_nth<0>(std::forward<Args>(args)...);
         if (!pop_available_cv_.wait(lock, stop_token,
-                                    [this]() { return !empty(); })) {
+                                    [this] { return !empty(); })) {
           return false;
         }
-      } else {
-        pop_available_cv_.wait(lock, [this]() { return !empty(); });
+        pop_and_notify(std::forward<Args>(args)...);
+        return true;
       }
-    } else {
-      if (!lock.try_lock() || empty()) {
-        return false;
+
+      if constexpr (!Cancellable) {
+        pop_available_cv_.wait(lock, [this] { return !empty(); });
+        pop_and_notify(std::forward<Args>(args)...);
       }
     }
 
-    /**
-     * @warning This code exception safety is totally dependent ot pop_front()
-     * being noexcept
-     */
-    auto & value =
-        swiss::variadic_nth<Cancellable ? 1 : 0>(std::forward<Args>(args)...);
-    value = std::move(deque_.front());
-    deque_.pop_front();
-
-    push_available_cv_.notify_all();
-    return true;
+    if constexpr (!Blocking) {
+      std::unique_lock lock(mutex_, std::defer_lock);
+      if (!lock.try_lock() || empty()) {
+        return false;
+      }
+      pop_and_notify(std::forward<Args>(args)...);
+      return true;
+    }
   }
 };
 

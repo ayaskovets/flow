@@ -85,9 +85,9 @@ class spmc_queue final : public swiss::non_copyable, public swiss::non_movable {
   constexpr ~spmc_queue() noexcept
     requires(std::is_nothrow_destructible_v<value_type>)
   {
-    auto const push_to = writer_.index.load(std::memory_order::relaxed);
+    index_type const push_to = writer_.index.load(std::memory_order::relaxed);
 
-    auto pop_from = reader_.index.load(std::memory_order::relaxed);
+    index_type pop_from = reader_.index.load(std::memory_order::relaxed);
     while (!empty(push_to, pop_from)) {
       std::allocator_traits<allocator_type>::destroy(
           allocator_,
@@ -168,8 +168,8 @@ class spmc_queue final : public swiss::non_copyable, public swiss::non_movable {
   }
 
   [[nodiscard]] constexpr auto size() const noexcept -> index_type {
-    auto const push_to  = writer_.index.load(std::memory_order::relaxed);
-    auto const pop_from = reader_.index.load(std::memory_order::relaxed);
+    index_type const push_to  = writer_.index.load(std::memory_order::relaxed);
+    index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
 
     return pop_from <= push_to ? push_to - pop_from
                                : *writer_.capacity + push_to + 1 - pop_from;
@@ -233,8 +233,8 @@ class spmc_queue final : public swiss::non_copyable, public swiss::non_movable {
  private:
   template <bool Blocking, bool Cancellable, typename... Args>
   constexpr auto emplace_impl(Args &&... args) -> decltype(auto) {
-    auto const push_to = writer_.index.load(std::memory_order::relaxed);
-    auto entry         = at(writer_.ring_buffer, *writer_.capacity, push_to);
+    index_type const push_to = writer_.index.load(std::memory_order::relaxed);
+    auto entry = at(writer_.ring_buffer, *writer_.capacity, push_to);
 
     if constexpr (Blocking) {
       while (true) {
@@ -285,8 +285,8 @@ class spmc_queue final : public swiss::non_copyable, public swiss::non_movable {
 
   template <bool Blocking, bool Cancellable, typename... Args>
   constexpr auto pop_impl(Args &&... args) -> decltype(auto) {
-    auto pop_from = reader_.index.load(std::memory_order::relaxed);
-    auto entry    = at(reader_.ring_buffer, *reader_.capacity, pop_from);
+    index_type pop_from = reader_.index.load(std::memory_order::relaxed);
+    auto entry          = at(reader_.ring_buffer, *reader_.capacity, pop_from);
 
     if constexpr (Blocking) {
       while (true) {
@@ -299,7 +299,7 @@ class spmc_queue final : public swiss::non_copyable, public swiss::non_movable {
         }
 
         auto const & [_, seqnum] = *entry;
-        auto const occ =
+        bool const occ =
             occupied(pop_from, seqnum.load(std::memory_order::acquire));
         if (occ && reader_.index.compare_exchange_weak(
                        pop_from, next(pop_from), std::memory_order::relaxed)) {
@@ -324,7 +324,7 @@ class spmc_queue final : public swiss::non_copyable, public swiss::non_movable {
     }
 
     auto & [item, seqnum] = *entry;
-    auto & value =
+    value_type & value =
         swiss::variadic_nth<Cancellable ? 1 : 0>(std::forward<Args>(args)...);
     value = std::move(item);
     std::destroy_at(&item);

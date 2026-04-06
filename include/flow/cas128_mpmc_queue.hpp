@@ -253,9 +253,9 @@ class cas128_mpmc_queue final : public swiss::non_copyable,
     }
 
     if constexpr (!Blocking) {
-      auto push_to  = writer_.index.load(std::memory_order::relaxed);
-      auto entry    = at(writer_.ring_buffer, *writer_.capacity, push_to);
-      auto expected = entry->load(std::memory_order::acquire);
+      index_type push_to = writer_.index.load(std::memory_order::relaxed);
+      auto entry         = at(writer_.ring_buffer, *writer_.capacity, push_to);
+      auto expected      = entry->load(std::memory_order::acquire);
       auto const & [_, seqnum] = expected;
 
       if (!vacant(push_to, seqnum)) {
@@ -308,7 +308,7 @@ class cas128_mpmc_queue final : public swiss::non_copyable,
     }
 
     if constexpr (!Blocking) {
-      auto pop_from = reader_.index.load(std::memory_order::relaxed);
+      index_type pop_from = reader_.index.load(std::memory_order::relaxed);
       auto entry    = at(reader_.ring_buffer, *reader_.capacity, pop_from);
       auto expected = entry->load(std::memory_order::acquire);
       auto & [item, seqnum] = expected;
@@ -327,8 +327,8 @@ class cas128_mpmc_queue final : public swiss::non_copyable,
         return false;
       }
 
-      auto & value = swiss::variadic_nth<0>(std::forward<Args>(args)...);
-      value        = std::move(item);
+      value_type & value = swiss::variadic_nth<0>(std::forward<Args>(args)...);
+      value              = std::move(item);
       reader_.index.compare_exchange_strong(pop_from, next(pop_from),
                                             std::memory_order::release,
                                             std::memory_order::acquire);

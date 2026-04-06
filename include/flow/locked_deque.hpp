@@ -206,7 +206,7 @@ class locked_deque final : public swiss::non_copyable,
        * @warning Exception safety of this code is totally dependent ot
        * pop_front() being noexcept
        */
-      auto & value =
+      value_type & value =
           swiss::variadic_nth<Cancellable ? 1 : 0>(std::forward<Args>(args)...);
       value = std::move(deque_.front());
       deque_.pop_front();

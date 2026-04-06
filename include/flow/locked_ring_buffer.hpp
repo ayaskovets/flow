@@ -231,7 +231,7 @@ class locked_ring_buffer final : public swiss::non_copyable,
   template <bool Blocking, bool Cancellable, typename... Args>
   constexpr auto pop_impl(Args &&... args) -> decltype(auto) {
     auto const pop_and_notify = [this](auto &&... args) {
-      auto & value = swiss::variadic_nth<Cancellable ? 1 : 0>(
+      value_type & value = swiss::variadic_nth<Cancellable ? 1 : 0>(
           std::forward<decltype(args)>(args)...);
       value = std::move(*(ring_buffer_ + pop_from_));
       std::allocator_traits<allocator_type>::destroy(allocator_,

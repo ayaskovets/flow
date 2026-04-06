@@ -33,8 +33,10 @@ set(SOURCES
     queue_test.cpp
     spmc_queue_test.cpp
     spsc_queue_test.cpp
+    stream_test.cpp
     templates.hpp
-    unsafe_queue_test.cpp)
+    unsafe_queue_test.cpp
+    unsafe_stream_test.cpp)
 
 # ------------------------------------------------------------------------------
 # target

@@ -70,7 +70,8 @@ class unsafe_queue final : public swiss::non_copyable,
     }
 
     std::allocator_traits<allocator_type>::construct(
-        allocator_, ring_buffer_ + push_to(), std::forward<Args>(args)...);
+        allocator_, ring_buffer_ + next(pop_from_, size_),
+        std::forward<Args>(args)...);
 
     size_ += 1;
     return true;
@@ -107,7 +108,7 @@ class unsafe_queue final : public swiss::non_copyable,
     std::allocator_traits<allocator_type>::destroy(allocator_,
                                                    ring_buffer_ + pop_from_);
 
-    pop_from_ = next(pop_from_);
+    pop_from_ = next(pop_from_, 1);
     size_ -= 1;
     return true;
   }
@@ -144,11 +145,6 @@ class unsafe_queue final : public swiss::non_copyable,
   [[no_unique_address]] allocator_type allocator_;
 
  private:
-  [[nodiscard]] constexpr auto push_to() const noexcept -> index_type {
-    return pop_from_ + size_ >= *capacity_ ? pop_from_ + size_ - *capacity_
-                                           : pop_from_ + size_;
-  }
-
   [[nodiscard]] constexpr auto full() const noexcept -> bool {
     return size_ == *capacity_;
   }
@@ -157,9 +153,10 @@ class unsafe_queue final : public swiss::non_copyable,
     return size_ == 0;
   }
 
-  [[nodiscard]] constexpr auto next(index_type index) const noexcept
+  [[nodiscard]] constexpr auto next(index_type index,
+                                    index_type distance) const noexcept
       -> index_type {
-    return index == *capacity_ - 1 ? 0 : index + 1;
+    return (index += distance) >= *capacity_ ? index - *capacity_ : index;
   }
 };
 

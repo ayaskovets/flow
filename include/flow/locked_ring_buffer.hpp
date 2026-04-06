@@ -3,7 +3,6 @@
 #include <condition_variable>
 #include <memory>
 #include <mutex>
-#include <new>
 #include <stdexcept>
 #include <stop_token>
 

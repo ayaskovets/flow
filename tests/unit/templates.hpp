@@ -10,6 +10,7 @@
 #include <ranges>
 #include <stop_token>
 #include <thread>
+#include <vector>
 
 #include <gtest/gtest.h>
 #include <swiss/leak_detector_allocator.hpp>
@@ -40,17 +41,19 @@ namespace tests::templates {
 template <flow::concepts::blocking_queue Queue>
 constexpr void size_capacity() noexcept {
   constexpr std::size_t kQueueCapacity = 8;
+  constexpr std::size_t kRepeats       = 128;
 
-  int value{};
   Queue queue(kQueueCapacity);
-  queue.push(value);
-  queue.push(value);
 
-  for (std::size_t i = 0; i < kQueueCapacity * kQueueCapacity * 2; ++i) {
+  typename Queue::value_type value{};
+  queue.push(value);
+  queue.emplace();
+
+  for (std::size_t repeat = 0; repeat < kRepeats; ++repeat) {
     EXPECT_EQ(queue.size(), 2);
     EXPECT_EQ(queue.capacity(), kQueueCapacity);
 
-    queue.push(value);
+    queue.emplace();
     EXPECT_EQ(queue.size(), 3);
     EXPECT_EQ(queue.capacity(), kQueueCapacity);
 
@@ -69,10 +72,12 @@ constexpr void nonblocking_smoke() noexcept {
   Queue queue(kQueueCapacity);
 
   EXPECT_FALSE(queue.try_pop(value));
+
   EXPECT_TRUE(queue.try_push(0));
   EXPECT_TRUE(queue.try_push(1));
   EXPECT_TRUE(queue.try_push(2));
   EXPECT_TRUE(queue.try_push(3));
+
   EXPECT_TRUE(queue.try_pop(value));
   EXPECT_EQ(value, 0);
   EXPECT_TRUE(queue.try_pop(value));
@@ -81,7 +86,9 @@ constexpr void nonblocking_smoke() noexcept {
   EXPECT_EQ(value, 2);
   EXPECT_TRUE(queue.try_pop(value));
   EXPECT_EQ(value, 3);
+
   EXPECT_FALSE(queue.try_pop(value));
+
   EXPECT_TRUE(queue.try_push(4));
   EXPECT_TRUE(queue.try_pop(value));
   EXPECT_EQ(value, 4);
@@ -99,6 +106,7 @@ constexpr void blocking_smoke() noexcept {
   queue.push(1);
   queue.push(2);
   queue.push(3);
+
   queue.pop(value);
   EXPECT_EQ(value, 0);
   queue.pop(value);
@@ -107,6 +115,7 @@ constexpr void blocking_smoke() noexcept {
   EXPECT_EQ(value, 2);
   queue.pop(value);
   EXPECT_EQ(value, 3);
+
   queue.push(4);
   queue.pop(value);
   EXPECT_EQ(value, 4);
@@ -125,22 +134,28 @@ constexpr void mixed_smoke() noexcept {
   EXPECT_EQ(queue.size(), 0);
   EXPECT_FALSE(queue.try_pop(value));
   EXPECT_EQ(queue.size(), 0);
+
   queue.push(1);
   EXPECT_EQ(queue.size(), 1);
+
   queue.push(2);
   EXPECT_EQ(queue.size(), 2);
   EXPECT_FALSE(queue.try_emplace(3));
   EXPECT_EQ(queue.size(), 2);
+
   queue.pop(value);
   EXPECT_EQ(value, 1);
   EXPECT_EQ(queue.size(), 1);
+
   queue.emplace(4);
   EXPECT_EQ(queue.size(), 2);
   EXPECT_FALSE(queue.try_push(5));
   EXPECT_EQ(queue.size(), 2);
+
   queue.pop(value);
   EXPECT_EQ(value, 2);
   EXPECT_EQ(queue.size(), 1);
+
   queue.pop(value);
   EXPECT_EQ(value, 4);
   EXPECT_EQ(queue.size(), 0);
@@ -153,8 +168,8 @@ template <flow::concepts::blocking_queue Queue>
 constexpr void blocking_push() noexcept {
   constexpr std::size_t kQueueCapacity = 2;
 
-  int value{};
   Queue queue(kQueueCapacity);
+
   queue.push(1);
   queue.push(2);
 
@@ -165,35 +180,38 @@ constexpr void blocking_push() noexcept {
   });
 
   queue.push(3);
+
+  int value{};
   queue.pop(value);
   EXPECT_EQ(value, 2);
 }
 
 template <flow::concepts::blocking_queue Queue>
+  requires(std::same_as<typename Queue::value_type, int>)
 constexpr void blocking_pop() noexcept {
   constexpr std::size_t kQueueCapacity = 2;
 
-  typename Queue::value_type value{};
   Queue queue(kQueueCapacity);
 
-  std::jthread const producer([&] { EXPECT_TRUE(queue.try_push(value)); });
+  std::jthread const producer([&] { EXPECT_TRUE(queue.try_push(2)); });
 
+  int value{};
   queue.pop(value);
-  EXPECT_EQ(value, typename Queue::value_type{});
+  EXPECT_EQ(value, 2);
 }
 
 template <flow::concepts::cancellable_blocking_queue Queue>
 constexpr void blocking_push_stop_token() noexcept {
   constexpr std::size_t kQueueCapacity = 2;
 
-  typename Queue::value_type value{};
   Queue queue(kQueueCapacity);
-  queue.push(value);
-  queue.push(value);
+
+  EXPECT_TRUE(queue.push(std::stop_token{}, typename Queue::value_type{}));
+  EXPECT_TRUE(queue.emplace(std::stop_token{}));
 
   std::jthread const consumer([&](std::stop_token stop_token) {
-    queue.push(stop_token, value);
-    queue.emplace(stop_token, value);
+    EXPECT_FALSE(queue.emplace(stop_token));
+    EXPECT_FALSE(queue.emplace(stop_token));
   });
 }
 
@@ -204,8 +222,12 @@ constexpr void blocking_pop_stop_token() noexcept {
   typename Queue::value_type value{};
   Queue queue(kQueueCapacity);
 
-  std::jthread const producer(
-      [&](std::stop_token stop_token) { queue.pop(stop_token, value); });
+  EXPECT_TRUE(queue.emplace(std::stop_token{}));
+  EXPECT_TRUE(queue.pop(std::stop_token{}, value));
+
+  std::jthread const producer([&](std::stop_token stop_token) {
+    EXPECT_FALSE(queue.pop(stop_token, value));
+  });
 }
 
 template <flow::concepts::queue Queue>
@@ -219,12 +241,16 @@ constexpr void capacity_one() noexcept {
   EXPECT_FALSE(queue.try_pop(value));
   queue.push(1);
   EXPECT_FALSE(queue.try_push(3));
+
   queue.pop(value);
   EXPECT_EQ(value, 1);
+
   queue.push(4);
   EXPECT_FALSE(queue.try_push(5));
+
   queue.pop(value);
   EXPECT_EQ(value, 4);
+
   EXPECT_FALSE(queue.try_pop(value));
 }
 
@@ -233,7 +259,7 @@ template <flow::concepts::queue Queue>
 constexpr void queue_destructor() noexcept {
   constexpr std::size_t kQueueCapacity = 2;
 
-  std::shared_ptr<int> value = std::make_shared<int>();
+  std::shared_ptr<int> const value = std::make_shared<int>();
 
   {
     Queue queue(kQueueCapacity);
@@ -257,6 +283,7 @@ constexpr void item_destructor() noexcept {
   Queue queue(kQueueCapacity);
 
   EXPECT_EQ(value.use_count(), 1);
+
   queue.push(value);
   EXPECT_EQ(value.use_count(), 2);
   queue.push(value);
@@ -281,6 +308,7 @@ constexpr void non_copyable_item_type() noexcept {
 
   queue.push(std::move(value));
   queue.pop(value);
+
   EXPECT_TRUE(queue.try_push(std::move(value)));
   EXPECT_TRUE(queue.try_pop(value));
 }
@@ -296,6 +324,7 @@ constexpr void allocator() noexcept {
   allocator.clear();
 
   EXPECT_TRUE(allocator.empty());
+
   {
     int value{};
     Queue queue(kQueueCapacity, allocator);
@@ -303,15 +332,19 @@ constexpr void allocator() noexcept {
 
     queue.push(1);
     EXPECT_FALSE(allocator.empty());
+
     queue.push(2);
     EXPECT_FALSE(allocator.empty());
+
     queue.pop(value);
     EXPECT_EQ(value, 1);
     EXPECT_FALSE(allocator.empty());
+
     queue.pop(value);
     EXPECT_EQ(value, 2);
     EXPECT_FALSE(allocator.empty());
   }
+
   EXPECT_TRUE(allocator.empty());
 }
 
@@ -320,56 +353,51 @@ template <flow::concepts::nonblocking_queue Queue>
 constexpr void nonblocking(auto const & param) noexcept {
   auto const & [items_size, queue_capacity, producers, consumers] = param;
 
-  auto const pushed_items =
-      std::ranges::views::iota(static_cast<std::size_t>(0), items_size);
-
   Queue queue(queue_capacity);
   std::latch latch(static_cast<std::ptrdiff_t>(producers + consumers));
+
+  std::vector<int> const pushed_items =
+      std::ranges::views::iota(0ZU, items_size) |
+      std::ranges::to<std::vector<int>>();
   std::vector<int> popped_items(items_size);
-
-  std::atomic<int> push_value = 0;
-  auto const producer         = [&] {
-    latch.arrive_and_wait();
-
-    while (true) {
-      int const index = push_value.fetch_add(1, std::memory_order::relaxed);
-      if (static_cast<std::size_t>(index) >= items_size) {
-        return;
-      }
-      while (!queue.try_push(index)) {
-      }
-    }
-  };
-
-  std::atomic<std::size_t> pop_index = 0;
-  auto const consumer                = [&] {
-    latch.arrive_and_wait();
-
-    while (true) {
-      std::size_t const index =
-          pop_index.fetch_add(1, std::memory_order::relaxed);
-      if (index >= items_size) {
-        return;
-      }
-      while (!queue.try_pop(popped_items[index])) {
-      }
-    }
-  };
+  std::atomic<std::size_t> push_index = 0;
+  std::atomic<std::size_t> pop_index  = 0;
 
   {
     std::vector<std::jthread> threads;
     threads.reserve(producers + consumers);
     for (std::size_t i = 0; i < producers; ++i) {
-      threads.emplace_back(producer);
+      threads.emplace_back([&] {
+        latch.arrive_and_wait();
+
+        while (true) {
+          std::size_t const index = push_index++;
+          if (index >= items_size) {
+            return;
+          }
+          while (!queue.try_push(pushed_items[index])) {
+          }
+        }
+      });
     }
     for (std::size_t i = 0; i < consumers; ++i) {
-      threads.emplace_back(consumer);
+      threads.emplace_back([&] {
+        latch.arrive_and_wait();
+
+        while (true) {
+          std::size_t const index = pop_index++;
+          if (index >= items_size) {
+            return;
+          }
+          while (!queue.try_pop(popped_items[index])) {
+          }
+        }
+      });
     }
   }
 
   std::ranges::sort(popped_items);
-  EXPECT_EQ(std::vector<int>(pushed_items.begin(), pushed_items.end()),
-            popped_items);
+  EXPECT_EQ(pushed_items, popped_items);
 }
 
 template <flow::concepts::blocking_queue Queue>
@@ -377,54 +405,49 @@ template <flow::concepts::blocking_queue Queue>
 constexpr void blocking(auto const & param) noexcept {
   auto const & [items_size, queue_capacity, producers, consumers] = param;
 
-  auto const pushed_items =
-      std::ranges::views::iota(static_cast<std::size_t>(0), items_size);
-
   Queue queue(queue_capacity);
   std::latch latch(static_cast<std::ptrdiff_t>(producers + consumers));
+
+  std::vector<int> const pushed_items =
+      std::ranges::views::iota(0ZU, items_size) |
+      std::ranges::to<std::vector<int>>();
   std::vector<int> popped_items(items_size);
-
-  std::atomic<int> push_value = 0;
-  auto const producer         = [&] {
-    latch.arrive_and_wait();
-
-    while (true) {
-      int const index = push_value.fetch_add(1, std::memory_order::relaxed);
-      if (static_cast<std::size_t>(index) >= items_size) {
-        return;
-      }
-      queue.push(index);
-    }
-  };
-
-  std::atomic<std::size_t> pop_index = 0;
-  auto const consumer                = [&] {
-    latch.arrive_and_wait();
-
-    while (true) {
-      std::size_t const index =
-          pop_index.fetch_add(1, std::memory_order::relaxed);
-      if (index >= items_size) {
-        return;
-      }
-      queue.pop(popped_items[index]);
-    }
-  };
+  std::atomic<std::size_t> push_index = 0;
+  std::atomic<std::size_t> pop_index  = 0;
 
   {
     std::vector<std::jthread> threads;
     threads.reserve(producers + consumers);
     for (std::size_t i = 0; i < producers; ++i) {
-      threads.emplace_back(producer);
+      threads.emplace_back([&] {
+        latch.arrive_and_wait();
+
+        while (true) {
+          std::size_t const index = push_index++;
+          if (index >= items_size) {
+            return;
+          }
+          queue.push(pushed_items[index]);
+        }
+      });
     }
     for (std::size_t i = 0; i < consumers; ++i) {
-      threads.emplace_back(consumer);
+      threads.emplace_back([&] {
+        latch.arrive_and_wait();
+
+        while (true) {
+          std::size_t const index = pop_index++;
+          if (index >= items_size) {
+            return;
+          }
+          queue.pop(popped_items[index]);
+        }
+      });
     }
   }
 
   std::ranges::sort(popped_items);
-  EXPECT_EQ(std::vector<int>(pushed_items.begin(), pushed_items.end()),
-            popped_items);
+  EXPECT_EQ(pushed_items, popped_items);
 }
 
 template <flow::concepts::queue Queue>
@@ -432,25 +455,24 @@ constexpr void queued_producers_nonblocking() noexcept {
   constexpr std::size_t kQueueCapacity = 2;
   constexpr std::size_t kProducers     = 16;
 
-  typename Queue::value_type value{};
   Queue queue(kQueueCapacity);
-  queue.push(value);
-  queue.push(value);
+  std::latch latch(static_cast<std::ptrdiff_t>(kProducers + 1));
+
+  queue.emplace();
+  queue.emplace();
 
   std::vector<std::jthread> producers;
   producers.reserve(kProducers);
-  std::latch latch(static_cast<std::ptrdiff_t>(kProducers + 1));
-
   for (std::size_t i = 0; i < kProducers; ++i) {
     producers.emplace_back([&] {
-      typename Queue::value_type value{};
       latch.count_down();
-      queue.push(value);
+      queue.emplace();
     });
   }
 
   latch.arrive_and_wait();
   for (std::size_t i = 0; i < kProducers;) {
+    typename Queue::value_type value{};
     i += queue.try_pop(value);
   }
 }
@@ -460,25 +482,24 @@ constexpr void queued_producers_blocking() noexcept {
   constexpr std::size_t kQueueCapacity = 2;
   constexpr std::size_t kProducers     = 16;
 
-  typename Queue::value_type value{};
   Queue queue(kQueueCapacity);
-  queue.push(value);
-  queue.push(value);
+  std::latch latch(static_cast<std::ptrdiff_t>(kProducers + 1));
+
+  queue.emplace();
+  queue.emplace();
 
   std::vector<std::jthread> producers;
   producers.reserve(kProducers);
-  std::latch latch(static_cast<std::ptrdiff_t>(kProducers + 1));
-
   for (std::size_t i = 0; i < kProducers; ++i) {
     producers.emplace_back([&] {
-      typename Queue::value_type value{};
       latch.count_down();
-      queue.push(value);
+      queue.emplace();
     });
   }
 
   latch.arrive_and_wait();
   for (std::size_t i = 0; i < kProducers; ++i) {
+    typename Queue::value_type value{};
     queue.pop(value);
   }
 }
@@ -488,12 +509,11 @@ constexpr void queued_consumers_nonblocking() noexcept {
   constexpr std::size_t kQueueCapacity = 2;
   constexpr std::size_t kConsumers     = 16;
 
-  typename Queue::value_type value{};
   Queue queue(kQueueCapacity);
-  std::vector<std::jthread> consumers;
-  consumers.reserve(kConsumers);
   std::latch latch(static_cast<std::ptrdiff_t>(kConsumers + 1));
 
+  std::vector<std::jthread> consumers;
+  consumers.reserve(kConsumers);
   for (std::size_t i = 0; i < kConsumers; ++i) {
     consumers.emplace_back([&] {
       typename Queue::value_type value{};
@@ -504,7 +524,7 @@ constexpr void queued_consumers_nonblocking() noexcept {
 
   latch.arrive_and_wait();
   for (std::size_t i = 0; i < kConsumers;) {
-    i += queue.try_push(value);
+    i += queue.try_emplace();
   }
 }
 
@@ -513,12 +533,11 @@ constexpr void queued_consumers_blocking() noexcept {
   constexpr std::size_t kQueueCapacity = 2;
   constexpr std::size_t kConsumers     = 16;
 
-  typename Queue::value_type value{};
   Queue queue(kQueueCapacity);
-  std::vector<std::jthread> consumers;
-  consumers.reserve(kConsumers);
   std::latch latch(static_cast<std::ptrdiff_t>(kConsumers + 1));
 
+  std::vector<std::jthread> consumers;
+  consumers.reserve(kConsumers);
   for (std::size_t i = 0; i < kConsumers; ++i) {
     consumers.emplace_back([&] {
       typename Queue::value_type value{};
@@ -529,7 +548,7 @@ constexpr void queued_consumers_blocking() noexcept {
 
   latch.arrive_and_wait();
   for (std::size_t i = 0; i < kConsumers; ++i) {
-    queue.push(value);
+    queue.emplace();
   }
 }
 
@@ -559,23 +578,22 @@ namespace tests::templates {
 template <flow::concepts::blocking_stream Stream>
 constexpr void size_capacity() noexcept {
   constexpr std::size_t kStreamCapacity = 8;
-  constexpr std::size_t kDataSize       = 2;
 
-  std::array<std::byte, kDataSize> bytes{std::byte{0}, std::byte(1)};
+  std::vector<std::byte> bytes(2);
   Stream stream(kStreamCapacity);
-  stream.push(bytes);
-  stream.push(bytes);
+
+  stream.push(std::vector(4, std::byte(0)));
 
   for (std::size_t i = 0; i < kStreamCapacity * kStreamCapacity * 2; ++i) {
-    EXPECT_EQ(stream.size(), kDataSize * 2);
+    EXPECT_EQ(stream.size(), 4);
     EXPECT_EQ(stream.capacity(), kStreamCapacity);
 
-    stream.push(bytes);
-    EXPECT_EQ(stream.size(), kDataSize * 3);
+    stream.push(std::vector(2, std::byte(0)));
+    EXPECT_EQ(stream.size(), 6);
     EXPECT_EQ(stream.capacity(), kStreamCapacity);
 
     stream.pop(bytes);
-    EXPECT_EQ(stream.size(), kDataSize * 2);
+    EXPECT_EQ(stream.size(), 4);
     EXPECT_EQ(stream.capacity(), kStreamCapacity);
   }
 }
@@ -583,48 +601,44 @@ constexpr void size_capacity() noexcept {
 template <flow::concepts::nonblocking_stream Stream>
 constexpr void nonblocking_smoke() noexcept {
   constexpr std::size_t kStreamCapacity = 5;
-  constexpr std::size_t kDataSize       = 2;
 
-  std::array<std::byte, kDataSize> const bytes{std::byte{0}, std::byte(1)};
-  std::array<std::byte, kDataSize> out_bytes{};
+  std::vector<std::byte> bytes(2);
   Stream stream(kStreamCapacity);
 
-  EXPECT_EQ(stream.try_pop(out_bytes), 0);
-  EXPECT_EQ(stream.try_push(bytes), 2);
-  EXPECT_EQ(stream.try_push(bytes), 2);
-  EXPECT_EQ(stream.try_push(bytes), 1);
-  EXPECT_EQ(stream.try_push(bytes), 0);
-  EXPECT_EQ(stream.try_pop(out_bytes), 2);
-  EXPECT_EQ(out_bytes, bytes);
-  EXPECT_EQ(stream.try_pop(out_bytes), 2);
-  EXPECT_EQ(out_bytes, bytes);
+  EXPECT_EQ(stream.try_pop(bytes), 0);
 
-  out_bytes[1] = std::byte(2);
-  EXPECT_EQ(stream.try_pop(out_bytes), 1);
-  EXPECT_EQ(out_bytes[0], bytes[0]);
-  EXPECT_NE(out_bytes[1], bytes[1]);
+  EXPECT_EQ(stream.try_push(std::vector(2, std::byte(0))), 2);
+  EXPECT_EQ(stream.try_push(std::vector(2, std::byte(1))), 2);
+  EXPECT_EQ(stream.try_push(std::vector(2, std::byte(2))), 1);
+  EXPECT_EQ(stream.try_push(std::vector(2, std::byte(3))), 0);
+
+  EXPECT_EQ(stream.try_pop(bytes), 2);
+  EXPECT_EQ(bytes, std::vector(2, std::byte(0)));
+  EXPECT_EQ(stream.try_pop(bytes), 2);
+  EXPECT_EQ(bytes, std::vector(2, std::byte(1)));
+
+  EXPECT_EQ(stream.try_pop(bytes), 1);
+  EXPECT_EQ(bytes, (std::vector{std::byte(2), std::byte{1}}));
 }
 
 template <flow::concepts::blocking_stream Stream>
 constexpr void blocking_smoke() noexcept {
   constexpr std::size_t kStreamCapacity = 5;
-  constexpr std::size_t kDataSize       = 2;
 
-  std::array<std::byte, kDataSize> const bytes{std::byte{0}, std::byte(1)};
-  std::array<std::byte, kDataSize> out_bytes{};
+  std::vector<std::byte> bytes(2);
   Stream stream(kStreamCapacity);
 
-  stream.push(bytes);
-  stream.push(bytes);
-  stream.pop(out_bytes);
-  EXPECT_EQ(out_bytes, bytes);
-  stream.pop(out_bytes);
-  EXPECT_EQ(out_bytes, bytes);
+  stream.push(std::vector(2, std::byte(0)));
+  stream.push(std::vector(2, std::byte(1)));
+  stream.push(std::vector(1, std::byte(2)));
 
-  stream.push(std::array{bytes[1], bytes[0]});
-  stream.pop(out_bytes);
-  EXPECT_EQ(out_bytes[0], bytes[1]);
-  EXPECT_EQ(out_bytes[1], bytes[0]);
+  stream.pop(bytes);
+  EXPECT_EQ(bytes, std::vector(2, std::byte(0)));
+  stream.pop(bytes);
+  EXPECT_EQ(bytes, std::vector(2, std::byte(1)));
+
+  stream.pop(std::span<std::byte, 1>(bytes));
+  EXPECT_EQ(bytes, (std::vector{std::byte(2), std::byte{1}}));
 }
 
 template <typename Stream>
@@ -632,95 +646,104 @@ template <typename Stream>
            flow::concepts::nonblocking_stream<Stream>)
 constexpr void mixed_smoke() noexcept {
   constexpr std::size_t kStreamCapacity = 5;
-  constexpr std::size_t kDataSize       = 2;
 
-  std::array<std::byte, kDataSize> const bytes{std::byte{0}, std::byte(1)};
-  std::array<std::byte, kDataSize> out_bytes{};
+  std::array<std::byte, 2> bytes{};
   Stream stream(kStreamCapacity);
 
   EXPECT_EQ(stream.size(), 0);
-  EXPECT_EQ(stream.try_pop(out_bytes), 0);
+  EXPECT_EQ(stream.try_pop(bytes), 0);
   EXPECT_EQ(stream.size(), 0);
-  stream.push(bytes);
+
+  stream.push(std::array{std::byte(0), std::byte(1)});
   EXPECT_EQ(stream.size(), 2);
-  stream.push(bytes);
+
+  stream.push(std::array{std::byte(2), std::byte(3)});
   EXPECT_EQ(stream.size(), 4);
-  EXPECT_EQ(stream.try_push(bytes), 1);
+  EXPECT_EQ(stream.try_push(std::array{std::byte(4), std::byte(0)}), 1);
   EXPECT_EQ(stream.size(), 5);
-  stream.pop(out_bytes);
-  EXPECT_EQ(out_bytes, bytes);
+
+  stream.pop(bytes);
+  EXPECT_EQ(bytes, (std::array{std::byte(0), std::byte(1)}));
   EXPECT_EQ(stream.size(), 3);
-  EXPECT_EQ(stream.try_push(bytes), 2);
+
+  EXPECT_EQ(stream.try_push(std::array{std::byte(5), std::byte(6)}), 2);
   EXPECT_EQ(stream.size(), 5);
-  stream.pop(out_bytes);
-  EXPECT_EQ(out_bytes, bytes);
+  stream.pop(bytes);
+  EXPECT_EQ(bytes, (std::array{std::byte(2), std::byte(3)}));
   EXPECT_EQ(stream.size(), 3);
-  stream.pop(out_bytes);
-  EXPECT_EQ(out_bytes[0], bytes[0]);
-  EXPECT_EQ(out_bytes[1], bytes[0]);
+
+  stream.pop(bytes);
+  EXPECT_EQ(bytes, (std::array{std::byte(4), std::byte(5)}));
   EXPECT_EQ(stream.size(), 1);
-  EXPECT_EQ(stream.try_pop(out_bytes), 1);
-  EXPECT_EQ(out_bytes[0], bytes[1]);
-  EXPECT_EQ(out_bytes[1], bytes[0]);
+
+  EXPECT_EQ(stream.try_pop(bytes), 1);
+  EXPECT_EQ(bytes, (std::array{std::byte(6), std::byte(5)}));
 }
 
 template <flow::concepts::blocking_stream Stream>
-constexpr void blocking_push() noexcept {  // TODO:
-  constexpr std::size_t kStreamCapacity = 2;
+constexpr void blocking_push() noexcept {
+  constexpr std::size_t kStreamCapacity = 6;
 
-  int value{};
+  std::array<std::byte, 4> bytes{};
   Stream stream(kStreamCapacity);
-  stream.push(1);
-  stream.push(2);
+
+  stream.push(std::vector(3, std::byte(0)));
+  stream.push(std::vector(3, std::byte(1)));
 
   std::jthread const consumer([&] {
-    int value{};
-    EXPECT_TRUE(stream.try_pop(value));
-    EXPECT_EQ(value, 1);
+    EXPECT_EQ(stream.try_pop(bytes), 4);
+    EXPECT_EQ(bytes, (std::array{std::byte(0), std::byte(0), std::byte(0),
+                                 std::byte(1)}));
   });
 
-  stream.push(3);
-  stream.pop(value);
-  EXPECT_EQ(value, 2);
+  stream.push(std::vector(2, std::byte(2)));
+  stream.pop(bytes);
+  EXPECT_EQ(bytes, (std::array{std::byte(1), std::byte(1), std::byte(2),
+                               std::byte(2)}));
 }
 
 template <typename Stream>
   requires(flow::concepts::blocking_stream<Stream> &&
            flow::concepts::nonblocking_stream<Stream>)
-constexpr void blocking_pop() noexcept {  // TODO:
+constexpr void blocking_pop() noexcept {
   constexpr std::size_t kStreamCapacity = 2;
 
-  typename Stream::value_type value{};
   Stream stream(kStreamCapacity);
 
-  std::jthread const producer([&] { EXPECT_TRUE(stream.try_push(value)); });
+  std::jthread const producer(
+      [&] { EXPECT_EQ(stream.try_push(std::vector(2, std::byte(1))), 2); });
 
-  stream.pop(value);
-  EXPECT_EQ(value, typename Stream::value_type{});
+  std::array<std::byte, 2> bytes{};
+  stream.pop(bytes);
+  EXPECT_EQ(bytes, (std::array{std::byte(1), std::byte(1)}));
 }
 
 template <flow::concepts::cancellable_blocking_stream Stream>
-constexpr void blocking_push_stop_token() noexcept {  // TODO:
+constexpr void blocking_push_stop_token() noexcept {
   constexpr std::size_t kStreamCapacity = 2;
 
-  typename Stream::value_type value{};
   Stream stream(kStreamCapacity);
-  stream.push(value);
-  stream.push(value);
+
+  EXPECT_TRUE(stream.push(std::stop_token{}, std::vector(2, std::byte(0))));
 
   std::jthread const consumer([&](std::stop_token stop_token) {
-    stream.push(stop_token, value);
-    stream.emplace(stop_token, value);
+    EXPECT_FALSE(stream.push(stop_token, std::vector(2, std::byte(0))));
   });
 }
 
 template <flow::concepts::cancellable_blocking_stream Stream>
-constexpr void blocking_pop_stop_token() noexcept {  // TODO:
-  typename Stream::value_type value{};
-  Stream stream(2);
+constexpr void blocking_pop_stop_token() noexcept {
+  constexpr std::size_t kStreamCapacity = 2;
 
-  std::jthread const producer(
-      [&](std::stop_token stop_token) { stream.pop(stop_token, value); });
+  std::array<std::byte, 2> bytes{};
+  Stream stream(kStreamCapacity);
+
+  EXPECT_TRUE(stream.push(std::stop_token{}, std::vector(2, std::byte(0))));
+  EXPECT_TRUE(stream.pop(std::stop_token{}, bytes));
+
+  std::jthread const producer([&](std::stop_token stop_token) {
+    EXPECT_FALSE(stream.pop(stop_token, bytes));
+  });
 }
 
 template <flow::concepts::blocking_stream Stream>
@@ -734,247 +757,160 @@ constexpr void allocator() noexcept {
 
   EXPECT_TRUE(allocator.empty());
   {
-    Stream stream(kStreamCapacity, allocator);
+    Stream const stream(kStreamCapacity, allocator);
     EXPECT_FALSE(allocator.empty());
   }
   EXPECT_TRUE(allocator.empty());
 }
 
 template <flow::concepts::nonblocking_stream Stream>
-constexpr void nonblocking(auto const & param) noexcept {  // TODO:
-  auto const & [items_size, stream_size, producers, consumers] = param;
+constexpr void nonblocking(auto const & param) noexcept {
+  auto const & [bytes_count, queue_capacity, producers, consumers] = param;
 
-  auto const pushed_items =
-      std::ranges::views::iota(static_cast<std::size_t>(0), items_size);
+  std::size_t const producer_bytes =
+      std::max<std::size_t>(1, queue_capacity / 5);
+  std::size_t const consumer_bytes =
+      std::max<std::size_t>(1, queue_capacity / 7);
 
-  Stream stream(stream_size);
+  Stream stream(queue_capacity);
   std::latch latch(static_cast<std::ptrdiff_t>(producers + consumers));
-  std::vector<int> popped_items(items_size);
 
-  std::atomic<int> push_value = 0;
-  auto const producer         = [&] {
-    latch.arrive_and_wait();
-
-    while (true) {
-      int const index = push_value.fetch_add(1, std::memory_order::relaxed);
-      if (static_cast<std::size_t>(index) >= items_size) {
-        return;
-      }
-      while (!stream.try_push(index)) {
-      }
-    }
-  };
-
-  std::atomic<std::size_t> pop_index = 0;
-  auto const consumer                = [&] {
-    latch.arrive_and_wait();
-
-    while (true) {
-      std::size_t const index =
-          pop_index.fetch_add(1, std::memory_order::relaxed);
-      if (index >= items_size) {
-        return;
-      }
-      while (!stream.try_pop(popped_items[index])) {
-      }
-    }
-  };
+  std::vector<std::atomic<std::size_t>> pushed_byte_counts(
+      std::numeric_limits<std::uint8_t>::max());
+  std::vector<std::atomic<std::size_t>> popped_byte_counts(
+      std::numeric_limits<std::uint8_t>::max());
+  std::atomic<std::size_t> push_index = 0;
+  std::atomic<std::size_t> pop_index  = 0;
 
   {
     std::vector<std::jthread> threads;
     threads.reserve(producers + consumers);
     for (std::size_t i = 0; i < producers; ++i) {
-      threads.emplace_back(producer);
+      threads.emplace_back([&] {
+        latch.arrive_and_wait();
+
+        std::vector<std::byte> bytes(producer_bytes);
+        while (true) {
+          std::size_t const index = push_index.fetch_add(producer_bytes);
+          if (index >= bytes_count) {
+            return;
+          }
+          auto const size = std::min(producer_bytes, bytes_count - index);
+          for (std::size_t i = 0; i < size; ++i) {
+            bytes[i] =
+                std::byte(index % std::numeric_limits<std::uint8_t>::max());
+            ++pushed_byte_counts[static_cast<std::size_t>(bytes[i])];
+          }
+          while (!stream.try_push(std::span<std::byte>(bytes.data(), size))) {
+          }
+        }
+      });
     }
     for (std::size_t i = 0; i < consumers; ++i) {
-      threads.emplace_back(consumer);
+      threads.emplace_back([&] {
+        latch.arrive_and_wait();
+
+        std::vector<std::byte> bytes(consumer_bytes);
+        while (true) {
+          std::size_t const index = pop_index.fetch_add(consumer_bytes);
+          if (index >= bytes_count) {
+            return;
+          }
+          auto const size = std::min(consumer_bytes, bytes_count - index);
+          while (!stream.try_pop(std::span<std::byte>(bytes.data(), size))) {
+          }
+          for (std::size_t i = 0; i < size; ++i) {
+            ++popped_byte_counts[static_cast<std::size_t>(bytes[i])];
+          }
+        }
+      });
     }
   }
 
-  std::ranges::sort(popped_items);
-  EXPECT_EQ(std::vector<int>(pushed_items.begin(), pushed_items.end()),
-            popped_items);
+  EXPECT_EQ(pushed_byte_counts, popped_byte_counts);
 }
 
 template <flow::concepts::blocking_stream Stream>
-constexpr void blocking(auto const & param) noexcept {  // TODO:
-  auto const & [items_size, stream_size, producers, consumers] = param;
+constexpr void blocking(auto const & param) noexcept {
+  auto const & [bytes_count, queue_capacity, producers, consumers] = param;
 
-  auto const pushed_items =
-      std::ranges::views::iota(static_cast<std::size_t>(0), items_size);
+  std::size_t const producer_bytes =
+      std::max<std::size_t>(1, queue_capacity / 5);
+  std::size_t const consumer_bytes =
+      std::max<std::size_t>(1, queue_capacity / 7);
 
-  Stream stream(stream_size);
+  Stream stream(queue_capacity);
   std::latch latch(static_cast<std::ptrdiff_t>(producers + consumers));
-  std::vector<int> popped_items(items_size);
 
-  std::atomic<int> push_value = 0;
-  auto const producer         = [&] {
-    latch.arrive_and_wait();
-
-    while (true) {
-      int const index = push_value.fetch_add(1, std::memory_order::relaxed);
-      if (static_cast<std::size_t>(index) >= items_size) {
-        return;
-      }
-      stream.push(index);
-    }
-  };
-
-  std::atomic<std::size_t> pop_index = 0;
-  auto const consumer                = [&] {
-    latch.arrive_and_wait();
-
-    while (true) {
-      std::size_t const index =
-          pop_index.fetch_add(1, std::memory_order::relaxed);
-      if (index >= items_size) {
-        return;
-      }
-      stream.pop(popped_items[index]);
-    }
-  };
+  std::vector<std::atomic<std::size_t>> pushed_byte_counts(
+      std::numeric_limits<std::uint8_t>::max());
+  std::vector<std::atomic<std::size_t>> popped_byte_counts(
+      std::numeric_limits<std::uint8_t>::max());
+  std::atomic<std::size_t> push_index = 0;
+  std::atomic<std::size_t> pop_index  = 0;
 
   {
     std::vector<std::jthread> threads;
     threads.reserve(producers + consumers);
     for (std::size_t i = 0; i < producers; ++i) {
-      threads.emplace_back(producer);
+      threads.emplace_back([&] {
+        latch.arrive_and_wait();
+
+        std::vector<std::byte> bytes(producer_bytes);
+        while (true) {
+          std::size_t const index = push_index.fetch_add(producer_bytes);
+          if (index >= bytes_count) {
+            return;
+          }
+          auto const size = std::min(producer_bytes, bytes_count - index);
+          for (std::size_t i = 0; i < size; ++i) {
+            bytes[i] =
+                std::byte(index % std::numeric_limits<std::uint8_t>::max());
+            ++pushed_byte_counts[static_cast<std::size_t>(bytes[i])];
+          }
+          stream.push(std::span<std::byte>(bytes.data(), size));
+        }
+      });
     }
     for (std::size_t i = 0; i < consumers; ++i) {
-      threads.emplace_back(consumer);
+      threads.emplace_back([&] {
+        latch.arrive_and_wait();
+
+        std::vector<std::byte> bytes(consumer_bytes);
+        while (true) {
+          std::size_t const index = pop_index.fetch_add(consumer_bytes);
+          if (index >= bytes_count) {
+            return;
+          }
+          auto const size = std::min(consumer_bytes, bytes_count - index);
+          stream.pop(std::span<std::byte>(bytes.data(), size));
+          for (std::size_t i = 0; i < size; ++i) {
+            ++popped_byte_counts[static_cast<std::size_t>(bytes[i])];
+          }
+        }
+      });
     }
   }
 
-  std::ranges::sort(popped_items);
-  EXPECT_EQ(std::vector<int>(pushed_items.begin(), pushed_items.end()),
-            popped_items);
-}
-
-template <typename Stream>
-  requires(flow::concepts::blocking_stream<Stream> &&
-           flow::concepts::nonblocking_stream<Stream>)
-constexpr void queued_producers_nonblocking() noexcept {  // TODO:
-  constexpr std::size_t kStreamCapacity = 2;
-  constexpr std::size_t kProducers      = 16;
-
-  typename Stream::value_type value{};
-  Stream stream(kStreamCapacity);
-  stream.push(value);
-  stream.push(value);
-
-  std::vector<std::jthread> producers;
-  producers.reserve(kProducers);
-  std::latch latch(static_cast<std::ptrdiff_t>(kProducers + 1));
-
-  for (std::size_t i = 0; i < kProducers; ++i) {
-    producers.emplace_back([&] {
-      typename Stream::value_type value{};
-      latch.count_down();
-      stream.push(value);
-    });
-  }
-
-  latch.arrive_and_wait();
-  for (std::size_t i = 0; i < kProducers;) {
-    i += stream.try_pop(value);
-  }
-}
-
-template <flow::concepts::blocking_stream Stream>
-constexpr void queued_producers_blocking() noexcept {  // TODO:
-  constexpr std::size_t kStreamCapacity = 2;
-  constexpr std::size_t kProducers      = 16;
-
-  typename Stream::value_type value{};
-  Stream stream(kStreamCapacity);
-  stream.push(value);
-  stream.push(value);
-
-  std::vector<std::jthread> producers;
-  producers.reserve(kProducers);
-  std::latch latch(static_cast<std::ptrdiff_t>(kProducers + 1));
-
-  for (std::size_t i = 0; i < kProducers; ++i) {
-    producers.emplace_back([&] {
-      typename Stream::value_type value{};
-      latch.count_down();
-      stream.push(value);
-    });
-  }
-
-  latch.arrive_and_wait();
-  for (std::size_t i = 0; i < kProducers; ++i) {
-    stream.pop(value);
-  }
-}
-
-template <flow::concepts::nonblocking_stream Stream>
-constexpr void queued_consumers_nonblocking() noexcept {  // TODO:
-  constexpr std::size_t kStreamCapacity = 2;
-  constexpr std::size_t kConsumers      = 16;
-
-  typename Stream::value_type value{};
-  Stream stream(kStreamCapacity);
-  std::vector<std::jthread> consumers;
-  consumers.reserve(kConsumers);
-  std::latch latch(static_cast<std::ptrdiff_t>(kConsumers + 1));
-
-  for (std::size_t i = 0; i < kConsumers; ++i) {
-    consumers.emplace_back([&] {
-      typename Stream::value_type value{};
-      latch.count_down();
-      stream.pop(value);
-    });
-  }
-
-  latch.arrive_and_wait();
-  for (std::size_t i = 0; i < kConsumers;) {
-    i += stream.try_push(value);
-  }
-}
-
-template <flow::concepts::blocking_stream Stream>
-constexpr void queued_consumers_blocking() noexcept {  // TODO:
-  constexpr std::size_t kStreamCapacity = 2;
-  constexpr std::size_t kConsumers      = 16;
-
-  typename Stream::value_type value{};
-  Stream stream(kStreamCapacity);
-  std::vector<std::jthread> consumers;
-  consumers.reserve(kConsumers);
-  std::latch latch(static_cast<std::ptrdiff_t>(kConsumers + 1));
-
-  for (std::size_t i = 0; i < kConsumers; ++i) {
-    consumers.emplace_back([&] {
-      typename Stream::value_type value{};
-      latch.count_down();
-      stream.pop(value);
-    });
-  }
-
-  latch.arrive_and_wait();
-  for (std::size_t i = 0; i < kConsumers; ++i) {
-    stream.push(value);
-  }
+  EXPECT_EQ(pushed_byte_counts, popped_byte_counts);
 }
 
 template <flow::concepts::nonblocking_stream Stream>
 constexpr void rollover() noexcept {
   constexpr std::size_t kStreamCapacity = 8;
-  constexpr std::size_t kDataSize       = 3;
   constexpr std::size_t kRepeats        = 3;
 
-  std::array<std::byte, kDataSize> const bytes{std::byte(0), std::byte(1),
-                                               std::byte(2)};
-  std::array<std::byte, kDataSize> out_bytes{};
+  std::array<std::byte, 3> bytes{};
   Stream stream(kStreamCapacity);
 
   for (std::size_t repeat = 0; repeat < kRepeats; ++repeat) {
     for (std::size_t i = 0;
          i < std::numeric_limits<typename Stream::index_type>::max(); ++i) {
-      EXPECT_EQ(stream.try_push(bytes), bytes.size());
-      EXPECT_EQ(stream.try_pop(out_bytes), out_bytes.size());
-      EXPECT_EQ(out_bytes, bytes);
+      EXPECT_EQ(
+          stream.try_push(std::array{std::byte(0), std::byte(1), std::byte(2)}),
+          3);
+      EXPECT_EQ(stream.try_pop(bytes), 3);
+      EXPECT_EQ(bytes, (std::array{std::byte(0), std::byte(1), std::byte(2)}));
     }
   }
 }

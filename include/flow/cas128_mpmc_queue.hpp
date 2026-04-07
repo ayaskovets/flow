@@ -28,7 +28,7 @@ template <typename Value, std::unsigned_integral Index = std::size_t,
           Index Capacity = swiss::kDynamicExtent<Index>,
           typename Allocator =
               std::allocator<std::atomic<swiss::trivial_pair<Value, Index>>>>
-  requires(static_cast<bool>(Allocator::value_type::is_always_lock_free))
+  requires(Allocator::value_type::is_always_lock_free)
 // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class cas128_mpmc_queue final : public swiss::non_copyable,
                                 public swiss::non_movable {

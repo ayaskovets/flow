@@ -29,9 +29,9 @@ class unsafe_queue final : public swiss::non_copyable,
  public:
   constexpr explicit unsafe_queue(allocator_type allocator = allocator_type())
     requires(Capacity != swiss::kDynamicExtent<index_type>)
-      : ring_buffer_(allocator.allocate(Capacity)),
-        capacity_(),
-        allocator_(std::move(allocator)) {
+      : allocator_(std::move(allocator)),
+        ring_buffer_(std::allocator_traits<allocator_type>::allocate(
+            allocator_, Capacity)) {
     static_assert(Capacity > 0,
                   "unsafe_queue::unsafe_queue(): invalid capacity < 1");
   }
@@ -39,15 +39,16 @@ class unsafe_queue final : public swiss::non_copyable,
   constexpr explicit unsafe_queue(index_type capacity,
                                   allocator_type allocator = allocator_type())
     requires(Capacity == swiss::kDynamicExtent<index_type>)
-      : ring_buffer_([capacity, &allocator] {
-          if (capacity == 0) {
+      : allocator_(std::move(allocator)),
+        capacity_(capacity),
+        ring_buffer_([this] {
+          if (*capacity_ == 0) {
             throw std::invalid_argument(
                 "unsafe_queue::unsafe_queue(): invalid capacity < 1");
           }
-          return allocator.allocate(capacity);
-        }()),
-        capacity_(capacity),
-        allocator_(std::move(allocator)) {}
+          return std::allocator_traits<allocator_type>::allocate(allocator_,
+                                                                 *capacity_);
+        }()) {}
 
   constexpr ~unsafe_queue() noexcept
     requires(std::is_nothrow_destructible_v<value_type>)
@@ -58,7 +59,8 @@ class unsafe_queue final : public swiss::non_copyable,
       size_ -= 1;
     }
 
-    allocator_.deallocate(ring_buffer_, *capacity_);
+    std::allocator_traits<allocator_type>::deallocate(allocator_, ring_buffer_,
+                                                      *capacity_);
   }
 
  public:
@@ -134,15 +136,15 @@ class unsafe_queue final : public swiss::non_copyable,
   }
 
  private:
+  [[no_unique_address]] allocator_type allocator_;
   index_type pop_from_ = 0;
   index_type size_     = 0;
   // NOLINTBEGIN(cppcoreguidelines-avoid-const-or-ref-data-members)
-  value_type * const ring_buffer_;
   [[no_unique_address]] swiss::conditionally_runtime<
       index_type, Capacity == swiss::kDynamicExtent<index_type>, Capacity> const
       capacity_;
+  value_type * const ring_buffer_;
   // NOLINTEND(cppcoreguidelines-avoid-const-or-ref-data-members)
-  [[no_unique_address]] allocator_type allocator_;
 
  private:
   [[nodiscard]] constexpr auto full() const noexcept -> bool {

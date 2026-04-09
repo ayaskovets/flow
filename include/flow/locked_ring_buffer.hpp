@@ -37,9 +37,9 @@ class locked_ring_buffer final : public swiss::non_copyable,
   constexpr explicit locked_ring_buffer(
       allocator_type allocator = allocator_type())
     requires(Capacity != swiss::kDynamicExtent<index_type>)
-      : ring_buffer_(allocator.allocate(Capacity + 1)),
-        capacity_(),
-        allocator_(std::move(allocator)) {
+      : allocator_(std::move(allocator)),
+        ring_buffer_(std::allocator_traits<allocator_type>::allocate(
+            allocator_, *capacity_ + 1)) {
     static_assert(
         Capacity > 0,
         "locked_ring_buffer::locked_ring_buffer(): invalid capacity < 1");
@@ -48,16 +48,17 @@ class locked_ring_buffer final : public swiss::non_copyable,
   constexpr explicit locked_ring_buffer(
       index_type capacity, allocator_type allocator = allocator_type())
     requires(Capacity == swiss::kDynamicExtent<index_type>)
-      : ring_buffer_([capacity, &allocator] {
-          if (capacity == 0) {
+      : allocator_(std::move(allocator)),
+        capacity_(capacity),
+        ring_buffer_([this] {
+          if (*capacity_ == 0) {
             throw std::invalid_argument(
                 "locked_ring_buffer::locked_ring_buffer(): invalid capacity < "
                 "1");
           }
-          return allocator.allocate(capacity + 1);
-        }()),
-        capacity_(capacity),
-        allocator_(std::move(allocator)) {}
+          return std::allocator_traits<allocator_type>::allocate(
+              allocator_, *capacity_ + 1);
+        }()) {}
 
   /**
    * @warning Destructor requires exlusive access to the queue
@@ -71,7 +72,8 @@ class locked_ring_buffer final : public swiss::non_copyable,
       pop_from_ = next(pop_from_);
     }
 
-    allocator_.deallocate(ring_buffer_, *capacity_ + 1);
+    std::allocator_traits<allocator_type>::deallocate(allocator_, ring_buffer_,
+                                                      *capacity_ + 1);
   }
 
  public:
@@ -147,18 +149,18 @@ class locked_ring_buffer final : public swiss::non_copyable,
   }
 
  private:
+  [[no_unique_address]] allocator_type allocator_;
   mutable std::mutex mutex_;
   std::condition_variable_any push_available_cv_;
   index_type push_to_ = 0;
   std::condition_variable_any pop_available_cv_;
   index_type pop_from_ = 0;
   // NOLINTBEGIN(cppcoreguidelines-avoid-const-or-ref-data-members)
-  value_type * const ring_buffer_;
   [[no_unique_address]] swiss::conditionally_runtime<
       index_type, Capacity == swiss::kDynamicExtent<index_type>, Capacity> const
       capacity_;
+  value_type * const ring_buffer_;
   // NOLINTEND(cppcoreguidelines-avoid-const-or-ref-data-members)
-  [[no_unique_address]] allocator_type allocator_;
 
  private:
   [[nodiscard]] constexpr auto full() const noexcept -> bool {

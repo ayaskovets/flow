@@ -11,7 +11,7 @@ TEST(locked_ring_buffer, size) {
   // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
   static_assert(sizeof(flow::locked_ring_buffer<int, std::size_t, 10>) == 216);
   static_assert(alignof(flow::locked_ring_buffer<int, std::size_t, 10>) == 8);
-  static_assert(sizeof(flow::locked_ring_buffer<int, std::uint8_t>) == 224);
+  static_assert(sizeof(flow::locked_ring_buffer<int, std::uint8_t>) == 216);
   static_assert(alignof(flow::locked_ring_buffer<int, std::uint8_t>) == 8);
   // NOLINTEND(cppcoreguidelines-avoid-magic-numbers)
 }

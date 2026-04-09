@@ -35,7 +35,7 @@ class locked_deque final : public swiss::non_copyable,
  public:
   constexpr explicit locked_deque(allocator_type allocator = allocator_type())
     requires(Capacity != swiss::kDynamicExtent<index_type>)
-      : deque_(std::move(allocator)), capacity_() {
+      : deque_(std::move(allocator)) {
     static_assert(Capacity > 0,
                   "locked_deque::locked_deque(): invalid capacity < 1");
   }
@@ -44,7 +44,7 @@ class locked_deque final : public swiss::non_copyable,
                                   allocator_type allocator = allocator_type())
     requires(Capacity == swiss::kDynamicExtent<index_type>)
       : deque_(std::move(allocator)), capacity_(capacity) {
-    if (capacity < 1) {
+    if (*capacity_ < 1) {
       throw std::invalid_argument(
           "locked_deque::locked_deque(): invalid capacity < 1");
     }

@@ -34,9 +34,10 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
  public:
   constexpr explicit spsc_queue(allocator_type allocator = allocator_type())
     requires(Capacity != swiss::kDynamicExtent<index_type>)
-      : writer_{.ring_buffer = allocator.allocate(Capacity + 1)},
-        reader_{.ring_buffer = writer_.ring_buffer},
-        allocator_(std::move(allocator)) {
+      : allocator_(std::move(allocator)),
+        writer_{.ring_buffer = std::allocator_traits<allocator_type>::allocate(
+                    allocator_, Capacity + 1)},
+        reader_{.ring_buffer = writer_.ring_buffer} {
     static_assert(Capacity > 0,
                   "spsc_queue::spsc_queue(): invalid capacity < 1");
   }
@@ -44,17 +45,21 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
   constexpr explicit spsc_queue(index_type capacity,
                                 allocator_type allocator = allocator_type())
     requires(Capacity == swiss::kDynamicExtent<index_type>)
-      : writer_{.ring_buffer =
-                    [capacity, &allocator] {
-                      if (capacity == 0) {
-                        throw std::invalid_argument(
-                            "spsc_queue::spsc_queue(): invalid capacity < 1");
-                      }
-                      return allocator.allocate(capacity + 1);
-                    }(),
-                .capacity{capacity}},
-        reader_{.ring_buffer = writer_.ring_buffer, .capacity{capacity}},
-        allocator_(std::move(allocator)) {}
+      : allocator_(std::move(allocator)),
+        writer_{
+            .capacity{capacity},
+            .ring_buffer =
+                [this] {
+                  if (*writer_.capacity == 0) {
+                    throw std::invalid_argument(
+                        "spsc_queue::spsc_queue(): invalid capacity < 1");
+                  }
+                  return std::allocator_traits<allocator_type>::allocate(
+                      allocator_, *writer_.capacity + 1);
+                }(),
+        },
+        reader_{.capacity    = writer_.capacity,
+                .ring_buffer = writer_.ring_buffer} {}
 
   /**
    * @warning Destructor is not thread safe and assumes that there is only one
@@ -72,7 +77,8 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
       pop_from = next(*reader_.capacity, pop_from);
     }
 
-    allocator_.deallocate(reader_.ring_buffer, *reader_.capacity + 1);
+    std::allocator_traits<allocator_type>::deallocate(
+        allocator_, reader_.ring_buffer, *reader_.capacity + 1);
   }
 
  public:
@@ -154,16 +160,16 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     std::atomic<index_type> index = 0;
     index_type cache              = 0;
     // NOLINTBEGIN(cppcoreguidelines-avoid-const-or-ref-data-members)
-    value_type * const ring_buffer;
     [[no_unique_address]] swiss::conditionally_runtime<
         index_type, Capacity == swiss::kDynamicExtent<index_type>,
         Capacity> const capacity;
+    value_type * const ring_buffer;
     // NOLINTEND(cppcoreguidelines-avoid-const-or-ref-data-members)
   };
 
+  [[no_unique_address]] allocator_type allocator_;
   CacheLine writer_;
   CacheLine reader_;
-  [[no_unique_address]] allocator_type allocator_;
 
  private:
   [[nodiscard]] constexpr auto full(index_type next_push_to,

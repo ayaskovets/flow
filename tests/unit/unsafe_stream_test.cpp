@@ -11,7 +11,7 @@ TEST(unsafe_stream, size) {
   // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
   static_assert(sizeof(flow::unsafe_stream<std::size_t, 10>) == 24);
   static_assert(alignof(flow::unsafe_stream<std::size_t, 10>) == 8);
-  static_assert(sizeof(flow::unsafe_stream<std::uint16_t>) == 24);
+  static_assert(sizeof(flow::unsafe_stream<std::uint16_t>) == 16);
   static_assert(alignof(flow::unsafe_stream<std::uint16_t>) == 8);
   // NOLINTEND(cppcoreguidelines-avoid-magic-numbers)
 }

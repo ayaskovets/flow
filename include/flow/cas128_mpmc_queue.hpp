@@ -41,9 +41,10 @@ class cas128_mpmc_queue final : public swiss::non_copyable,
   constexpr explicit cas128_mpmc_queue(
       allocator_type allocator = allocator_type())
     requires(Capacity != swiss::kDynamicExtent<index_type>)
-      : writer_{.ring_buffer = allocator.allocate(Capacity)},
-        reader_{.ring_buffer = writer_.ring_buffer},
-        allocator_(std::move(allocator)) {
+      : allocator_(std::move(allocator)),
+        writer_{.ring_buffer = std::allocator_traits<allocator_type>::allocate(
+                    allocator_, Capacity)},
+        reader_{.ring_buffer = writer_.ring_buffer} {
     static_assert(
         Capacity > 1,
         "cas128_mpmc_queue::cas128_mpmc_queue(): invalid capacity < 2");
@@ -65,25 +66,28 @@ class cas128_mpmc_queue final : public swiss::non_copyable,
   constexpr explicit cas128_mpmc_queue(
       index_type capacity, allocator_type allocator = allocator_type())
     requires(Capacity == swiss::kDynamicExtent<index_type>)
-      : writer_{.ring_buffer =
-                    [capacity, &allocator] {
-                      if (capacity < 2) {
-                        throw std::invalid_argument(
-                            "cas128_mpmc_queue::cas128_mpmc_queue(): "
-                            "invalid capacity "
-                            "< 2");
-                      }
-                      if (!swiss::is_power_of_two(capacity)) {
-                        throw std::invalid_argument(
-                            "cas128_mpmc_queue::cas128_mpmc_queue(): "
-                            "capacity must be 2^n");
-                      }
-                      return allocator.allocate(capacity);
-                    }(),
-                .capacity{capacity}},
-        reader_{.ring_buffer = writer_.ring_buffer, .capacity{capacity}},
-        allocator_(std::move(allocator)) {
-    for (index_type i = 0; i < capacity; ++i) {
+      : allocator_(std::move(allocator)),
+        writer_{
+            .capacity{capacity},
+            .ring_buffer =
+                [this] {
+                  if (*writer_.capacity < 2) {
+                    throw std::invalid_argument(
+                        "cas128_mpmc_queue::cas128_mpmc_queue(): invalid "
+                        "capacity < 2");
+                  }
+                  if (!swiss::is_power_of_two(*writer_.capacity)) {
+                    throw std::invalid_argument(
+                        "cas128_mpmc_queue::cas128_mpmc_queue(): capacity must "
+                        "be 2^n");
+                  }
+                  return std::allocator_traits<allocator_type>::allocate(
+                      allocator_, *writer_.capacity);
+                }(),
+        },
+        reader_{.capacity    = writer_.capacity,
+                .ring_buffer = writer_.ring_buffer} {
+    for (index_type i = 0; i < *writer_.capacity; ++i) {
       auto entry = at(writer_.ring_buffer, *writer_.capacity, i);
       entry->store([i] {
         typename allocator_type::value_type::value_type entry{};
@@ -95,7 +99,8 @@ class cas128_mpmc_queue final : public swiss::non_copyable,
   }
 
   constexpr ~cas128_mpmc_queue() noexcept {
-    allocator_.deallocate(reader_.ring_buffer, *reader_.capacity);
+    std::allocator_traits<allocator_type>::deallocate(
+        allocator_, reader_.ring_buffer, *reader_.capacity);
   }
 
  public:
@@ -184,16 +189,16 @@ class cas128_mpmc_queue final : public swiss::non_copyable,
   struct alignas(std::hardware_destructive_interference_size) CacheLine final {
     std::atomic<index_type> index = 0;
     // NOLINTBEGIN(cppcoreguidelines-avoid-const-or-ref-data-members)
-    typename allocator_type::value_type * const ring_buffer;
     [[no_unique_address]] swiss::conditionally_runtime<
         index_type, Capacity == swiss::kDynamicExtent<index_type>,
         Capacity> const capacity;
+    typename allocator_type::value_type * const ring_buffer;
     // NOLINTEND(cppcoreguidelines-avoid-const-or-ref-data-members)
   };
 
+  [[no_unique_address]] allocator_type allocator_;
   CacheLine writer_;
   CacheLine reader_;
-  [[no_unique_address]] allocator_type allocator_;
 
  private:
   [[nodiscard]] constexpr auto at(

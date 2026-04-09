@@ -141,7 +141,8 @@ class unsafe_stream final : public swiss::non_copyable,
   [[nodiscard]] constexpr auto next(index_type index,
                                     index_type bytes) const noexcept
       -> index_type {
-    return (index += bytes) >= *capacity_ ? index - *capacity_ : index;
+    index += bytes;
+    return index >= *capacity_ ? index - *capacity_ : index;
   }
 };
 

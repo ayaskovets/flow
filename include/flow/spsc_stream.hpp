@@ -1,15 +1,18 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <memory>
 #include <new>
 #include <span>
 #include <stdexcept>
 #include <stop_token>
+#include <thread>
 
 #include <swiss/conditionally_runtime.hpp>
 #include <swiss/dynamic_extent.hpp>
 #include <swiss/mixins.hpp>
+#include <swiss/variadic_traits.hpp>
 
 namespace flow {
 
@@ -32,9 +35,10 @@ class spsc_stream final : public swiss::non_copyable,
  public:
   constexpr explicit spsc_stream(allocator_type allocator = allocator_type())
     requires(Capacity != swiss::kDynamicExtent<index_type>)
-      : writer_{.ring_buffer = allocator.allocate(Capacity + 1)},
-        reader_{.ring_buffer = writer_.ring_buffer},
-        allocator_(std::move(allocator)) {
+      : allocator_(std::move(allocator)),
+        writer_{.ring_buffer = std::allocator_traits<allocator_type>::allocate(
+                    allocator_, Capacity + 1)},
+        reader_{.ring_buffer = writer_.ring_buffer} {
     static_assert(Capacity > 0,
                   "spsc_stream::spsc_stream(): invalid capacity < 1");
   }
@@ -42,48 +46,50 @@ class spsc_stream final : public swiss::non_copyable,
   constexpr explicit spsc_stream(index_type capacity,
                                  allocator_type allocator = allocator_type())
     requires(Capacity == swiss::kDynamicExtent<index_type>)
-      : writer_{.ring_buffer =
-                    [capacity, &allocator] {
-                      if (capacity == 0) {
+      : allocator_(std::move(allocator)),
+        writer_{.capacity{capacity},
+                .ring_buffer =
+                    [this] {
+                      if (*writer_.capacity == 0) {
                         throw std::invalid_argument(
                             "spsc_stream::spsc_stream(): invalid capacity < 1");
                       }
-                      return allocator.allocate(capacity + 1);
-                    }(),
-                .capacity{capacity}},
-        reader_{.ring_buffer = writer_.ring_buffer, .capacity{capacity}},
-        allocator_(std::move(allocator)) {}
+                      return std::allocator_traits<allocator_type>::allocate(
+                          allocator_, *writer_.capacity + 1);
+                    }()},
+        reader_{.capacity    = writer_.capacity,
+                .ring_buffer = writer_.ring_buffer} {}
 
   constexpr ~spsc_stream() noexcept {
-    allocator_.deallocate(reader_.ring_buffer, *reader_.capacity);
+    std::allocator_traits<allocator_type>::deallocate(
+        allocator_, reader_.ring_buffer, *reader_.capacity + 1);
   }
 
  public:
-  constexpr auto try_push(std::span<std::byte const> const bytes) noexcept
+  constexpr auto try_push(std::span<std::byte const> bytes) noexcept
       -> index_type {
     return push_impl<false, false>(bytes);
   }
 
   constexpr auto push(std::stop_token stop_token,
-                      std::span<std::byte const> const bytes) noexcept -> bool {
+                      std::span<std::byte const> bytes) noexcept -> bool {
     return push_impl<true, true>(stop_token, bytes);
   }
 
-  constexpr void push(std::span<std::byte const> const bytes) noexcept {
+  constexpr void push(std::span<std::byte const> bytes) noexcept {
     push_impl<true, false>(bytes);
   }
 
-  constexpr auto try_pop(std::span<std::byte> const bytes) noexcept
-      -> index_type {
+  constexpr auto try_pop(std::span<std::byte> bytes) noexcept -> index_type {
     return pop_impl<false, false>(bytes);
   }
 
   constexpr auto pop(std::stop_token stop_token,
-                     std::span<std::byte> const bytes) noexcept -> bool {
+                     std::span<std::byte> bytes) noexcept -> bool {
     return pop_impl<true, true>(stop_token, bytes);
   }
 
-  constexpr void pop(std::span<std::byte> const bytes) noexcept {
+  constexpr void pop(std::span<std::byte> bytes) noexcept {
     pop_impl<true, false>(bytes);
   }
 
@@ -96,8 +102,7 @@ class spsc_stream final : public swiss::non_copyable,
     index_type const push_to  = writer_.index.load(std::memory_order::relaxed);
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
 
-    return pop_from <= push_to ? push_to - pop_from
-                               : *reader_.capacity + push_to + 1 - pop_from;
+    return size(*reader_.capacity, push_to, pop_from);
   }
 
  public:
@@ -111,87 +116,145 @@ class spsc_stream final : public swiss::non_copyable,
     std::atomic<index_type> index = 0;
     index_type cache              = 0;
     // NOLINTBEGIN(cppcoreguidelines-avoid-const-or-ref-data-members)
-    std::byte * const ring_buffer;
     [[no_unique_address]] swiss::conditionally_runtime<
         index_type, Capacity == swiss::kDynamicExtent<index_type>,
         Capacity> const capacity;
+    std::byte * const ring_buffer;
     // NOLINTEND(cppcoreguidelines-avoid-const-or-ref-data-members)
   };
 
+  [[no_unique_address]] allocator_type allocator_;
   CacheLine writer_;
   CacheLine reader_;
-  [[no_unique_address]] allocator_type allocator_;
 
  private:
-  [[nodiscard]] constexpr auto full(index_type next_push_to,
+  [[nodiscard]] constexpr auto size(index_type capacity, index_type push_to,
                                     index_type pop_from) const noexcept
-      -> bool {
-    return next_push_to == pop_from;
+      -> index_type {
+    return pop_from <= push_to ? push_to - pop_from
+                               : capacity + push_to + 1 - pop_from;
   }
 
-  [[nodiscard]] constexpr auto empty(index_type push_to,
-                                     index_type pop_from) const noexcept
-      -> bool {
-    return push_to == pop_from;
-  }
-  [[nodiscard]] constexpr auto next(index_type index, index_type bytes,
-                                    index_type capacity) const noexcept
+  [[nodiscard]] constexpr auto free(index_type capacity, index_type push_to,
+                                    index_type pop_from) const noexcept
       -> index_type {
-    return (index += bytes) >= capacity ? index - capacity : index;
+    return capacity - size(capacity, push_to, pop_from);
+  }
+
+  // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+  [[nodiscard]] constexpr auto next(index_type capacity, index_type bytes,
+                                    index_type index) const noexcept
+      -> index_type {
+    index += bytes;
+    return index > capacity ? index - capacity - 1 : index;
   }
 
  private:
   template <bool Blocking, bool Cancellable, typename... Args>
-  constexpr auto push_impl(Args &&...) -> decltype(auto) {
-    if constexpr (Cancellable || !Blocking) {
-      return false;
+  constexpr auto push_impl(Args &&... args) -> decltype(auto) {
+    std::span<std::byte const> const bytes =
+        swiss::variadic_nth<Cancellable ? 1 : 0>(args...);
+
+    if constexpr (Blocking) {
+      index_type offset = 0;
+      while (true) {
+        if constexpr (Cancellable) {
+          if (std::stop_token const & stop_token =
+                  swiss::variadic_nth<0>(std::forward<Args>(args)...);
+              stop_token.stop_requested()) {
+            return false;
+          }
+        }
+
+        offset += push_impl<false, false>(bytes.subspan(offset));
+        if (offset == static_cast<index_type>(bytes.size())) {
+          if constexpr (Cancellable) {
+            return true;
+          } else {
+            break;
+          }
+        }
+
+        std::this_thread::yield();
+      }
     }
 
-    // TODO: impl
+    if constexpr (!Blocking) {
+      index_type const push_to = writer_.index.load(std::memory_order::relaxed);
 
-    // if (bytes.empty() || full()) {
-    //   return 0;
-    // }
+      auto total = static_cast<index_type>(bytes.size());
+      if (total > free(*writer_.capacity, push_to, writer_.cache)) {
+        index_type const cache = reader_.index.load(std::memory_order::relaxed);
+        if (total = std::min(total, free(*writer_.capacity, push_to, cache));
+            total == 0) {
+          return static_cast<index_type>(0);
+        }
+        writer_.cache = cache;
+      }
 
-    // index_type const push_to = next(pop_from_, size_);
-    // index_type const total =
-    //     std::min(static_cast<index_type>(bytes.size()),
-    //              static_cast<index_type>(*capacity_ - size_));
-    // index_type const postfix = *capacity_ - push_to;
-    // index_type const chunk1  = std::min(total, postfix);
-    // index_type const chunk2  = total - chunk1;
+      index_type const postfix = *writer_.capacity - push_to + 1;
+      index_type const chunk1  = std::min(total, postfix);
+      index_type const chunk2  = total - chunk1;
 
-    // std::copy_n(bytes.data(), chunk1, ring_buffer_ + push_to);
-    // std::copy_n(bytes.data() + chunk1, chunk2, ring_buffer_);
+      std::copy_n(bytes.data(), chunk1, writer_.ring_buffer + push_to);
+      std::copy_n(bytes.data() + chunk1, chunk2, writer_.ring_buffer);
 
-    // size_ += total;
-    // return total;
+      writer_.index.store(next(*writer_.capacity, total, push_to),
+                          std::memory_order::relaxed);
+      return total;
+    }
   }
 
   template <bool Blocking, bool Cancellable, typename... Args>
-  constexpr auto pop_impl(Args &&...) -> decltype(auto) {
-    if constexpr (Cancellable || !Blocking) {
-      return false;
+  constexpr auto pop_impl(Args &&... args) -> decltype(auto) {
+    std::span<std::byte> bytes =
+        swiss::variadic_nth<Cancellable ? 1 : 0>(args...);
+
+    if constexpr (Blocking) {
+      index_type offset = 0;
+      while (true) {
+        if constexpr (Cancellable) {
+          if (std::stop_token const & stop_token =
+                  swiss::variadic_nth<0>(std::forward<Args>(args)...);
+              stop_token.stop_requested()) {
+            return false;
+          }
+        }
+
+        offset += pop_impl<false, false>(bytes.subspan(offset));
+        if (offset == static_cast<index_type>(bytes.size())) {
+          return true;
+        }
+
+        std::this_thread::yield();
+      }
     }
 
-    // TODO: impl
+    if constexpr (!Blocking) {
+      index_type const pop_from =
+          reader_.index.load(std::memory_order::relaxed);
 
-    // if (bytes.empty() || empty()) {
-    //   return 0;
-    // }
+      auto total = static_cast<index_type>(bytes.size());
+      if (total > size(*reader_.capacity, reader_.cache, pop_from)) {
+        index_type const cache = writer_.index.load(std::memory_order::relaxed);
+        if (total = std::min(total, size(*reader_.capacity, cache, pop_from));
+            total == 0) {
+          return static_cast<index_type>(0);
+        }
+        reader_.cache = cache;
+      }
 
-    // index_type const total =
-    //     std::min(static_cast<index_type>(bytes.size()), size_);
-    // index_type const postfix = *capacity_ - pop_from_;
-    // index_type const chunk1  = std::min(total, postfix);
-    // index_type const chunk2  = total - chunk1;
+      index_type const postfix = *reader_.capacity - pop_from + 1;
+      index_type const chunk1  = std::min(total, postfix);
+      index_type const chunk2  = total - chunk1;
 
-    // std::copy_n(ring_buffer_ + pop_from_, chunk1, bytes.data());
-    // std::copy_n(ring_buffer_, chunk2, bytes.data() + chunk1);
+      std::copy_n(reader_.ring_buffer + pop_from, chunk1, bytes.data());
+      std::copy_n(reader_.ring_buffer, chunk2, bytes.data() + chunk1);
 
-    // size_ -= total;
-    // pop_from_ = next(pop_from_, total);
-    // return total;
+      reader_.index.store(next(*reader_.capacity, total, pop_from),
+                          std::memory_order::relaxed);
+      return total;
+    }
   }
 };
 

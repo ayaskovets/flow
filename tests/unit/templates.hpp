@@ -801,7 +801,9 @@ constexpr void nonblocking(auto const & param) noexcept {
                 std::byte(index % std::numeric_limits<std::uint8_t>::max());
             ++pushed_byte_counts[static_cast<std::size_t>(bytes[i])];
           }
-          while (!stream.try_push(std::span<std::byte>(bytes.data(), size))) {
+          for (std::size_t offset = 0; offset < size;
+               offset += stream.try_push(
+                   std::span<std::byte>(bytes.data(), size).subspan(offset))) {
           }
         }
       });
@@ -817,7 +819,9 @@ constexpr void nonblocking(auto const & param) noexcept {
             return;
           }
           auto const size = std::min(consumer_bytes, bytes_count - index);
-          while (!stream.try_pop(std::span<std::byte>(bytes.data(), size))) {
+          for (std::size_t offset = 0; offset < size;
+               offset += stream.try_pop(
+                   std::span<std::byte>(bytes.data(), size).subspan(offset))) {
           }
           for (std::size_t i = 0; i < size; ++i) {
             ++popped_byte_counts[static_cast<std::size_t>(bytes[i])];

@@ -32,6 +32,7 @@ set(SOURCES
     mpsc_queue_bench.cpp
     spmc_queue_bench.cpp
     spsc_queue_bench.cpp
+    spsc_stream_bench.cpp
     templates.hpp)
 
 # ------------------------------------------------------------------------------

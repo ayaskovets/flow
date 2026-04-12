@@ -3,7 +3,8 @@
 #include <gtest/gtest.h>
 #include <swiss/leak_detector_allocator.hpp>
 
-#include "templates.hpp"
+#include "templates/queue.hpp"
+#include "templates/templates.hpp"
 
 namespace tests {
 

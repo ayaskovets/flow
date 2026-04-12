@@ -3,7 +3,8 @@
 #include <gtest/gtest.h>
 #include <swiss/leak_detector_allocator.hpp>
 
-#include "templates.hpp"
+#include "templates/stream.hpp"
+#include "templates/templates.hpp"
 
 namespace tests {
 
@@ -44,18 +45,18 @@ TEST_T(spsc_stream, blocking_pop_stop_token, flow::spsc_stream<>);
 using allocator_stream_t =
     flow::spsc_stream<std::size_t, swiss::kDynamicExtent<std::size_t>,
                       swiss::leak_detector_allocator<std::byte, true>>;
-TEST_T(unsafe_stream, allocator, allocator_stream_t);
+TEST_T(spsc_stream, allocator, allocator_stream_t);
 
-class spsc_queue_workload
+class spsc_stream_workload
     : public ::testing::TestWithParam<std::tuple<
           std::size_t /* items_size */, std::size_t /* queue_capacity */,
           std::size_t /* producers */, std::size_t /* consumers */>> {};
 
-TEST_P_T(spsc_queue_workload, nonblocking, flow::spsc_stream<>);
+TEST_P_T(spsc_stream_workload, nonblocking, flow::spsc_stream<>);
 
-TEST_P_T(spsc_queue_workload, blocking, flow::spsc_stream<>);
+TEST_P_T(spsc_stream_workload, blocking, flow::spsc_stream<>);
 
-INSTANTIATE_TEST_SUITE_P(spsc_queue_workload, spsc_queue_workload,
+INSTANTIATE_TEST_SUITE_P(spsc_stream_workload, spsc_stream_workload,
                          ::testing::Values(std::make_tuple(1000, 4, 1, 1),
                                            std::make_tuple(1000, 16, 1, 1),
                                            std::make_tuple(1000, 32, 1, 1),

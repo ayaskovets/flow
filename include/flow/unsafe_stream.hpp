@@ -59,8 +59,7 @@ class unsafe_stream final : public swiss::non_copyable,
   constexpr auto try_push(std::span<std::byte const> bytes) noexcept
       -> index_type {
     index_type const total =
-        std::min(static_cast<index_type>(bytes.size()),
-                 static_cast<index_type>(*capacity_ - size_));
+        std::min(static_cast<index_type>(bytes.size()), free());
 
     if (total == 0) {
       return 0;
@@ -79,15 +78,15 @@ class unsafe_stream final : public swiss::non_copyable,
   }
 
   constexpr void push(std::span<std::byte const> bytes) {
-    if (*capacity_ - size_ < bytes.size()) {
-      throw std::runtime_error("unsafe_stream::push(): full");
+    if (free() < bytes.size()) {
+      throw std::runtime_error("unsafe_stream::push(): not enough space");
     }
     try_push(bytes);
   }
 
   constexpr auto try_pop(std::span<std::byte> bytes) noexcept -> index_type {
     index_type const total =
-        std::min(static_cast<index_type>(bytes.size()), size_);
+        std::min(static_cast<index_type>(bytes.size()), size());
 
     if (total == 0) {
       return 0;
@@ -106,8 +105,8 @@ class unsafe_stream final : public swiss::non_copyable,
   }
 
   constexpr void pop(std::span<std::byte> bytes) {
-    if (size_ < bytes.size()) {
-      throw std::runtime_error("unsafe_stream::pop(): empty");
+    if (size() < bytes.size()) {
+      throw std::runtime_error("unsafe_stream::pop(): not enough data");
     }
     try_pop(bytes);
   }
@@ -143,6 +142,10 @@ class unsafe_stream final : public swiss::non_copyable,
       -> index_type {
     index += bytes;
     return index >= *capacity_ ? index - *capacity_ : index;
+  }
+
+  [[nodiscard]] constexpr auto free() const noexcept -> index_type {
+    return *capacity_ - size_;
   }
 };
 

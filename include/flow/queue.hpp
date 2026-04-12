@@ -6,7 +6,8 @@
 namespace flow::concepts {
 
 /**
- * @brief Generic queue with custom allocator support and typed items
+ * @brief Generic queue of fixed capacity with custom allocator support and
+ * typed items
  */
 template <typename T>
 concept queue = requires(T queue, typename T::value_type) {
@@ -20,7 +21,8 @@ concept queue = requires(T queue, typename T::value_type) {
 };
 
 /**
- * @brief Generic queue that supports nonblocking operations
+ * @brief Generic queue that supports nonblocking operations and in-place
+ * construction
  */
 template <typename T>
 concept nonblocking_queue =
@@ -42,7 +44,8 @@ concept noexcept_nonblocking_queue =
     };
 
 /**
- * @brief Generic queue that supports blocking operations
+ * @brief Generic queue that supports blocking operations and in-place
+ * construction
  */
 template <typename T>
 concept blocking_queue =

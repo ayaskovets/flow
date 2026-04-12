@@ -7,7 +7,7 @@
 namespace flow::concepts {
 
 /**
- * @brief Generic byte stream with custom allocator support
+ * @brief Generic byte stream of fixed capacity with custom allocator support
  */
 template <typename T>
 concept stream = requires(T stream) {
@@ -21,7 +21,8 @@ concept stream = requires(T stream) {
 };
 
 /**
- * @brief Generic byte stream that supports nonblocking operations
+ * @brief Generic byte stream that supports nonblocking operations (i.e. writing
+ * and reading as many bytes as possible)
  */
 template <typename T>
 concept nonblocking_stream =
@@ -41,7 +42,8 @@ concept noexcept_nonblocking_stream =
     };
 
 /**
- * @brief Generic byte stream that supports blocking operations
+ * @brief Generic byte stream that supports blocking operations (i.e. writing
+ * or reading until the buffer is exhausted or full respectively)
  */
 template <typename T>
 concept blocking_stream =

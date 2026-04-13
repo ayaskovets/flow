@@ -29,11 +29,14 @@ set(HEADERS
     include/flow/locked_ring_buffer.hpp
     include/flow/mpmc_queue.hpp
     include/flow/mpsc_queue.hpp
+    include/flow/msgbuf.hpp
     include/flow/queue.hpp
     include/flow/spmc_queue.hpp
+    include/flow/spsc_msgbuf.hpp
     include/flow/spsc_queue.hpp
     include/flow/spsc_stream.hpp
     include/flow/stream.hpp
+    include/flow/unsafe_msgbuf.hpp
     include/flow/unsafe_queue.hpp
     include/flow/unsafe_stream.hpp)
 

@@ -24,6 +24,10 @@ add_executable(flow-benchmarks)
 # ------------------------------------------------------------------------------
 
 set(SOURCES
+    templates/msgbuf.hpp
+    templates/queue.hpp
+    templates/stream.hpp
+    templates/templates.hpp
     cas128_mpmc_queue_bench.cpp
     locked_deque_bench.cpp
     locked_ring_buffer_bench.cpp
@@ -32,8 +36,7 @@ set(SOURCES
     mpsc_queue_bench.cpp
     spmc_queue_bench.cpp
     spsc_queue_bench.cpp
-    spsc_stream_bench.cpp
-    templates.hpp)
+    spsc_stream_bench.cpp)
 
 # ------------------------------------------------------------------------------
 # target

@@ -2,7 +2,8 @@
 
 #include <benchmark/benchmark.h>
 
-#include "templates.hpp"
+#include "templates/stream.hpp"
+#include "templates/templates.hpp"
 
 namespace benchmarks {
 // NOLINTBEGIN(misc-use-internal-linkage,cppcoreguidelines-avoid-magic-numbers)

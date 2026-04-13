@@ -59,8 +59,8 @@ class unsafe_msgbuf final : public swiss::non_copyable,
   }
 
  public:
-  constexpr auto try_push(std::span<std::byte const> bytes) noexcept -> bool {
-    auto const msg_size = static_cast<index_type>(bytes.size());
+  constexpr auto try_push(std::span<std::byte const> msg) noexcept -> bool {
+    auto const msg_size = static_cast<index_type>(msg.size());
 
     if (msg_size == 0 || free() < kMsgSizeBytes + msg_size) {
       return false;
@@ -70,22 +70,22 @@ class unsafe_msgbuf final : public swiss::non_copyable,
         std::bit_cast<std::array<std::byte, kMsgSizeBytes>>(msg_size));
     size_ += kMsgSizeBytes;
 
-    write_unchecked(bytes);
+    write_unchecked(msg);
     size_ += msg_size;
 
     return true;
   }
 
-  constexpr void push(std::span<std::byte const> bytes) {
-    if (free() < kMsgSizeBytes + bytes.size()) {
+  constexpr void push(std::span<std::byte const> msg) {
+    if (free() < kMsgSizeBytes + msg.size()) {
       throw std::runtime_error("unsafe_msgbuf::push(): full");
     }
-    try_push(bytes);
+    try_push(msg);
   }
 
-  constexpr auto try_pop(std::span<std::byte> bytes) noexcept -> bool {
+  constexpr auto try_pop(std::span<std::byte> msg) noexcept -> bool {
     auto const msg_size = peek();
-    auto const total    = static_cast<index_type>(bytes.size());
+    auto const total    = static_cast<index_type>(msg.size());
 
     if (msg_size == 0 || msg_size != total) {
       return false;
@@ -94,17 +94,17 @@ class unsafe_msgbuf final : public swiss::non_copyable,
     pop_from_ = next(pop_from_, kMsgSizeBytes);
     size_ -= kMsgSizeBytes;
 
-    read_unchecked(bytes);
+    read_unchecked(msg);
     pop_from_ = next(pop_from_, total);
     size_ -= total;
     return total;
   }
 
-  constexpr void pop(std::span<std::byte> bytes) {
-    if (peek() != bytes.size()) {
+  constexpr void pop(std::span<std::byte> msg) {
+    if (peek() != msg.size()) {
       throw std::runtime_error("unsafe_msgbuf::pop(): empty");
     }
-    try_pop(bytes);
+    try_pop(msg);
   }
 
  public:
@@ -148,33 +148,33 @@ class unsafe_msgbuf final : public swiss::non_copyable,
   }
 
   [[nodiscard]] constexpr auto next(index_type index,
-                                    index_type bytes) const noexcept
+                                    index_type msg_size) const noexcept
       -> index_type {
-    index += bytes;
+    index += msg_size;
     return index >= *capacity_ ? index - *capacity_ : index;
   }
 
  private:
   constexpr void write_unchecked(
-      std::span<std::byte const> bytes) const noexcept {
-    auto const total         = static_cast<index_type>(bytes.size());
+      std::span<std::byte const> msg) const noexcept {
+    auto const msg_size      = static_cast<index_type>(msg.size());
     index_type const push_to = next(pop_from_, size_);
     index_type const postfix = *capacity_ - push_to;
-    index_type const chunk1  = std::min(total, postfix);
-    index_type const chunk2  = total - chunk1;
+    index_type const chunk1  = std::min(msg_size, postfix);
+    index_type const chunk2  = msg_size - chunk1;
 
-    std::copy_n(bytes.data(), chunk1, ring_buffer_ + push_to);
-    std::copy_n(bytes.data() + chunk1, chunk2, ring_buffer_);
+    std::copy_n(msg.data(), chunk1, ring_buffer_ + push_to);
+    std::copy_n(msg.data() + chunk1, chunk2, ring_buffer_);
   }
 
-  constexpr void read_unchecked(std::span<std::byte> bytes) const noexcept {
-    auto const total         = static_cast<index_type>(bytes.size());
+  constexpr void read_unchecked(std::span<std::byte> msg) const noexcept {
+    auto const msg_size      = static_cast<index_type>(msg.size());
     index_type const postfix = *capacity_ - pop_from_;
-    index_type const chunk1  = std::min(total, postfix);
-    index_type const chunk2  = total - chunk1;
+    index_type const chunk1  = std::min(msg_size, postfix);
+    index_type const chunk2  = msg_size - chunk1;
 
-    std::copy_n(ring_buffer_ + pop_from_, chunk1, bytes.data());
-    std::copy_n(ring_buffer_, chunk2, bytes.data() + chunk1);
+    std::copy_n(ring_buffer_ + pop_from_, chunk1, msg.data());
+    std::copy_n(ring_buffer_, chunk2, msg.data() + chunk1);
   }
 };
 

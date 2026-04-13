@@ -29,16 +29,18 @@ constexpr void size_capacity() noexcept {
   constexpr std::size_t kQueueCapacity = 8;
   constexpr std::size_t kRepeats       = 128;
 
+  typename Queue::value_type value{};
   Queue queue(kQueueCapacity);
 
-  typename Queue::value_type value{};
+  EXPECT_EQ(queue.size(), 0);
+  EXPECT_EQ(queue.capacity(), kQueueCapacity);
+
   queue.push(value);
   queue.emplace();
+  EXPECT_EQ(queue.size(), 2);
+  EXPECT_EQ(queue.capacity(), kQueueCapacity);
 
   for (std::size_t repeat = 0; repeat < kRepeats; ++repeat) {
-    EXPECT_EQ(queue.size(), 2);
-    EXPECT_EQ(queue.capacity(), kQueueCapacity);
-
     queue.emplace();
     EXPECT_EQ(queue.size(), 3);
     EXPECT_EQ(queue.capacity(), kQueueCapacity);

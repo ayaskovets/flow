@@ -30,12 +30,14 @@ constexpr void size_capacity() noexcept {
   std::vector<std::byte> bytes(2);
   Stream stream(kStreamCapacity);
 
+  EXPECT_EQ(stream.size(), 0);
+  EXPECT_EQ(stream.capacity(), kStreamCapacity);
+
   stream.push(std::vector(4, std::byte(0)));
+  EXPECT_EQ(stream.size(), 4);
+  EXPECT_EQ(stream.capacity(), kStreamCapacity);
 
   for (std::size_t i = 0; i < kStreamCapacity * kStreamCapacity * 2; ++i) {
-    EXPECT_EQ(stream.size(), 4);
-    EXPECT_EQ(stream.capacity(), kStreamCapacity);
-
     stream.push(std::vector(2, std::byte(0)));
     EXPECT_EQ(stream.size(), 6);
     EXPECT_EQ(stream.capacity(), kStreamCapacity);

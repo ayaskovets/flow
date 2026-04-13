@@ -21,8 +21,9 @@ concept stream = requires(T stream) {
 };
 
 /**
- * @brief Generic byte stream that supports nonblocking operations (i.e. writing
- * and reading as many bytes as possible)
+ * @brief Generic byte stream that supports nonblocking operations
+ * @note Nonblocking methods insert and remove as many bytes as possible and
+ * return the number of bytes written/read
  */
 template <typename T>
 concept nonblocking_stream =
@@ -42,8 +43,9 @@ concept noexcept_nonblocking_stream =
     };
 
 /**
- * @brief Generic byte stream that supports blocking operations (i.e. writing
- * or reading until the buffer is exhausted or full respectively)
+ * @brief Generic byte stream that supports blocking operations
+ * @note Blocking methods block until the whole input buffer is inserted into
+ * the stream or the input buffer is full with the data from the stream
  */
 template <typename T>
 concept blocking_stream =

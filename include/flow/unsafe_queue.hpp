@@ -130,6 +130,13 @@ class unsafe_queue final : public swiss::non_copyable,
     return size_;
   }
 
+  /**
+   * @warning If the queue is empty, behaviour is undefined
+   */
+  [[nodiscard]] constexpr auto front() const noexcept -> value_type & {
+    return *(ring_buffer_ + pop_from_);
+  }
+
  public:
   constexpr auto get_allocator() const noexcept -> allocator_type {
     return allocator_;

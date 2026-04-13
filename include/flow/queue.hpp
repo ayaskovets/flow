@@ -21,8 +21,9 @@ concept queue = requires(T queue, typename T::value_type) {
 };
 
 /**
- * @brief Generic queue that supports nonblocking operations and in-place
- * construction
+ * @brief Generic queue that supports nonblocking operations
+ * @note Nonblocking methods return true only upon successful the insertion or
+ * removal of the value
  */
 template <typename T>
 concept nonblocking_queue =
@@ -44,8 +45,9 @@ concept noexcept_nonblocking_queue =
     };
 
 /**
- * @brief Generic queue that supports blocking operations and in-place
- * construction
+ * @brief Generic queue that supports blocking operations
+ * @note Blocking methods block until the value gets inserted or removed from
+ * the queue
  */
 template <typename T>
 concept blocking_queue =

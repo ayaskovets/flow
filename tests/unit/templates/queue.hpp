@@ -559,4 +559,26 @@ constexpr void rollover() noexcept {
   }
 }
 
+template <typename Queue>
+  requires(std::same_as<typename Queue::value_type, int>)
+constexpr void front() noexcept {
+  constexpr std::size_t kQueueCapacity = 4;
+
+  int value{};
+  Queue queue(kQueueCapacity);
+
+  queue.push(1);
+  EXPECT_EQ(queue.front(), 1);
+
+  queue.push(2);
+  EXPECT_EQ(queue.front(), 1);
+
+  queue.pop(value);
+  EXPECT_EQ(value, 1);
+  EXPECT_EQ(queue.front(), 2);
+
+  queue.front() = 3;
+  EXPECT_EQ(queue.front(), 3);
+}
+
 }  // namespace tests::templates

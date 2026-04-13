@@ -150,6 +150,16 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
                                : *reader_.capacity + push_to + 1 - pop_from;
   }
 
+  /**
+   * @warning If the queue is empty, behaviour is undefined
+   * @warning Should only be ever called by the consumer thread
+   */
+  [[nodiscard]] constexpr auto front() const noexcept -> value_type & {
+    index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
+
+    return *(reader_.ring_buffer + pop_from);
+  }
+
  public:
   constexpr auto get_allocator() const noexcept -> allocator_type {
     return allocator_;

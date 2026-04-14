@@ -49,7 +49,7 @@ TEST_T(spsc_stream, allocator, allocator_stream_t);
 
 class spsc_stream_workload
     : public ::testing::TestWithParam<std::tuple<
-          std::size_t /* items_size */, std::size_t /* queue_capacity */,
+          std::size_t /* items_size */, std::size_t /* stream_capacity */,
           std::size_t /* producers */, std::size_t /* consumers */>> {};
 
 TEST_P_T(spsc_stream_workload, nonblocking, flow::spsc_stream<>);
@@ -63,7 +63,7 @@ INSTANTIATE_TEST_SUITE_P(spsc_stream_workload, spsc_stream_workload,
                                            std::make_tuple(1000, 64, 1, 1),
                                            std::make_tuple(1000, 128, 1, 1)));
 
-using uint8_index_queue_t = flow::spsc_stream<std::uint8_t>;
-TEST_T(spsc_stream, rollover, uint8_index_queue_t);
+using uint8_index_stream_t = flow::spsc_stream<std::uint8_t>;
+TEST_T(spsc_stream, rollover, uint8_index_stream_t);
 
 }  // namespace tests

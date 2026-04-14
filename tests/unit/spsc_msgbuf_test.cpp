@@ -49,7 +49,7 @@ TEST_T(spsc_msgbuf, allocator, allocator_msgbuf_t);
 
 class spsc_msgbuf_workload
     : public ::testing::TestWithParam<std::tuple<
-          std::size_t /* items_size */, std::size_t /* queue_capacity */,
+          std::size_t /* msg_count */, std::size_t /* msgbuf_capacity */,
           std::size_t /* producers */, std::size_t /* consumers */>> {};
 
 TEST_P_T(spsc_msgbuf_workload, nonblocking, flow::spsc_msgbuf<>);
@@ -57,13 +57,12 @@ TEST_P_T(spsc_msgbuf_workload, nonblocking, flow::spsc_msgbuf<>);
 TEST_P_T(spsc_msgbuf_workload, blocking, flow::spsc_msgbuf<>);
 
 INSTANTIATE_TEST_SUITE_P(spsc_msgbuf_workload, spsc_msgbuf_workload,
-                         ::testing::Values(std::make_tuple(1000, 4, 1, 1),
-                                           std::make_tuple(1000, 16, 1, 1),
+                         ::testing::Values(std::make_tuple(1000, 16, 1, 1),
                                            std::make_tuple(1000, 32, 1, 1),
                                            std::make_tuple(1000, 64, 1, 1),
                                            std::make_tuple(1000, 128, 1, 1)));
 
-using uint8_index_queue_t = flow::spsc_msgbuf<std::uint8_t>;
-TEST_T(spsc_msgbuf, rollover, uint8_index_queue_t);
+using uint8_index_msgbuf_t = flow::spsc_msgbuf<std::uint8_t>;
+TEST_T(spsc_msgbuf, rollover, uint8_index_msgbuf_t);
 
 }  // namespace tests

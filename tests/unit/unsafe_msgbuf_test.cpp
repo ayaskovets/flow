@@ -59,7 +59,7 @@ TEST(unsafe_msgbuf, queued_consumers_nonblocking) { GTEST_SKIP(); }
 
 TEST(unsafe_msgbuf, queued_consumers_blocking) { GTEST_SKIP(); }
 
-using uint8_index_queue_t = flow::unsafe_msgbuf<std::uint8_t>;
-TEST_T(unsafe_msgbuf, rollover, uint8_index_queue_t);
+using uint8_index_msgbuf_t = flow::unsafe_msgbuf<std::uint8_t>;
+TEST_T(unsafe_msgbuf, rollover, uint8_index_msgbuf_t);
 
 }  // namespace tests

@@ -215,14 +215,14 @@ constexpr void allocator() noexcept {
 
 template <flow::concepts::nonblocking_stream Stream>
 constexpr void nonblocking(auto const & param) noexcept {
-  auto const & [bytes_count, queue_capacity, producers, consumers] = param;
+  auto const & [bytes_count, stream_capacity, producers, consumers] = param;
 
   std::size_t const producer_bytes =
-      std::max<std::size_t>(1, queue_capacity / 5);
+      std::max<std::size_t>(1, stream_capacity / 5);
   std::size_t const consumer_bytes =
-      std::max<std::size_t>(1, queue_capacity / 7);
+      std::max<std::size_t>(1, stream_capacity / 7);
 
-  Stream stream(queue_capacity);
+  Stream stream(stream_capacity);
   std::latch latch(static_cast<std::ptrdiff_t>(producers + consumers));
 
   std::vector<std::atomic<std::size_t>> pushed_byte_counts(
@@ -249,7 +249,7 @@ constexpr void nonblocking(auto const & param) noexcept {
           for (std::size_t i = 0; i < size; ++i) {
             bytes[i] =
                 std::byte(index % std::numeric_limits<std::uint8_t>::max());
-            ++pushed_byte_counts[static_cast<std::size_t>(bytes[i])];
+            pushed_byte_counts[static_cast<std::size_t>(bytes[i])] += 1;
           }
           for (std::size_t offset = 0; offset < size;
                offset += stream.try_push(
@@ -274,7 +274,7 @@ constexpr void nonblocking(auto const & param) noexcept {
                    std::span<std::byte>(bytes.data(), size).subspan(offset))) {
           }
           for (std::size_t i = 0; i < size; ++i) {
-            ++popped_byte_counts[static_cast<std::size_t>(bytes[i])];
+            popped_byte_counts[static_cast<std::size_t>(bytes[i])] += 1;
           }
         }
       });
@@ -286,14 +286,14 @@ constexpr void nonblocking(auto const & param) noexcept {
 
 template <flow::concepts::blocking_stream Stream>
 constexpr void blocking(auto const & param) noexcept {
-  auto const & [bytes_count, queue_capacity, producers, consumers] = param;
+  auto const & [bytes_count, stream_capacity, producers, consumers] = param;
 
   std::size_t const producer_bytes =
-      std::max<std::size_t>(1, queue_capacity / 5);
+      std::max<std::size_t>(1, stream_capacity / 5);
   std::size_t const consumer_bytes =
-      std::max<std::size_t>(1, queue_capacity / 7);
+      std::max<std::size_t>(1, stream_capacity / 7);
 
-  Stream stream(queue_capacity);
+  Stream stream(stream_capacity);
   std::latch latch(static_cast<std::ptrdiff_t>(producers + consumers));
 
   std::vector<std::atomic<std::size_t>> pushed_byte_counts(
@@ -320,7 +320,7 @@ constexpr void blocking(auto const & param) noexcept {
           for (std::size_t i = 0; i < size; ++i) {
             bytes[i] =
                 std::byte(index % std::numeric_limits<std::uint8_t>::max());
-            ++pushed_byte_counts[static_cast<std::size_t>(bytes[i])];
+            pushed_byte_counts[static_cast<std::size_t>(bytes[i])] += 1;
           }
           stream.push(std::span<std::byte>(bytes.data(), size));
         }
@@ -339,7 +339,7 @@ constexpr void blocking(auto const & param) noexcept {
           auto const size = std::min(consumer_bytes, bytes_count - index);
           stream.pop(std::span<std::byte>(bytes.data(), size));
           for (std::size_t i = 0; i < size; ++i) {
-            ++popped_byte_counts[static_cast<std::size_t>(bytes[i])];
+            popped_byte_counts[static_cast<std::size_t>(bytes[i])] += 1;
           }
         }
       });

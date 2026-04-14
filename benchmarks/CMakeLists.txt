@@ -35,6 +35,7 @@ set(SOURCES
     mpmc_queue_bench.cpp
     mpsc_queue_bench.cpp
     spmc_queue_bench.cpp
+    spsc_msgbuf_bench.cpp
     spsc_queue_bench.cpp
     spsc_stream_bench.cpp)
 

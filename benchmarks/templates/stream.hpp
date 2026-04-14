@@ -32,22 +32,22 @@ constexpr void nonblocking_throughput(benchmark::State & state) noexcept {
     stream.emplace(stream_capacity);
   }
 
-  std::int64_t bytes = 0;
-  std::int64_t full  = 0;
+  std::int64_t bytes      = 0;
+  std::int64_t successful = 0;
   if (state.thread_index() < producers) {
     std::vector<std::byte> const buffer(buffer_capacity);
     // NOLINTNEXTLINE(readability-identifier-length)
     for (auto const _ : state) {
       if (auto const pushed = stream->try_push(buffer); pushed > 0) {
         bytes += pushed;
-        full += 1;
+        successful += 1;
       } else {
         std::this_thread::yield();
       }
     }
 
     state.counters["push%"] =
-        benchmark::Counter(100.0 * static_cast<double>(full) /
+        benchmark::Counter(100.0 * static_cast<double>(successful) /
                            static_cast<double>(state.iterations()) /
                            static_cast<double>(producers));
   } else {
@@ -56,14 +56,14 @@ constexpr void nonblocking_throughput(benchmark::State & state) noexcept {
     for (auto const _ : state) {
       if (auto const popped = stream->try_pop(buffer); popped > 0) {
         bytes += popped;
-        full += 1;
+        successful += 1;
       } else {
         std::this_thread::yield();
       }
     }
 
     state.counters["pop%"] =
-        benchmark::Counter(100.0 * static_cast<double>(full) /
+        benchmark::Counter(100.0 * static_cast<double>(successful) /
                            static_cast<double>(state.iterations()) /
                            static_cast<double>(consumers));
     state.SetBytesProcessed(bytes);

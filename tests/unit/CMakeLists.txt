@@ -37,6 +37,7 @@ set(SOURCES
     msgbuf_test.cpp
     queue_test.cpp
     spmc_queue_test.cpp
+    spsc_msgbuf_test.cpp
     spsc_queue_test.cpp
     spsc_stream_test.cpp
     stream_test.cpp

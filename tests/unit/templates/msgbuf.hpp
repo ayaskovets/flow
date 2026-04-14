@@ -172,16 +172,17 @@ template <flow::concepts::blocking_msgbuf Msgbuf>
 constexpr void blocking_push() noexcept {
   constexpr std::size_t kMsgbufCapacity = 11;
 
-  std::array<std::byte, 2> msg{};
   Msgbuf msgbuf(kMsgbufCapacity);
 
   msgbuf.push(std::vector(3, std::byte(0)));
 
   std::jthread const consumer([&] {
-    EXPECT_EQ(msgbuf.try_pop(msg), 3);
+    std::array<std::byte, 3> msg{};
+    EXPECT_TRUE(msgbuf.try_pop(msg));
     EXPECT_EQ(msg, (std::array{std::byte(0), std::byte(0), std::byte(0)}));
   });
 
+  std::array<std::byte, 2> msg{};
   msgbuf.push(std::vector(2, std::byte(1)));
   msgbuf.pop(msg);
   EXPECT_EQ(msg, (std::array{std::byte(1), std::byte(1)}));
@@ -196,7 +197,7 @@ constexpr void blocking_pop() noexcept {
   Msgbuf msgbuf(kMsgbufCapacity);
 
   std::jthread const producer(
-      [&] { EXPECT_EQ(msgbuf.try_push(std::vector(2, std::byte(1))), 2); });
+      [&] { EXPECT_TRUE(msgbuf.try_push(std::vector(2, std::byte(1)))); });
 
   std::array<std::byte, 2> msg{};
   msgbuf.pop(msg);
@@ -250,14 +251,11 @@ constexpr void allocator() noexcept {
 
 template <flow::concepts::nonblocking_msgbuf Msgbuf>
 constexpr void nonblocking(auto const & param) noexcept {
-  auto const & [bytes_count, queue_capacity, producers, consumers] = param;
+  auto const & [msg_count, msgbuf_capacity, producers, consumers] = param;
 
-  std::size_t const producer_bytes =
-      std::max<std::size_t>(1, queue_capacity / 5);
-  std::size_t const consumer_bytes =
-      std::max<std::size_t>(1, queue_capacity / 7);
+  std::size_t const msg_size = std::max<std::size_t>(1, msgbuf_capacity / 7);
 
-  Msgbuf msgbuf(queue_capacity);
+  Msgbuf msgbuf(msgbuf_capacity);
   std::latch latch(static_cast<std::ptrdiff_t>(producers + consumers));
 
   std::vector<std::atomic<std::size_t>> pushed_byte_counts(
@@ -274,21 +272,17 @@ constexpr void nonblocking(auto const & param) noexcept {
       threads.emplace_back([&] {
         latch.arrive_and_wait();
 
-        std::vector<std::byte> msg(producer_bytes);
+        std::vector<std::byte> msg(msg_size);
         while (true) {
-          std::size_t const index = push_index.fetch_add(producer_bytes);
-          if (index >= bytes_count) {
+          std::size_t const index = push_index.fetch_add(msg_size);
+          if (index >= msg_count) {
             return;
           }
-          auto const size = std::min(producer_bytes, bytes_count - index);
-          for (std::size_t i = 0; i < size; ++i) {
-            msg[i] =
-                std::byte(index % std::numeric_limits<std::uint8_t>::max());
-            ++pushed_byte_counts[static_cast<std::size_t>(msg[i])];
+          for (std::byte & byte : msg) {
+            byte = std::byte(index % std::numeric_limits<std::uint8_t>::max());
+            pushed_byte_counts[static_cast<std::size_t>(byte)] += 1;
           }
-          for (std::size_t offset = 0; offset < size;
-               offset += msgbuf.try_push(
-                   std::span<std::byte>(msg.data(), size).subspan(offset))) {
+          while (!msgbuf.try_push(msg)) {
           }
         }
       });
@@ -297,19 +291,16 @@ constexpr void nonblocking(auto const & param) noexcept {
       threads.emplace_back([&] {
         latch.arrive_and_wait();
 
-        std::vector<std::byte> msg(consumer_bytes);
+        std::vector<std::byte> msg(msg_size);
         while (true) {
-          std::size_t const index = pop_index.fetch_add(consumer_bytes);
-          if (index >= bytes_count) {
+          std::size_t const index = pop_index.fetch_add(msg_size);
+          if (index >= msg_count) {
             return;
           }
-          auto const size = std::min(consumer_bytes, bytes_count - index);
-          for (std::size_t offset = 0; offset < size;
-               offset += msgbuf.try_pop(
-                   std::span<std::byte>(msg.data(), size).subspan(offset))) {
+          while (!msgbuf.try_pop(msg)) {
           }
-          for (std::size_t i = 0; i < size; ++i) {
-            ++popped_byte_counts[static_cast<std::size_t>(msg[i])];
+          for (std::byte const byte : msg) {
+            popped_byte_counts[static_cast<std::size_t>(byte)] += 1;
           }
         }
       });
@@ -321,14 +312,11 @@ constexpr void nonblocking(auto const & param) noexcept {
 
 template <flow::concepts::blocking_msgbuf Msgbuf>
 constexpr void blocking(auto const & param) noexcept {
-  auto const & [bytes_count, queue_capacity, producers, consumers] = param;
+  auto const & [msg_count, msgbuf_capacity, producers, consumers] = param;
 
-  std::size_t const producer_bytes =
-      std::max<std::size_t>(1, queue_capacity / 5);
-  std::size_t const consumer_bytes =
-      std::max<std::size_t>(1, queue_capacity / 7);
+  std::size_t const msg_size = std::max<std::size_t>(1, msgbuf_capacity / 7);
 
-  Msgbuf msgbuf(queue_capacity);
+  Msgbuf msgbuf(msgbuf_capacity);
   std::latch latch(static_cast<std::ptrdiff_t>(producers + consumers));
 
   std::vector<std::atomic<std::size_t>> pushed_byte_counts(
@@ -345,19 +333,17 @@ constexpr void blocking(auto const & param) noexcept {
       threads.emplace_back([&] {
         latch.arrive_and_wait();
 
-        std::vector<std::byte> msg(producer_bytes);
+        std::vector<std::byte> msg(msg_size);
         while (true) {
-          std::size_t const index = push_index.fetch_add(producer_bytes);
-          if (index >= bytes_count) {
+          std::size_t const index = push_index.fetch_add(msg_size);
+          if (index >= msg_count) {
             return;
           }
-          auto const size = std::min(producer_bytes, bytes_count - index);
-          for (std::size_t i = 0; i < size; ++i) {
-            msg[i] =
-                std::byte(index % std::numeric_limits<std::uint8_t>::max());
-            ++pushed_byte_counts[static_cast<std::size_t>(msg[i])];
+          for (std::byte & byte : msg) {
+            byte = std::byte(index % std::numeric_limits<std::uint8_t>::max());
+            pushed_byte_counts[static_cast<std::size_t>(byte)] += 1;
           }
-          msgbuf.push(std::span<std::byte>(msg.data(), size));
+          msgbuf.push(msg);
         }
       });
     }
@@ -365,16 +351,15 @@ constexpr void blocking(auto const & param) noexcept {
       threads.emplace_back([&] {
         latch.arrive_and_wait();
 
-        std::vector<std::byte> msg(consumer_bytes);
+        std::vector<std::byte> msg(msg_size);
         while (true) {
-          std::size_t const index = pop_index.fetch_add(consumer_bytes);
-          if (index >= bytes_count) {
+          std::size_t const index = pop_index.fetch_add(msg_size);
+          if (index >= msg_count) {
             return;
           }
-          auto const size = std::min(consumer_bytes, bytes_count - index);
-          msgbuf.pop(std::span<std::byte>(msg.data(), size));
-          for (std::size_t i = 0; i < size; ++i) {
-            ++popped_byte_counts[static_cast<std::size_t>(msg[i])];
+          msgbuf.pop(msg);
+          for (std::byte const byte : msg) {
+            popped_byte_counts[static_cast<std::size_t>(byte)] += 1;
           }
         }
       });

@@ -8,7 +8,7 @@ project(
 # dependencies
 # ------------------------------------------------------------------------------
 
-find_package(swiss REQUIRED PATHS)
+find_package(swiss REQUIRED)
 
 # ------------------------------------------------------------------------------
 # general settings and options

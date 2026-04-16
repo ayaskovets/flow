@@ -6,7 +6,7 @@
 #include "templates/stream.hpp"
 #include "templates/templates.hpp"
 
-namespace tests {
+namespace tests::unit {
 
 TEST(spsc_stream, size) {
   // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
@@ -66,4 +66,4 @@ INSTANTIATE_TEST_SUITE_P(spsc_stream_workload, spsc_stream_workload,
 using uint8_index_stream_t = flow::spsc_stream<std::uint8_t>;
 TEST_T(spsc_stream, rollover, uint8_index_stream_t);
 
-}  // namespace tests
+}  // namespace tests::unit

@@ -6,7 +6,7 @@
 #include "templates/queue.hpp"
 #include "templates/templates.hpp"
 
-namespace tests {
+namespace tests::unit {
 
 TEST(unsafe_queue, size) {
   // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
@@ -76,4 +76,4 @@ TEST_T(unsafe_queue, rollover, uint8_index_queue_t);
 
 TEST_T(unsafe_queue, front, flow::unsafe_queue<int>);
 
-}  // namespace tests
+}  // namespace tests::unit

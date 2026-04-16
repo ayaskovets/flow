@@ -6,7 +6,7 @@
 #include "templates/queue.hpp"
 #include "templates/templates.hpp"
 
-namespace tests {
+namespace tests::unit {
 
 TEST(locked_deque, size) {
   // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
@@ -86,4 +86,4 @@ TEST_T(locked_deque, queued_consumers_blocking, flow::locked_deque<int>);
 using uint8_index_queue_t = flow::locked_deque<int, std::uint8_t>;
 TEST_T(locked_deque, rollover, uint8_index_queue_t);
 
-}  // namespace tests
+}  // namespace tests::unit

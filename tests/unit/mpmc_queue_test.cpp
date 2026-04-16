@@ -6,7 +6,7 @@
 #include "templates/queue.hpp"
 #include "templates/templates.hpp"
 
-namespace tests {
+namespace tests::unit {
 
 TEST(mpmc_queue, size) {
   // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
@@ -85,4 +85,4 @@ TEST_T(mpmc_queue, queued_consumers_blocking, flow::mpmc_queue<int>);
 using uint8_index_queue_t = flow::mpmc_queue<int, std::uint8_t>;
 TEST_T(mpmc_queue, rollover, uint8_index_queue_t);
 
-}  // namespace tests
+}  // namespace tests::unit

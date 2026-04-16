@@ -4,7 +4,7 @@
 
 #include <gtest/gtest.h>
 
-namespace tests {
+namespace tests::unit {
 
 TEST(stream, unsafe_stream) {
   using stream_t = flow::unsafe_stream<>;
@@ -31,4 +31,4 @@ TEST(stream, spsc_stream) {
   static_assert(flow::concepts::noexcept_cancellable_blocking_stream<stream_t>);
 }
 
-}  // namespace tests
+}  // namespace tests::unit

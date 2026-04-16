@@ -6,7 +6,7 @@
 #include "templates/msgbuf.hpp"
 #include "templates/templates.hpp"
 
-namespace tests {
+namespace tests::unit {
 
 TEST(spsc_msgbuf, size) {
   // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
@@ -65,4 +65,4 @@ INSTANTIATE_TEST_SUITE_P(spsc_msgbuf_workload, spsc_msgbuf_workload,
 using uint8_index_msgbuf_t = flow::spsc_msgbuf<std::uint8_t>;
 TEST_T(spsc_msgbuf, rollover, uint8_index_msgbuf_t);
 
-}  // namespace tests
+}  // namespace tests::unit

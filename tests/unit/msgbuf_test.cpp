@@ -4,7 +4,7 @@
 
 #include <gtest/gtest.h>
 
-namespace tests {
+namespace tests::unit {
 
 TEST(msgbuf, unsafe_msgbuf) {
   using msgbuf_t = flow::unsafe_msgbuf<>;
@@ -31,4 +31,4 @@ TEST(msgbuf, spsc_msgbuf) {
   static_assert(flow::concepts::noexcept_cancellable_blocking_msgbuf<msgbuf_t>);
 }
 
-}  // namespace tests
+}  // namespace tests::unit

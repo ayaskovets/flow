@@ -10,7 +10,7 @@
 
 #include <gtest/gtest.h>
 
-namespace tests {
+namespace tests::unit {
 
 TEST(queue, cas128_mpmc_queue) {
   using queue_t = flow::cas128_mpmc_queue<int>;
@@ -108,4 +108,4 @@ TEST(queue, unsafe_queue) {
   static_assert(!flow::concepts::noexcept_cancellable_blocking_queue<queue_t>);
 }
 
-}  // namespace tests
+}  // namespace tests::unit

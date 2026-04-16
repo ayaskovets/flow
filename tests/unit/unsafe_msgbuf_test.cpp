@@ -6,7 +6,7 @@
 #include "templates/msgbuf.hpp"
 #include "templates/templates.hpp"
 
-namespace tests {
+namespace tests::unit {
 
 TEST(unsafe_msgbuf, size) {
   // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
@@ -62,4 +62,4 @@ TEST(unsafe_msgbuf, queued_consumers_blocking) { GTEST_SKIP(); }
 using uint8_index_msgbuf_t = flow::unsafe_msgbuf<std::uint8_t>;
 TEST_T(unsafe_msgbuf, rollover, uint8_index_msgbuf_t);
 
-}  // namespace tests
+}  // namespace tests::unit

@@ -6,7 +6,7 @@
 #include "templates/stream.hpp"
 #include "templates/templates.hpp"
 
-namespace tests {
+namespace tests::unit {
 
 TEST(unsafe_stream, size) {
   // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
@@ -62,4 +62,4 @@ TEST(unsafe_stream, queued_consumers_blocking) { GTEST_SKIP(); }
 using uint8_index_stream_t = flow::unsafe_stream<std::uint8_t>;
 TEST_T(unsafe_stream, rollover, uint8_index_stream_t);
 
-}  // namespace tests
+}  // namespace tests::unit

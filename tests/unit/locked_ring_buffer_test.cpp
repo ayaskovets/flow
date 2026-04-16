@@ -6,7 +6,7 @@
 #include "templates/queue.hpp"
 #include "templates/templates.hpp"
 
-namespace tests {
+namespace tests::unit {
 
 TEST(locked_ring_buffer, size) {
   // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
@@ -98,4 +98,4 @@ TEST_T(locked_ring_buffer, queued_consumers_blocking,
 using uint8_index_queue_t = flow::locked_ring_buffer<int, std::uint8_t>;
 TEST_T(locked_ring_buffer, rollover, uint8_index_queue_t);
 
-}  // namespace tests
+}  // namespace tests::unit

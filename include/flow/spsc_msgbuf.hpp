@@ -293,19 +293,19 @@ class spsc_msgbuf final : public swiss::non_copyable,
     }
 
     if constexpr (!Blocking) {
-      auto const total = static_cast<index_type>(msg.size());
+      auto const msg_size = static_cast<index_type>(msg.size());
       index_type const pop_from =
           reader_.index.load(std::memory_order::relaxed);
 
-      if (total == 0) {
+      if (msg_size == 0) {
         return false;
       }
 
       if (peek(reader_.ring_buffer, *reader_.capacity, reader_.cache,
-               pop_from) != total) {
+               pop_from) != msg_size) {
         index_type const cache = writer_.index.load(std::memory_order::relaxed);
         if (peek(reader_.ring_buffer, *reader_.capacity, cache, pop_from) !=
-            total) {
+            msg_size) {
           return false;
         }
         reader_.cache = cache;
@@ -316,7 +316,7 @@ class spsc_msgbuf final : public swiss::non_copyable,
       read_unchecked(msg, reader_.ring_buffer, *reader_.capacity,
                      next_pop_from);
 
-      reader_.index.store(next(*reader_.capacity, total, next_pop_from),
+      reader_.index.store(next(*reader_.capacity, msg_size, next_pop_from),
                           std::memory_order::relaxed);
       return true;
     }

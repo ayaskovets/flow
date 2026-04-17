@@ -150,9 +150,28 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
                                : *reader_.capacity + push_to + 1 - pop_from;
   }
 
-  /**
-   * @warning Should only be ever called by the consumer thread
-   */
+  [[nodiscard]] constexpr auto back() noexcept -> value_type * {
+    index_type const push_to = writer_.index.load(std::memory_order::relaxed);
+    index_type const next_push_to = next(*writer_.capacity, push_to);
+
+    if (full(next_push_to, writer_.cache)) {
+      index_type const cache = reader_.index.load(std::memory_order::acquire);
+      if (full(next_push_to, cache)) {
+        return nullptr;
+      }
+      writer_.cache = cache;
+    }
+
+    return reader_.ring_buffer + push_to;
+  }
+
+  constexpr void commit_back() noexcept {
+    index_type const push_to = writer_.index.load(std::memory_order::relaxed);
+
+    writer_.index.store(next(*writer_.capacity, push_to),
+                        std::memory_order::release);
+  }
+
   [[nodiscard]] constexpr auto front() noexcept -> value_type * {
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
 
@@ -167,11 +186,6 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     return reader_.ring_buffer + pop_from;
   }
 
-  /**
-   * @brief Remove the front element from the queue
-   * @warning Should only be ever called after front() returned a non-null
-   * pointer, otherwise behaviour is undefined
-   */
   constexpr void pop_front() noexcept {
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
 

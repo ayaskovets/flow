@@ -21,8 +21,27 @@ concept queue = requires(T queue, typename T::value_type) {
 };
 
 /**
+ * @brief Additional interface for a queue that supports at most one producer
+ * which allows to reuse the memory without moving the object out of the queue
+ * @warning These functions should only be called from the producer thread
+ * @warning The value should only be ever committed after back() returned a
+ * non-null pointer, otherwise behaviour is undefined
+ */
+template <typename T>
+concept single_producer_queue = queue<T> && requires(T queue) {
+  { queue.back() } -> std::same_as<typename T::value_type *>;
+  { queue.commit_back() } -> std::same_as<void>;
+
+  requires noexcept(queue.back());
+  requires noexcept(queue.commit_back());
+};
+
+/**
  * @brief Additional interface for a queue that supports at most one consumer
  * which allows to reuse the memory without moving the object out of the queue
+ * @warning These functions should only be called from the consumer thread
+ * @warning The value should only be ever popped after front() returned a
+ * non-null pointer, otherwise behaviour is undefined
  */
 template <typename T>
 concept single_consumer_queue = queue<T> && requires(T queue) {

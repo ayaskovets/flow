@@ -16,6 +16,7 @@ TEST(queue, cas128_mpmc_queue) {
   using queue_t = flow::cas128_mpmc_queue<int>;
 
   static_assert(flow::concepts::queue<queue_t>);
+  static_assert(!flow::concepts::single_producer_queue<queue_t>);
   static_assert(!flow::concepts::single_consumer_queue<queue_t>);
   static_assert(flow::concepts::nonblocking_queue<queue_t>);
   static_assert(flow::concepts::noexcept_nonblocking_queue<queue_t>);
@@ -29,6 +30,7 @@ TEST(queue, locked_deque) {
   using queue_t = flow::locked_deque<int>;
 
   static_assert(flow::concepts::queue<queue_t>);
+  static_assert(!flow::concepts::single_producer_queue<queue_t>);
   static_assert(!flow::concepts::single_consumer_queue<queue_t>);
   static_assert(flow::concepts::nonblocking_queue<queue_t>);
   static_assert(flow::concepts::noexcept_nonblocking_queue<queue_t>);
@@ -42,6 +44,7 @@ TEST(queue, locked_ring_buffer) {
   using queue_t = flow::locked_ring_buffer<int>;
 
   static_assert(flow::concepts::queue<queue_t>);
+  static_assert(!flow::concepts::single_producer_queue<queue_t>);
   static_assert(!flow::concepts::single_consumer_queue<queue_t>);
   static_assert(flow::concepts::nonblocking_queue<queue_t>);
   static_assert(flow::concepts::noexcept_nonblocking_queue<queue_t>);
@@ -55,6 +58,7 @@ TEST(queue, mpsc_queue) {
   using queue_t = flow::mpsc_queue<int>;
 
   static_assert(flow::concepts::queue<queue_t>);
+  static_assert(!flow::concepts::single_producer_queue<queue_t>);
   static_assert(flow::concepts::single_consumer_queue<queue_t>);
   static_assert(flow::concepts::nonblocking_queue<queue_t>);
   static_assert(flow::concepts::noexcept_nonblocking_queue<queue_t>);
@@ -68,6 +72,7 @@ TEST(queue, mpmc_queue) {
   using queue_t = flow::mpmc_queue<int>;
 
   static_assert(flow::concepts::queue<queue_t>);
+  static_assert(!flow::concepts::single_producer_queue<queue_t>);
   static_assert(!flow::concepts::single_consumer_queue<queue_t>);
   static_assert(flow::concepts::nonblocking_queue<queue_t>);
   static_assert(flow::concepts::noexcept_nonblocking_queue<queue_t>);
@@ -81,6 +86,7 @@ TEST(queue, spmc_queue) {
   using queue_t = flow::spmc_queue<int>;
 
   static_assert(flow::concepts::queue<queue_t>);
+  static_assert(flow::concepts::single_producer_queue<queue_t>);
   static_assert(!flow::concepts::single_consumer_queue<queue_t>);
   static_assert(flow::concepts::nonblocking_queue<queue_t>);
   static_assert(flow::concepts::noexcept_nonblocking_queue<queue_t>);
@@ -107,6 +113,7 @@ TEST(queue, unsafe_queue) {
   using queue_t = flow::unsafe_queue<int>;
 
   static_assert(flow::concepts::queue<queue_t>);
+  static_assert(flow::concepts::single_producer_queue<queue_t>);
   static_assert(flow::concepts::single_consumer_queue<queue_t>);
   static_assert(flow::concepts::nonblocking_queue<queue_t>);
   static_assert(flow::concepts::noexcept_nonblocking_queue<queue_t>);

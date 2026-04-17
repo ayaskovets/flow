@@ -560,9 +560,40 @@ constexpr void rollover() noexcept {
 }
 
 template <typename Queue>
-  requires(std::same_as<typename Queue::value_type, int>)
+  requires(flow::concepts::blocking_queue<Queue> &&
+           flow::concepts::single_producer_queue<Queue> &&
+           std::same_as<typename Queue::value_type, int>)
+constexpr void back() noexcept {
+  constexpr std::size_t kQueueCapacity = 2;
+
+  Queue queue(kQueueCapacity);
+
+  EXPECT_NE(queue.back(), nullptr);
+  *queue.back() = 1;
+  queue.commit_back();
+
+  EXPECT_NE(queue.back(), nullptr);
+  *queue.back() = 2;
+  queue.commit_back();
+
+  EXPECT_EQ(queue.back(), nullptr);
+
+  int value{};
+  EXPECT_TRUE(queue.try_pop(value));
+  EXPECT_EQ(value, 1);
+
+  EXPECT_TRUE(queue.try_pop(value));
+  EXPECT_EQ(value, 2);
+
+  EXPECT_FALSE(queue.try_pop(value));
+}
+
+template <typename Queue>
+  requires(flow::concepts::blocking_queue<Queue> &&
+           flow::concepts::single_consumer_queue<Queue> &&
+           std::same_as<typename Queue::value_type, int>)
 constexpr void front() noexcept {
-  constexpr std::size_t kQueueCapacity = 4;
+  constexpr std::size_t kQueueCapacity = 2;
 
   Queue queue(kQueueCapacity);
 

@@ -86,4 +86,8 @@ TEST_T(locked_deque, queued_consumers_blocking, flow::locked_deque<int>);
 using uint8_index_queue_t = flow::locked_deque<int, std::uint8_t>;
 TEST_T(locked_deque, rollover, uint8_index_queue_t);
 
+TEST(locked_deque, back) { GTEST_SKIP(); }
+
+TEST(locked_deque, front) { GTEST_SKIP(); }
+
 }  // namespace tests::unit

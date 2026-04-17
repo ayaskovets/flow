@@ -179,6 +179,29 @@ class spmc_queue final : public swiss::non_copyable, public swiss::non_movable {
                                : *writer_.capacity + push_to + 1 - pop_from;
   }
 
+  [[nodiscard]] constexpr auto back() const noexcept -> value_type * {
+    index_type const push_to = writer_.index.load(std::memory_order::relaxed);
+
+    auto entry            = at(writer_.ring_buffer, *writer_.capacity, push_to);
+    auto & [item, seqnum] = *entry;
+
+    if (!vacant(push_to, seqnum)) [[unlikely]] {
+      return nullptr;
+    }
+
+    return &item;
+  }
+
+  constexpr void commit_back() noexcept {
+    index_type const push_to = writer_.index.load(std::memory_order::relaxed);
+
+    auto entry         = at(writer_.ring_buffer, *writer_.capacity, push_to);
+    auto & [_, seqnum] = *entry;
+
+    writer_.index.store(next(push_to), std::memory_order::relaxed);
+    seqnum.store(push_to + 1, std::memory_order::release);
+  }
+
  public:
   constexpr auto get_allocator() const noexcept -> allocator_type {
     return allocator_;
@@ -213,20 +236,20 @@ class spmc_queue final : public swiss::non_copyable, public swiss::non_movable {
     return ring_buffer + (index & capacity - 1);
   }
 
-  [[nodiscard]] constexpr auto vacant(index_type index,
+  [[nodiscard]] constexpr auto vacant(index_type push_to,
                                       index_type seqnum) const noexcept
       -> bool {
-    return index == seqnum;
+    return push_to == seqnum;
   }
 
-  [[nodiscard]] constexpr auto occupied(index_type index,
+  [[nodiscard]] constexpr auto occupied(index_type pop_from,
                                         index_type seqnum) const noexcept
       -> bool {
     /**
      * @note Cast here is required for types that are converted to int on
      * addition like std::uint8_t, std::uint16_t etc.
      */
-    return static_cast<index_type>(index + 1) == seqnum;
+    return static_cast<index_type>(pop_from + 1) == seqnum;
   }
 
   [[nodiscard]] constexpr auto next(index_type index) const noexcept

@@ -98,4 +98,8 @@ TEST_T(locked_ring_buffer, queued_consumers_blocking,
 using uint8_index_queue_t = flow::locked_ring_buffer<int, std::uint8_t>;
 TEST_T(locked_ring_buffer, rollover, uint8_index_queue_t);
 
+TEST(locked_ring_buffer, back) { GTEST_SKIP(); }
+
+TEST(locked_ring_buffer, front) { GTEST_SKIP(); }
+
 }  // namespace tests::unit

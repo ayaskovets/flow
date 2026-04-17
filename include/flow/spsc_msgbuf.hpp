@@ -107,10 +107,6 @@ class spsc_msgbuf final : public swiss::non_copyable,
     return size(*reader_.capacity, push_to, pop_from);
   }
 
-  /**
-   * @note If the message buffer is empty, zero is returned
-   * @warning Should only be ever called by the consumer thread
-   */
   [[nodiscard]] constexpr auto peek() noexcept -> index_type {
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
 

@@ -564,21 +564,26 @@ template <typename Queue>
 constexpr void front() noexcept {
   constexpr std::size_t kQueueCapacity = 4;
 
-  int value{};
   Queue queue(kQueueCapacity);
 
   queue.push(1);
-  EXPECT_EQ(queue.front(), 1);
+  EXPECT_NE(queue.front(), nullptr);
+  EXPECT_EQ(*queue.front(), 1);
 
   queue.push(2);
-  EXPECT_EQ(queue.front(), 1);
+  EXPECT_NE(queue.front(), nullptr);
+  EXPECT_EQ(*queue.front(), 1);
 
-  queue.pop(value);
-  EXPECT_EQ(value, 1);
-  EXPECT_EQ(queue.front(), 2);
+  queue.pop_front();
+  EXPECT_NE(queue.front(), nullptr);
+  EXPECT_EQ(*queue.front(), 2);
 
-  queue.front() = 3;
-  EXPECT_EQ(queue.front(), 3);
+  EXPECT_NE(queue.front(), nullptr);
+  *queue.front() = 3;
+  EXPECT_EQ(*queue.front(), 3);
+
+  queue.pop_front();
+  EXPECT_EQ(queue.front(), nullptr);
 }
 
 }  // namespace tests::templates

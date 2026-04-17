@@ -130,11 +130,24 @@ class unsafe_queue final : public swiss::non_copyable,
     return size_;
   }
 
+  [[nodiscard]] constexpr auto front() const noexcept -> value_type * {
+    if (empty()) [[unlikely]] {
+      return nullptr;
+    }
+
+    return ring_buffer_ + pop_from_;
+  }
+
   /**
-   * @warning If the queue is empty, behaviour is undefined
+   * @brief Remove the front element from the queue
+   * @warning Should only be ever called after front() returned a non-null
+   * pointer, otherwise behaviour is undefined
    */
-  [[nodiscard]] constexpr auto front() const noexcept -> value_type & {
-    return *(ring_buffer_ + pop_from_);
+  constexpr void pop_front() noexcept {
+    std::allocator_traits<allocator_type>::destroy(allocator_,
+                                                   ring_buffer_ + pop_from_);
+    pop_from_ = next(pop_from_, 1);
+    size_ -= 1;
   }
 
  public:

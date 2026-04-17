@@ -21,6 +21,19 @@ concept queue = requires(T queue, typename T::value_type) {
 };
 
 /**
+ * @brief Additional interface for a queue that supports at most one consumer
+ * which allows to reuse the memory without moving the object out of the queue
+ */
+template <typename T>
+concept single_consumer_queue = queue<T> && requires(T queue) {
+  { queue.front() } -> std::same_as<typename T::value_type *>;
+  { queue.pop_front() } -> std::same_as<void>;
+
+  requires noexcept(queue.front());
+  requires noexcept(queue.pop_front());
+};
+
+/**
  * @brief Generic queue that supports nonblocking operations
  * @note Nonblocking methods return true only upon successful the insertion or
  * removal of the value

@@ -151,13 +151,34 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
   }
 
   /**
-   * @warning If the queue is empty, behaviour is undefined
    * @warning Should only be ever called by the consumer thread
    */
-  [[nodiscard]] constexpr auto front() const noexcept -> value_type & {
+  [[nodiscard]] constexpr auto front() noexcept -> value_type * {
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
 
-    return *(reader_.ring_buffer + pop_from);
+    if (empty(reader_.cache, pop_from)) {
+      index_type const cache = writer_.index.load(std::memory_order::acquire);
+      if (empty(cache, pop_from)) [[unlikely]] {
+        return nullptr;
+      }
+      reader_.cache = cache;
+    }
+
+    return reader_.ring_buffer + pop_from;
+  }
+
+  /**
+   * @brief Remove the front element from the queue
+   * @warning Should only be ever called after front() returned a non-null
+   * pointer, otherwise behaviour is undefined
+   */
+  constexpr void pop_front() noexcept {
+    index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
+
+    std::allocator_traits<allocator_type>::destroy(
+        allocator_, reader_.ring_buffer + pop_from);
+    reader_.index.store(next(*reader_.capacity, pop_from),
+                        std::memory_order::release);
   }
 
  public:

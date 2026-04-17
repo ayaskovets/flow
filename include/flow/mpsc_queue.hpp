@@ -22,6 +22,7 @@ namespace flow {
  * @note Capacity for this queue must be a power of 2 for efficient division
  * @warning Allocated buffer always contains one additional element to
  * differentiate the empty state
+ * @warning std::allocator_traits construction/destruction is not supported
  */
 template <typename Value, std::unsigned_integral Index = std::size_t,
           Index Capacity = swiss::kDynamicExtent<Index>,
@@ -179,15 +180,35 @@ class mpsc_queue final : public swiss::non_copyable, public swiss::non_movable {
   }
 
   /**
-   * @warning If the queue is empty, behaviour is undefined
    * @warning Should only be ever called by the consumer thread
    */
-  [[nodiscard]] constexpr auto front() const noexcept -> value_type & {
+  [[nodiscard]] constexpr auto front() const noexcept -> value_type * {
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
 
-    auto entry       = at(reader_.ring_buffer, *reader_.capacity, pop_from);
-    auto & [item, _] = *entry;
-    return item;
+    auto entry = at(reader_.ring_buffer, *reader_.capacity, pop_from);
+    auto & [item, seqnum] = *entry;
+
+    if (vacant(pop_from, seqnum)) [[unlikely]] {
+      return nullptr;
+    }
+
+    return &item;
+  }
+
+  /**
+   * @brief Remove the front element from the queue
+   * @warning Should only be ever called after front() returned a non-null
+   * pointer, otherwise behaviour is undefined
+   */
+  constexpr void pop_front() noexcept {
+    index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
+
+    auto entry = at(reader_.ring_buffer, *reader_.capacity, pop_from);
+    auto & [item, seqnum] = *entry;
+
+    std::destroy_at(&item);
+    reader_.index.store(next(pop_from), std::memory_order::relaxed);
+    seqnum.store(pop_from + *reader_.capacity, std::memory_order::release);
   }
 
  public:

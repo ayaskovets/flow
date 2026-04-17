@@ -179,27 +179,19 @@ class mpsc_queue final : public swiss::non_copyable, public swiss::non_movable {
                                : *reader_.capacity + push_to + 1 - pop_from;
   }
 
-  /**
-   * @warning Should only be ever called by the consumer thread
-   */
   [[nodiscard]] constexpr auto front() const noexcept -> value_type * {
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
 
     auto entry = at(reader_.ring_buffer, *reader_.capacity, pop_from);
     auto & [item, seqnum] = *entry;
 
-    if (vacant(pop_from, seqnum)) [[unlikely]] {
+    if (!occupied(pop_from, seqnum)) [[unlikely]] {
       return nullptr;
     }
 
     return &item;
   }
 
-  /**
-   * @brief Remove the front element from the queue
-   * @warning Should only be ever called after front() returned a non-null
-   * pointer, otherwise behaviour is undefined
-   */
   constexpr void pop_front() noexcept {
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
 
@@ -245,20 +237,20 @@ class mpsc_queue final : public swiss::non_copyable, public swiss::non_movable {
     return ring_buffer + (index & capacity - 1);
   }
 
-  [[nodiscard]] constexpr auto vacant(index_type index,
+  [[nodiscard]] constexpr auto vacant(index_type push_to,
                                       index_type seqnum) const noexcept
       -> bool {
-    return index == seqnum;
+    return push_to == seqnum;
   }
 
-  [[nodiscard]] constexpr auto occupied(index_type index,
+  [[nodiscard]] constexpr auto occupied(index_type pop_from,
                                         index_type seqnum) const noexcept
       -> bool {
     /**
      * @note Cast here is required for types that are converted to int on
      * addition like std::uint8_t, std::uint16_t etc.
      */
-    return static_cast<index_type>(index + 1) == seqnum;
+    return static_cast<index_type>(pop_from + 1) == seqnum;
   }
 
   [[nodiscard]] constexpr auto next(index_type index) const noexcept

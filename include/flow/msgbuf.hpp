@@ -8,6 +8,8 @@ namespace flow::concepts {
 
 /**
  * @brief Generic message buffer of fixed capacity with custom allocator support
+ * @note If the message buffer is empty, peek() should return 0
+ * @warning peek() should only be called from the consumer thread
  */
 template <typename T>
 concept msgbuf = requires(T msgbuf) {

@@ -27,7 +27,8 @@ class unsafe_msgbuf final : public swiss::non_copyable,
   using allocator_type = Allocator;
 
  private:
-  static constexpr index_type kMsgSizeBytes = sizeof(index_type);
+  static constexpr index_type kHeaderSize    = sizeof(index_type);
+  static constexpr index_type kPaddingHeader = 0;
 
  public:
   constexpr explicit unsafe_msgbuf(allocator_type allocator = allocator_type())
@@ -59,52 +60,119 @@ class unsafe_msgbuf final : public swiss::non_copyable,
   }
 
  public:
-  constexpr auto try_push(std::span<std::byte const> msg) noexcept -> bool {
-    auto const msg_size = static_cast<index_type>(msg.size());
-
-    if (msg_size == 0 || free() < kMsgSizeBytes + msg_size) {
+  template <std::invocable<std::span<std::byte>> Callback>
+  constexpr auto try_push(index_type msg_size, Callback && callback) noexcept
+      -> bool
+    requires(std::is_nothrow_invocable_v<Callback, std::span<std::byte>>)
+  {
+    if (msg_size == 0) {
       return false;
     }
 
-    write_unchecked(
-        std::bit_cast<std::array<std::byte, kMsgSizeBytes>>(msg_size));
-    size_ += kMsgSizeBytes;
+    index_type const postfix = *capacity_ - push_to();
+    index_type const prefix  = pop_from_;
+    index_type const chunk   = std::min(postfix, free());
 
-    write_unchecked(msg);
-    size_ += msg_size;
+    if (chunk < kHeaderSize + msg_size) {
+      if (prefix < kHeaderSize + msg_size || postfix != chunk) {
+        return false;
+      }
 
+      if (postfix >= kHeaderSize) {
+        std::copy_n(
+            std::bit_cast<std::array<std::byte, kHeaderSize>>(kPaddingHeader)
+                .data(),
+            kHeaderSize, ring_buffer_ + push_to());
+        size_ += postfix;
+      }
+    }
+
+    std::copy_n(
+        std::bit_cast<std::array<std::byte, kHeaderSize>>(msg_size).data(),
+        kHeaderSize, ring_buffer_ + push_to());
+    std::invoke(std::forward<Callback>(callback),
+                std::span(ring_buffer_ + push_to() + kHeaderSize, msg_size));
+
+    size_ += kHeaderSize + msg_size;
     return true;
   }
 
-  constexpr void push(std::span<std::byte const> msg) {
-    if (free() < kMsgSizeBytes + msg.size()) {
+  template <std::invocable<std::span<std::byte>> Callback>
+  constexpr void push(index_type msg_size, Callback && callback) {
+    if (!try_push(msg_size, std::forward<Callback>(callback))) {
       throw std::runtime_error("unsafe_msgbuf::push(): full");
     }
-    try_push(msg);
   }
 
-  constexpr auto try_pop(std::span<std::byte> msg) noexcept -> bool {
-    auto const msg_size = peek();
-    auto const total    = static_cast<index_type>(msg.size());
+  template <std::invocable<std::span<std::byte>> Callback>
+  constexpr auto try_pop(Callback && callback) noexcept -> bool
+    requires(std::is_nothrow_invocable_v<Callback, std::span<std::byte>>)
+  {
+    index_type const postfix = *capacity_ - pop_from_;
 
-    if (msg_size == 0 || msg_size != total) {
+    if (postfix < kHeaderSize || header(pop_from_) == kPaddingHeader) {
+      pop_from_ = next(pop_from_, postfix);
+      size_ -= postfix;
+    }
+
+    if (size_ == 0) {
       return false;
     }
 
-    pop_from_ = next(pop_from_, kMsgSizeBytes);
-    size_ -= kMsgSizeBytes;
+    index_type const msg_size = header(pop_from_);
 
-    read_unchecked(msg);
-    pop_from_ = next(pop_from_, total);
-    size_ -= total;
-    return total;
+    if (!std::invoke(
+            std::forward<Callback>(callback),
+            std::span(ring_buffer_ + pop_from_ + kHeaderSize, msg_size))) {
+      return false;
+    }
+
+    pop_from_ = next(pop_from_, kHeaderSize + msg_size);
+    size_ -= kHeaderSize + msg_size;
+    return true;
+  }
+
+  template <std::invocable<std::span<std::byte>> Callback>
+  constexpr void pop(Callback && callback) {
+    if (!try_pop(std::forward<Callback>(callback))) {
+      throw std::runtime_error("unsafe_msgbuf::pop(): empty");
+    }
+  }
+
+ public:
+  constexpr auto try_push(std::span<std::byte const> msg) noexcept -> bool {
+    return try_push(static_cast<index_type>(msg.size()),
+                    [msg](std::span<std::byte> chunk) noexcept {
+                      std::copy_n(msg.begin(), msg.size(), chunk.begin());
+                    });
+  }
+
+  constexpr void push(std::span<std::byte const> msg) {
+    push(msg.size(), [msg](std::span<std::byte> chunk) noexcept {
+      std::copy_n(msg.begin(), msg.size(), chunk.begin());
+    });
+  }
+
+  constexpr auto try_pop(std::span<std::byte> msg) noexcept -> bool {
+    return try_pop([msg](std::span<std::byte> chunk) noexcept {
+      if (chunk.size() != msg.size()) {
+        return false;
+      }
+
+      std::copy_n(chunk.begin(), msg.size(), msg.begin());
+      return true;
+    });
   }
 
   constexpr void pop(std::span<std::byte> msg) {
-    if (peek() != msg.size()) {
-      throw std::runtime_error("unsafe_msgbuf::pop(): empty");
-    }
-    try_pop(msg);
+    pop([msg](std::span<std::byte> chunk) noexcept {
+      if (chunk.size() != msg.size()) {
+        return false;
+      }
+
+      std::copy_n(chunk.begin(), msg.size(), msg.begin());
+      return true;
+    });
   }
 
  public:
@@ -114,16 +182,6 @@ class unsafe_msgbuf final : public swiss::non_copyable,
 
   [[nodiscard]] constexpr auto size() const noexcept -> index_type {
     return size_;
-  }
-
-  [[nodiscard]] constexpr auto peek() const noexcept -> index_type {
-    if (size_ == 0) {
-      return 0;
-    }
-
-    std::array<std::byte, kMsgSizeBytes> msg_size{};
-    read_unchecked(msg_size);
-    return std::bit_cast<index_type>(msg_size);
   }
 
  public:
@@ -143,10 +201,6 @@ class unsafe_msgbuf final : public swiss::non_copyable,
   // NOLINTEND(cppcoreguidelines-avoid-const-or-ref-data-members)
 
  private:
-  [[nodiscard]] constexpr auto free() const noexcept -> index_type {
-    return *capacity_ - size_;
-  }
-
   [[nodiscard]] constexpr auto next(index_type index,
                                     index_type msg_size) const noexcept
       -> index_type {
@@ -154,27 +208,19 @@ class unsafe_msgbuf final : public swiss::non_copyable,
     return index >= *capacity_ ? index - *capacity_ : index;
   }
 
- private:
-  constexpr void write_unchecked(
-      std::span<std::byte const> msg) const noexcept {
-    auto const msg_size      = static_cast<index_type>(msg.size());
-    index_type const push_to = next(pop_from_, size_);
-    index_type const postfix = *capacity_ - push_to;
-    index_type const chunk1  = std::min(msg_size, postfix);
-    index_type const chunk2  = msg_size - chunk1;
-
-    std::copy_n(msg.data(), chunk1, ring_buffer_ + push_to);
-    std::copy_n(msg.data() + chunk1, chunk2, ring_buffer_);
+  [[nodiscard]] constexpr auto free() const noexcept -> index_type {
+    return *capacity_ - size_;
   }
 
-  constexpr void read_unchecked(std::span<std::byte> msg) const noexcept {
-    auto const msg_size      = static_cast<index_type>(msg.size());
-    index_type const postfix = *capacity_ - pop_from_;
-    index_type const chunk1  = std::min(msg_size, postfix);
-    index_type const chunk2  = msg_size - chunk1;
+  [[nodiscard]] constexpr auto push_to() const noexcept -> index_type {
+    return next(pop_from_, size_);
+  }
 
-    std::copy_n(ring_buffer_ + pop_from_, chunk1, msg.data());
-    std::copy_n(ring_buffer_, chunk2, msg.data() + chunk1);
+  [[nodiscard]] constexpr auto header(index_type index) const noexcept
+      -> index_type {
+    std::array<std::byte, kHeaderSize> msg_size{};
+    std::copy_n(ring_buffer_ + index, kHeaderSize, msg_size.data());
+    return std::bit_cast<index_type>(msg_size);
   }
 };
 

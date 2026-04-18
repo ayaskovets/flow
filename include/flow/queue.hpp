@@ -8,6 +8,9 @@ namespace flow::concepts {
 /**
  * @brief Generic queue of fixed capacity with custom allocator support and
  * typed items
+ * @note Callback-based methods receiv a reference to the value slot at the
+ * moment the value is accessible to write/read. Callback code should be minimal
+ * not to block other threads
  */
 template <typename T>
 concept queue = requires(T queue, typename T::value_type) {
@@ -21,45 +24,16 @@ concept queue = requires(T queue, typename T::value_type) {
 };
 
 /**
- * @brief Additional interface for a queue that supports at most one producer
- * which allows to reuse the memory without moving the object out of the queue
- * @warning These functions should only be called from the producer thread
- * @warning The value should only be ever committed after back() returned a
- * non-null pointer, otherwise behaviour is undefined
- */
-template <typename T>
-concept single_producer_queue = queue<T> && requires(T queue) {
-  { queue.back() } -> std::same_as<typename T::value_type *>;
-  { queue.commit_back() } -> std::same_as<void>;
-
-  requires noexcept(queue.back());
-  requires noexcept(queue.commit_back());
-};
-
-/**
- * @brief Additional interface for a queue that supports at most one consumer
- * which allows to reuse the memory without moving the object out of the queue
- * @warning These functions should only be called from the consumer thread
- * @warning The value should only be ever popped after front() returned a
- * non-null pointer, otherwise behaviour is undefined
- */
-template <typename T>
-concept single_consumer_queue = queue<T> && requires(T queue) {
-  { queue.front() } -> std::same_as<typename T::value_type *>;
-  { queue.pop_front() } -> std::same_as<void>;
-
-  requires noexcept(queue.front());
-  requires noexcept(queue.pop_front());
-};
-
-/**
  * @brief Generic queue that supports nonblocking operations
  * @note Nonblocking methods return true only upon successful the insertion or
  * removal of the value
  */
 template <typename T>
 concept nonblocking_queue =
-    queue<T> && requires(T queue, typename T::value_type value) {
+    queue<T> && requires(T queue, typename T::value_type value,
+                         decltype([](typename T::value_type &) {}) callback) {
+      { queue.try_push(callback) } -> std::same_as<bool>;
+      { queue.try_pop(callback) } -> std::same_as<bool>;
       { queue.try_emplace(std::move(value)) } -> std::same_as<bool>;
       { queue.try_push(std::move(value)) } -> std::same_as<bool>;
       { queue.try_pop(value) } -> std::same_as<bool>;
@@ -70,7 +44,11 @@ concept nonblocking_queue =
  */
 template <typename T>
 concept noexcept_nonblocking_queue =
-    nonblocking_queue<T> && requires(T queue, typename T::value_type value) {
+    nonblocking_queue<T> &&
+    requires(T queue, typename T::value_type value,
+             decltype([](typename T::value_type &) noexcept {}) callback) {
+      requires noexcept(queue.try_push(callback));
+      requires noexcept(queue.try_pop(callback));
       requires noexcept(queue.try_emplace(std::move(value)));
       requires noexcept(queue.try_push(std::move(value)));
       requires noexcept(queue.try_pop(value));
@@ -83,7 +61,10 @@ concept noexcept_nonblocking_queue =
  */
 template <typename T>
 concept blocking_queue =
-    queue<T> && requires(T queue, typename T::value_type value) {
+    queue<T> && requires(T queue, typename T::value_type value,
+                         decltype([](typename T::value_type &) {}) callback) {
+      { queue.push(callback) } -> std::same_as<void>;
+      { queue.pop(callback) } -> std::same_as<void>;
       { queue.emplace(std::move(value)) } -> std::same_as<void>;
       { queue.push(std::move(value)) } -> std::same_as<void>;
       { queue.pop(value) } -> std::same_as<void>;
@@ -94,7 +75,11 @@ concept blocking_queue =
  */
 template <typename T>
 concept noexcept_blocking_queue =
-    blocking_queue<T> && requires(T queue, typename T::value_type value) {
+    blocking_queue<T> &&
+    requires(T queue, typename T::value_type value,
+             decltype([](typename T::value_type &) noexcept {}) callback) {
+      requires noexcept(queue.push(callback));
+      requires noexcept(queue.pop(callback));
       requires noexcept(queue.emplace(std::move(value)));
       requires noexcept(queue.push(std::move(value)));
       requires noexcept(queue.pop(value));
@@ -105,8 +90,11 @@ concept noexcept_blocking_queue =
  */
 template <typename T>
 concept cancellable_blocking_queue =
-    blocking_queue<T> && requires(T queue, typename T::value_type value,
-                                  std::stop_token stop_token) {
+    blocking_queue<T> &&
+    requires(T queue, typename T::value_type value, std::stop_token stop_token,
+             decltype([](typename T::value_type &) {}) callback) {
+      { queue.push(stop_token, callback) } -> std::same_as<void>;
+      { queue.pop(stop_token, callback) } -> std::same_as<void>;
       { queue.emplace(stop_token, std::move(value)) } -> std::same_as<bool>;
       { queue.push(stop_token, std::move(value)) } -> std::same_as<bool>;
       { queue.pop(stop_token, value) } -> std::same_as<bool>;
@@ -119,8 +107,10 @@ concept cancellable_blocking_queue =
 template <typename T>
 concept noexcept_cancellable_blocking_queue =
     cancellable_blocking_queue<T> &&
-    requires(T queue, typename T::value_type value,
-             std::stop_token stop_token) {
+    requires(T queue, typename T::value_type value, std::stop_token stop_token,
+             decltype([](typename T::value_type &) noexcept {}) callback) {
+      requires noexcept(queue.push(stop_token, callback));
+      requires noexcept(queue.pop(stop_token, callback));
       requires noexcept(queue.emplace(stop_token, std::move(value)));
       requires noexcept(queue.push(stop_token, std::move(value)));
       requires noexcept(queue.pop(stop_token, value));

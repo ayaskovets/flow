@@ -198,7 +198,8 @@ constexpr void blocking_push_stop_token() noexcept {
   EXPECT_TRUE(queue.emplace(std::stop_token{}));
 
   std::jthread const consumer([&](std::stop_token stop_token) {
-    EXPECT_FALSE(queue.emplace(stop_token));
+    EXPECT_FALSE(queue.push(
+        stop_token, [](typename Queue::value_type &) { GTEST_FAIL(); }));
     EXPECT_FALSE(queue.emplace(stop_token));
   });
 }
@@ -214,7 +215,8 @@ constexpr void blocking_pop_stop_token() noexcept {
   EXPECT_TRUE(queue.pop(std::stop_token{}, value));
 
   std::jthread const producer([&](std::stop_token stop_token) {
-    EXPECT_FALSE(queue.pop(stop_token, value));
+    EXPECT_FALSE(queue.pop(stop_token,
+                           [](typename Queue::value_type &) { GTEST_FAIL(); }));
   });
 }
 
@@ -559,62 +561,32 @@ constexpr void rollover() noexcept {
   }
 }
 
-template <typename Queue>
-  requires(flow::concepts::blocking_queue<Queue> &&
-           flow::concepts::single_producer_queue<Queue> &&
-           std::same_as<typename Queue::value_type, int>)
-constexpr void back() noexcept {
+template <flow::concepts::nonblocking_queue Queue>
+constexpr void nonblocking_callback() noexcept {
   constexpr std::size_t kQueueCapacity = 2;
 
   Queue queue(kQueueCapacity);
 
-  EXPECT_NE(queue.back(), nullptr);
-  *queue.back() = 1;
-  queue.commit_back();
+  EXPECT_TRUE(queue.try_push([](int & value) { value = 1; }));
+  EXPECT_TRUE(queue.try_push([](int & value) { value = 2; }));
+  EXPECT_FALSE(queue.try_push([](int &) { GTEST_FAIL(); }));
 
-  EXPECT_NE(queue.back(), nullptr);
-  *queue.back() = 2;
-  queue.commit_back();
-
-  EXPECT_EQ(queue.back(), nullptr);
-
-  int value{};
-  EXPECT_TRUE(queue.try_pop(value));
-  EXPECT_EQ(value, 1);
-
-  EXPECT_TRUE(queue.try_pop(value));
-  EXPECT_EQ(value, 2);
-
-  EXPECT_FALSE(queue.try_pop(value));
+  EXPECT_TRUE(queue.try_pop([](int & value) { EXPECT_EQ(value, 1); }));
+  EXPECT_TRUE(queue.try_pop([](int & value) { EXPECT_EQ(value, 2); }));
+  EXPECT_FALSE(queue.try_pop([](int &) { GTEST_FAIL(); }));
 }
 
-template <typename Queue>
-  requires(flow::concepts::blocking_queue<Queue> &&
-           flow::concepts::single_consumer_queue<Queue> &&
-           std::same_as<typename Queue::value_type, int>)
-constexpr void front() noexcept {
+template <flow::concepts::blocking_queue Queue>
+constexpr void blocking_callback() noexcept {
   constexpr std::size_t kQueueCapacity = 2;
 
   Queue queue(kQueueCapacity);
 
-  queue.push(1);
-  EXPECT_NE(queue.front(), nullptr);
-  EXPECT_EQ(*queue.front(), 1);
+  queue.push([](int & value) { value = 1; });
+  queue.push([](int & value) { value = 2; });
 
-  queue.push(2);
-  EXPECT_NE(queue.front(), nullptr);
-  EXPECT_EQ(*queue.front(), 1);
-
-  queue.pop_front();
-  EXPECT_NE(queue.front(), nullptr);
-  EXPECT_EQ(*queue.front(), 2);
-
-  EXPECT_NE(queue.front(), nullptr);
-  *queue.front() = 3;
-  EXPECT_EQ(*queue.front(), 3);
-
-  queue.pop_front();
-  EXPECT_EQ(queue.front(), nullptr);
+  queue.pop([](int & value) { EXPECT_EQ(value, 1); });
+  queue.pop([](int & value) { EXPECT_EQ(value, 2); });
 }
 
 }  // namespace tests::templates

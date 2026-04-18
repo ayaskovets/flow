@@ -53,10 +53,9 @@ class unsafe_queue final : public swiss::non_copyable,
   constexpr ~unsafe_queue() noexcept
     requires(std::is_nothrow_destructible_v<value_type>)
   {
-    while (!empty()) {
-      std::allocator_traits<allocator_type>::destroy(allocator_,
-                                                     ring_buffer_ + pop_from_);
-      size_ -= 1;
+    while (try_pop([this](value_type & value) {
+      std::allocator_traits<allocator_type>::destroy(allocator_, &value);
+    })) {
     }
 
     std::allocator_traits<allocator_type>::deallocate(allocator_, ring_buffer_,
@@ -64,19 +63,56 @@ class unsafe_queue final : public swiss::non_copyable,
   }
 
  public:
-  template <typename... Args>
-  constexpr auto try_emplace(Args &&... args) noexcept(
-      std::is_nothrow_constructible_v<Value, Args...>) -> bool {
+  template <std::invocable<value_type &> Callback>
+  constexpr auto try_push(Callback && callback) noexcept(
+      std::is_nothrow_invocable_v<Callback, value_type &>) -> bool {
     if (full()) {
       return false;
     }
 
-    std::allocator_traits<allocator_type>::construct(
-        allocator_, ring_buffer_ + next(pop_from_, size_),
-        std::forward<Args>(args)...);
+    std::invoke(std::forward<Callback>(callback), *(ring_buffer_ + push_to()));
 
     size_ += 1;
     return true;
+  }
+
+  template <std::invocable<value_type &> Callback>
+  constexpr void push(Callback && callback) {
+    if (!try_push(std::forward<Callback>(callback))) {
+      throw std::runtime_error("unsafe_queue::push(): full");
+    }
+  }
+
+  template <std::invocable<value_type &> Callback>
+  constexpr auto try_pop(Callback && callback) noexcept(
+      std::is_nothrow_invocable_v<Callback, value_type &>) -> bool {
+    if (empty()) {
+      return false;
+    }
+
+    std::invoke(std::forward<Callback>(callback), *(ring_buffer_ + pop_from_));
+
+    pop_from_ = next(pop_from_, 1);
+    size_ -= 1;
+    return true;
+  }
+
+  template <std::invocable<value_type &> Callback>
+  constexpr void pop(Callback && callback) {
+    if (!try_pop(std::forward<Callback>(callback))) {
+      throw std::runtime_error("unsafe_queue::pop(): empty");
+    }
+  }
+
+ public:
+  template <typename... Args>
+  constexpr auto try_emplace(Args &&... args) noexcept(
+      std::is_nothrow_constructible_v<value_type, Args...>) -> bool {
+    return try_push([this, ... args = std::forward<Args>(args)](
+                        value_type & value) mutable {
+      std::allocator_traits<allocator_type>::construct(
+          allocator_, &value, std::forward<Args>(args)...);
+    });
   }
 
   constexpr auto try_push(value_type value) noexcept(
@@ -85,40 +121,30 @@ class unsafe_queue final : public swiss::non_copyable,
   }
 
   template <typename... Args>
-  constexpr void emplace(Args &&... args)
-    requires(std::is_nothrow_constructible_v<Value, Args...>)
-  {
-    if (!try_emplace(std::forward<Args>(args)...)) {
-      throw std::runtime_error("unsafe_queue::emplace(): full");
-    }
+  constexpr void emplace(Args &&... args) {
+    push([this,
+          ... args = std::forward<Args>(args)](value_type & value) mutable {
+      std::allocator_traits<allocator_type>::construct(
+          allocator_, &value, std::forward<Args>(args)...);
+    });
   }
 
-  constexpr void push(value_type value) noexcept(
-      std::is_nothrow_move_constructible_v<value_type>) {
-    emplace(std::move(value));
-  }
+  constexpr void push(value_type value) { emplace(std::move(value)); }
 
-  constexpr auto try_pop(value_type & value) noexcept -> bool
-    requires(std::is_nothrow_move_assignable_v<value_type> &&
-             std::is_nothrow_destructible_v<value_type>)
-  {
-    if (empty()) {
-      return false;
-    }
-
-    value = std::move(*(ring_buffer_ + pop_from_));
-    std::allocator_traits<allocator_type>::destroy(allocator_,
-                                                   ring_buffer_ + pop_from_);
-
-    pop_from_ = next(pop_from_, 1);
-    size_ -= 1;
-    return true;
+  constexpr auto try_pop(value_type & value) noexcept(
+      std::is_nothrow_move_assignable_v<value_type> &&
+      std::is_nothrow_destructible_v<value_type>) -> bool {
+    return try_pop([this, &out = value](value_type & value) mutable {
+      out = std::move(value);
+      std::allocator_traits<allocator_type>::destroy(allocator_, &value);
+    });
   }
 
   constexpr void pop(value_type & value) {
-    if (!try_pop(value)) {
-      throw std::runtime_error("unsafe_queue::pop(): empty");
-    }
+    pop([this, &out = value](value_type & value) mutable {
+      out = std::move(value);
+      std::allocator_traits<allocator_type>::destroy(allocator_, &value);
+    });
   }
 
  public:
@@ -128,31 +154,6 @@ class unsafe_queue final : public swiss::non_copyable,
 
   [[nodiscard]] constexpr auto size() const noexcept -> index_type {
     return size_;
-  }
-
-  [[nodiscard]] constexpr auto back() const noexcept -> value_type * {
-    if (full()) [[unlikely]] {
-      return nullptr;
-    }
-
-    return ring_buffer_ + next(pop_from_, size_);
-  }
-
-  constexpr void commit_back() noexcept { size_ += 1; }
-
-  [[nodiscard]] constexpr auto front() const noexcept -> value_type * {
-    if (empty()) [[unlikely]] {
-      return nullptr;
-    }
-
-    return ring_buffer_ + pop_from_;
-  }
-
-  constexpr void pop_front() noexcept {
-    std::allocator_traits<allocator_type>::destroy(allocator_,
-                                                   ring_buffer_ + pop_from_);
-    pop_from_ = next(pop_from_, 1);
-    size_ -= 1;
   }
 
  public:
@@ -178,6 +179,10 @@ class unsafe_queue final : public swiss::non_copyable,
 
   [[nodiscard]] constexpr auto empty() const noexcept -> bool {
     return size_ == 0;
+  }
+
+  [[nodiscard]] constexpr auto push_to() const noexcept -> index_type {
+    return next(pop_from_, size_);
   }
 
   [[nodiscard]] constexpr auto next(index_type index,

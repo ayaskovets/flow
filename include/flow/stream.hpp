@@ -8,6 +8,10 @@ namespace flow::concepts {
 
 /**
  * @brief Generic byte stream of fixed capacity with custom allocator support
+ * @note Callback-based methods reserve the maximum possible chunk in the stream
+ * buffer. Callback must return the size of a prefix that the data was written
+ * to or read from so a corresponding part of the underlying memory of the chunk
+ * gets marked as occupied/free
  */
 template <typename T>
 concept stream = requires(T stream) {
@@ -27,7 +31,12 @@ concept stream = requires(T stream) {
  */
 template <typename T>
 concept nonblocking_stream =
-    stream<T> && requires(T stream, std::span<std::byte> bytes) {
+    stream<T> && requires(T stream, std::span<std::byte> bytes,
+                          decltype([](std::span<std::byte>) {
+                            return typename T::index_type{};
+                          }) callback) {
+      { stream.try_push(callback) } -> std::same_as<bool>;
+      { stream.try_pop(callback) } -> std::same_as<bool>;
       { stream.try_push(bytes) } -> std::same_as<typename T::index_type>;
       { stream.try_pop(bytes) } -> std::same_as<typename T::index_type>;
     };
@@ -37,7 +46,13 @@ concept nonblocking_stream =
  */
 template <typename T>
 concept noexcept_nonblocking_stream =
-    nonblocking_stream<T> && requires(T stream, std::span<std::byte> bytes) {
+    nonblocking_stream<T> &&
+    requires(T stream, std::span<std::byte> bytes,
+             decltype([](std::span<std::byte>) noexcept {
+               return typename T::index_type{};
+             }) callback) {
+      requires noexcept(stream.try_push(callback));
+      requires noexcept(stream.try_pop(callback));
       requires noexcept(stream.try_push(bytes));
       requires noexcept(stream.try_pop(bytes));
     };
@@ -49,7 +64,12 @@ concept noexcept_nonblocking_stream =
  */
 template <typename T>
 concept blocking_stream =
-    stream<T> && requires(T stream, std::span<std::byte> bytes) {
+    stream<T> && requires(T stream, std::span<std::byte> bytes,
+                          decltype([](std::span<std::byte>) {
+                            return typename T::index_type{};
+                          }) callback) {
+      { stream.push(callback) } -> std::same_as<void>;
+      { stream.pop(callback) } -> std::same_as<void>;
       { stream.push(bytes) } -> std::same_as<void>;
       { stream.pop(bytes) } -> std::same_as<void>;
     };
@@ -59,7 +79,12 @@ concept blocking_stream =
  */
 template <typename T>
 concept noexcept_blocking_stream =
-    blocking_stream<T> && requires(T stream, std::span<std::byte> bytes) {
+    blocking_stream<T> && requires(T stream, std::span<std::byte> bytes,
+                                   decltype([](std::span<std::byte>) noexcept {
+                                     return typename T::index_type{};
+                                   }) callback) {
+      requires noexcept(stream.push(callback));
+      requires noexcept(stream.pop(callback));
       requires noexcept(stream.push(bytes));
       requires noexcept(stream.pop(bytes));
     };
@@ -70,7 +95,12 @@ concept noexcept_blocking_stream =
 template <typename T>
 concept cancellable_blocking_stream =
     blocking_stream<T> &&
-    requires(T stream, std::span<std::byte> bytes, std::stop_token stop_token) {
+    requires(T stream, std::span<std::byte> bytes, std::stop_token stop_token,
+             decltype([](std::span<std::byte>) {
+               return typename T::index_type{};
+             }) callback) {
+      { stream.push(stop_token, callback) } -> std::same_as<bool>;
+      { stream.pop(stop_token, callback) } -> std::same_as<bool>;
       { stream.push(stop_token, bytes) } -> std::same_as<bool>;
       { stream.pop(stop_token, bytes) } -> std::same_as<bool>;
     };
@@ -82,7 +112,12 @@ concept cancellable_blocking_stream =
 template <typename T>
 concept noexcept_cancellable_blocking_stream =
     cancellable_blocking_stream<T> &&
-    requires(T stream, std::span<std::byte> bytes, std::stop_token stop_token) {
+    requires(T stream, std::span<std::byte> bytes, std::stop_token stop_token,
+             decltype([](std::span<std::byte>) noexcept {
+               return typename T::index_type{};
+             }) callback) {
+      requires noexcept(stream.push(stop_token, callback));
+      requires noexcept(stream.pop(stop_token, callback));
       requires noexcept(stream.push(stop_token, bytes));
       requires noexcept(stream.pop(stop_token, bytes));
     };

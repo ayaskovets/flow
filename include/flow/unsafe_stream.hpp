@@ -56,6 +56,56 @@ class unsafe_stream final : public swiss::non_copyable,
   }
 
  public:
+  template <std::invocable<std::span<std::byte>> Callback>
+  constexpr auto try_push(Callback && callback) noexcept(
+      std::is_nothrow_invocable_v<Callback, std::span<std::byte>>) -> bool {
+    if (full()) {
+      return false;
+    }
+
+    index_type const postfix = *capacity_ - push_to();
+    index_type const chunk   = std::min(postfix, free());
+    index_type const cb_total =
+        std::invoke(std::forward<Callback>(callback),
+                    std::span(ring_buffer_ + push_to(), chunk));
+
+    size_ += cb_total;
+    return true;
+  }
+
+  template <std::invocable<std::span<std::byte>> Callback>
+  constexpr void push(Callback && callback) {
+    if (!try_push(std::forward<Callback>(callback))) {
+      throw std::runtime_error("unsafe_queue::push(): full");
+    }
+  }
+
+  template <std::invocable<std::span<std::byte>> Callback>
+  constexpr auto try_pop(Callback && callback) noexcept(noexcept(
+      std::is_nothrow_invocable_v<Callback, std::span<std::byte>>)) -> bool {
+    if (empty()) {
+      return false;
+    }
+
+    index_type const postfix = *capacity_ - pop_from_;
+    index_type const chunk   = std::min(postfix, size());
+    index_type const cb_total =
+        std::invoke(std::forward<Callback>(callback),
+                    std::span(ring_buffer_ + pop_from_, chunk));
+
+    pop_from_ = next(pop_from_, cb_total);
+    size_ -= cb_total;
+    return true;
+  }
+
+  template <std::invocable<std::span<std::byte>> Callback>
+  constexpr void pop(Callback && callback) {
+    if (!try_pop(std::forward<Callback>(callback))) {
+      throw std::runtime_error("unsafe_queue::pop(): empty");
+    }
+  }
+
+ public:
   constexpr auto try_push(std::span<std::byte const> bytes) noexcept
       -> index_type {
     index_type const total =
@@ -65,12 +115,11 @@ class unsafe_stream final : public swiss::non_copyable,
       return 0;
     }
 
-    index_type const push_to = next(pop_from_, size_);
-    index_type const postfix = *capacity_ - push_to;
+    index_type const postfix = *capacity_ - push_to();
     index_type const chunk1  = std::min(total, postfix);
     index_type const chunk2  = total - chunk1;
 
-    std::copy_n(bytes.data(), chunk1, ring_buffer_ + push_to);
+    std::copy_n(bytes.data(), chunk1, ring_buffer_ + push_to());
     std::copy_n(bytes.data() + chunk1, chunk2, ring_buffer_);
 
     size_ += total;
@@ -144,8 +193,20 @@ class unsafe_stream final : public swiss::non_copyable,
     return index >= *capacity_ ? index - *capacity_ : index;
   }
 
+  [[nodiscard]] constexpr auto full() const noexcept -> bool {
+    return size_ == *capacity_;
+  }
+
+  [[nodiscard]] constexpr auto empty() const noexcept -> bool {
+    return size_ == 0;
+  }
+
   [[nodiscard]] constexpr auto free() const noexcept -> index_type {
     return *capacity_ - size_;
+  }
+
+  [[nodiscard]] constexpr auto push_to() const noexcept -> index_type {
+    return next(pop_from_, size_);
   }
 };
 

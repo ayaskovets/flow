@@ -177,7 +177,8 @@ constexpr void blocking_push_stop_token() noexcept {
   EXPECT_TRUE(stream.push(std::stop_token{}, std::vector(2, std::byte(0))));
 
   std::jthread const consumer([&](std::stop_token stop_token) {
-    EXPECT_FALSE(stream.push(stop_token, std::vector(2, std::byte(0))));
+    EXPECT_FALSE(
+        stream.push(stop_token, [](std::span<std::byte>) { GTEST_FAIL(); }));
   });
 }
 
@@ -188,11 +189,12 @@ constexpr void blocking_pop_stop_token() noexcept {
   std::array<std::byte, 2> bytes{};
   Stream stream(kStreamCapacity);
 
-  EXPECT_TRUE(stream.push(std::stop_token{}, std::vector(2, std::byte(0))));
+  EXPECT_TRUE(stream.push(std::stop_token{}, std::vector(2, std::byte())));
   EXPECT_TRUE(stream.pop(std::stop_token{}, bytes));
 
   std::jthread const producer([&](std::stop_token stop_token) {
-    EXPECT_FALSE(stream.pop(stop_token, bytes));
+    EXPECT_FALSE(
+        stream.pop(stop_token, [](std::span<std::byte>) { GTEST_FAIL(); }));
   });
 }
 
@@ -367,6 +369,99 @@ constexpr void rollover() noexcept {
       EXPECT_EQ(bytes, (std::array{std::byte(0), std::byte(1), std::byte(2)}));
     }
   }
+}
+
+template <flow::concepts::nonblocking_stream Stream>
+constexpr void nonblocking_callback() noexcept {
+  constexpr std::size_t kStreamCapacity = 8;
+
+  Stream stream(kStreamCapacity);
+
+  EXPECT_TRUE(stream.try_push([](std::span<std::byte> chunk) -> std::size_t {
+    EXPECT_EQ(chunk.size(), 8);
+    return 3;
+  }));
+  EXPECT_EQ(stream.size(), 3);
+
+  EXPECT_TRUE(stream.try_push([](std::span<std::byte> chunk) -> std::size_t {
+    EXPECT_EQ(chunk.size(), 5);
+    return 2;
+  }));
+  EXPECT_EQ(stream.size(), 5);
+
+  EXPECT_TRUE(stream.try_pop([](std::span<std::byte> chunk) -> std::size_t {
+    EXPECT_EQ(chunk.size(), 5);
+    return 3;
+  }));
+  EXPECT_EQ(stream.size(), 2);
+
+  EXPECT_TRUE(stream.try_push(std::vector(6, std::byte(0))));
+  EXPECT_EQ(stream.size(), 8);
+
+  EXPECT_TRUE(stream.try_pop([](std::span<std::byte> chunk) -> std::size_t {
+    EXPECT_EQ(chunk.size(), 5);
+    return 0;
+  }));
+  EXPECT_EQ(stream.size(), 8);
+
+  EXPECT_TRUE(stream.try_pop([](std::span<std::byte> chunk) -> std::size_t {
+    EXPECT_EQ(chunk.size(), 5);
+    return 4;
+  }));
+  EXPECT_EQ(stream.size(), 4);
+
+  EXPECT_TRUE(stream.try_pop([](std::span<std::byte> chunk) -> std::size_t {
+    EXPECT_EQ(chunk.size(), 1);
+    return 1;
+  }));
+  EXPECT_EQ(stream.size(), 3);
+}
+
+template <flow::concepts::blocking_stream Stream>
+constexpr void blocking_callback() noexcept {
+  constexpr std::size_t kStreamCapacity = 8;
+
+  Stream stream(kStreamCapacity);
+
+  stream.push([](std::span<std::byte> chunk) -> std::size_t {
+    EXPECT_EQ(chunk.size(), 8);
+    return 3;
+  });
+  EXPECT_EQ(stream.size(), 3);
+
+  stream.push([](std::span<std::byte> chunk) -> std::size_t {
+    EXPECT_EQ(chunk.size(), 5);
+    return 2;
+  });
+  EXPECT_EQ(stream.size(), 5);
+
+  stream.pop([](std::span<std::byte> chunk) -> std::size_t {
+    EXPECT_EQ(chunk.size(), 5);
+    return 3;
+  });
+  EXPECT_EQ(stream.size(), 2);
+
+  // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
+  stream.push(std::vector(6, std::byte(0)));
+  EXPECT_EQ(stream.size(), 8);
+
+  stream.pop([](std::span<std::byte> chunk) -> std::size_t {
+    EXPECT_EQ(chunk.size(), 5);
+    return 0;
+  });
+  EXPECT_EQ(stream.size(), 8);
+
+  stream.pop([](std::span<std::byte> chunk) -> std::size_t {
+    EXPECT_EQ(chunk.size(), 5);
+    return 4;
+  });
+  EXPECT_EQ(stream.size(), 4);
+
+  stream.pop([](std::span<std::byte> chunk) -> std::size_t {
+    EXPECT_EQ(chunk.size(), 1);
+    return 1;
+  });
+  EXPECT_EQ(stream.size(), 3);
 }
 
 }  // namespace tests::templates

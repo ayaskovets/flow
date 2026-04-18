@@ -62,4 +62,8 @@ TEST(unsafe_stream, queued_consumers_blocking) { GTEST_SKIP(); }
 using uint8_index_stream_t = flow::unsafe_stream<std::uint8_t>;
 TEST_T(unsafe_stream, rollover, uint8_index_stream_t);
 
+TEST_T(unsafe_stream, nonblocking_callback, flow::unsafe_stream<>);
+
+TEST_T(unsafe_stream, blocking_callback, flow::unsafe_stream<>);
+
 }  // namespace tests::unit

@@ -32,7 +32,7 @@ concept stream = requires(T stream) {
 template <typename T>
 concept nonblocking_stream =
     stream<T> && requires(T stream, std::span<std::byte> bytes,
-                          decltype([](std::span<std::byte>) {
+                          decltype([](std::span<std::byte>) noexcept {
                             return typename T::index_type{};
                           }) callback) {
       { stream.try_push(callback) } -> std::same_as<bool>;
@@ -65,7 +65,7 @@ concept noexcept_nonblocking_stream =
 template <typename T>
 concept blocking_stream =
     stream<T> && requires(T stream, std::span<std::byte> bytes,
-                          decltype([](std::span<std::byte>) {
+                          decltype([](std::span<std::byte>) noexcept {
                             return typename T::index_type{};
                           }) callback) {
       { stream.push(callback) } -> std::same_as<void>;
@@ -96,7 +96,7 @@ template <typename T>
 concept cancellable_blocking_stream =
     blocking_stream<T> &&
     requires(T stream, std::span<std::byte> bytes, std::stop_token stop_token,
-             decltype([](std::span<std::byte>) {
+             decltype([](std::span<std::byte>) noexcept {
                return typename T::index_type{};
              }) callback) {
       { stream.push(stop_token, callback) } -> std::same_as<bool>;

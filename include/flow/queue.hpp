@@ -30,8 +30,9 @@ concept queue = requires(T queue, typename T::value_type) {
  */
 template <typename T>
 concept nonblocking_queue =
-    queue<T> && requires(T queue, typename T::value_type value,
-                         decltype([](typename T::value_type &) {}) callback) {
+    queue<T> &&
+    requires(T queue, typename T::value_type value,
+             decltype([](typename T::value_type &) noexcept {}) callback) {
       { queue.try_push(callback) } -> std::same_as<bool>;
       { queue.try_pop(callback) } -> std::same_as<bool>;
       { queue.try_emplace(std::move(value)) } -> std::same_as<bool>;
@@ -61,8 +62,9 @@ concept noexcept_nonblocking_queue =
  */
 template <typename T>
 concept blocking_queue =
-    queue<T> && requires(T queue, typename T::value_type value,
-                         decltype([](typename T::value_type &) {}) callback) {
+    queue<T> &&
+    requires(T queue, typename T::value_type value,
+             decltype([](typename T::value_type &) noexcept {}) callback) {
       { queue.push(callback) } -> std::same_as<void>;
       { queue.pop(callback) } -> std::same_as<void>;
       { queue.emplace(std::move(value)) } -> std::same_as<void>;
@@ -92,7 +94,7 @@ template <typename T>
 concept cancellable_blocking_queue =
     blocking_queue<T> &&
     requires(T queue, typename T::value_type value, std::stop_token stop_token,
-             decltype([](typename T::value_type &) {}) callback) {
+             decltype([](typename T::value_type &) noexcept {}) callback) {
       { queue.push(stop_token, callback) } -> std::same_as<void>;
       { queue.pop(stop_token, callback) } -> std::same_as<void>;
       { queue.emplace(stop_token, std::move(value)) } -> std::same_as<bool>;

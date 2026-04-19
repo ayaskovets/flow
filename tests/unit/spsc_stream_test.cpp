@@ -66,4 +66,6 @@ INSTANTIATE_TEST_SUITE_P(spsc_stream_workload, spsc_stream_workload,
 using uint8_index_stream_t = flow::spsc_stream<std::uint8_t>;
 TEST_T(spsc_stream, rollover, uint8_index_stream_t);
 
+TEST_T(spsc_stream, nonblocking_callback, flow::spsc_stream<>);
+
 }  // namespace tests::unit

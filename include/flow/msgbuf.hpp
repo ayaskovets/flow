@@ -27,8 +27,8 @@ concept msgbuf = requires(T msgbuf) {
  * @note Nonblocking pop methods return the size of the popped message
  * @note Callback-based methods reserve a contiguous chunk of memory (which may
  * require padding) and pass it to the callback
- * @note Popping the message with non-callback-based methods requires buffer
- * to be at least the size of the message to be popped
+ * @warning In non-callback-based pop the message gets truncated if is larger
+ * than the provider buffer
  */
 template <typename T>
 concept nonblocking_msgbuf =
@@ -61,6 +61,8 @@ concept noexcept_nonblocking_msgbuf =
  * @brief Generic message buffer that supports blocking operations
  * @note Blocking methods wait until the operation is completed
  * @note Blocking pop methods return the size of the popped message
+ * @warning In non-callback-based pop the message gets truncated if is larger
+ * than the provider buffer
  */
 template <typename T>
 concept blocking_msgbuf =

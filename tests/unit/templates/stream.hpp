@@ -377,69 +377,48 @@ constexpr void nonblocking_callback() noexcept {
 
   Stream stream(kStreamCapacity);
 
-  EXPECT_TRUE(stream.try_push(
-      [](std::span<std::byte> chunk) { EXPECT_EQ(chunk.size(), 3); }, 3));
+  EXPECT_EQ(
+      stream.try_push(
+          [](std::span<std::byte> chunk) { EXPECT_EQ(chunk.size(), 3); }, 3),
+      3);
   EXPECT_EQ(stream.size(), 3);
 
-  EXPECT_TRUE(stream.try_push(
-      [](std::span<std::byte> chunk) { EXPECT_EQ(chunk.size(), 2); }, 2));
+  EXPECT_EQ(
+      stream.try_push(
+          [](std::span<std::byte> chunk) { EXPECT_EQ(chunk.size(), 2); }, 2),
+      2);
   EXPECT_EQ(stream.size(), 5);
 
-  EXPECT_TRUE(stream.try_pop(
-      [](std::span<std::byte> chunk) { EXPECT_EQ(chunk.size(), 3); }, 3));
+  EXPECT_EQ(
+      stream.try_pop(
+          [](std::span<std::byte> chunk) { EXPECT_EQ(chunk.size(), 3); }, 3),
+      3);
   EXPECT_EQ(stream.size(), 2);
 
-  EXPECT_TRUE(stream.try_push(std::vector(6, std::byte(0))));
-  EXPECT_EQ(stream.size(), 8);
-
-  EXPECT_TRUE(stream.try_pop(
-      [](std::span<std::byte> chunk) {
-        EXPECT_EQ(chunk.size(), 0);
-        return 0;
-      },
-      0));
-  EXPECT_EQ(stream.size(), 8);
-
-  EXPECT_TRUE(stream.try_pop(
-      [](std::span<std::byte> chunk) { EXPECT_EQ(chunk.size(), 4); }, 4));
-  EXPECT_EQ(stream.size(), 4);
-
-  EXPECT_TRUE(stream.try_pop(
-      [](std::span<std::byte> chunk) { EXPECT_EQ(chunk.size(), 1); }, 1));
-  EXPECT_EQ(stream.size(), 3);
-}
-
-template <flow::concepts::blocking_stream Stream>
-constexpr void blocking_callback() noexcept {
-  constexpr std::size_t kStreamCapacity = 8;
-
-  Stream stream(kStreamCapacity);
-
-  stream.push([](std::span<std::byte> chunk) { EXPECT_EQ(chunk.size(), 3); },
-              3);
-  EXPECT_EQ(stream.size(), 3);
-
-  stream.push([](std::span<std::byte> chunk) { EXPECT_EQ(chunk.size(), 2); },
-              2);
+  EXPECT_EQ(stream.try_push(
+                [](std::span<std::byte> chunk) { EXPECT_EQ(chunk.size(), 3); }),
+            3);
   EXPECT_EQ(stream.size(), 5);
-
-  stream.pop([](std::span<std::byte> chunk) { EXPECT_EQ(chunk.size(), 3); }, 3);
-  EXPECT_EQ(stream.size(), 2);
-
-  // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
-  stream.push(std::vector(6, std::byte(0)));
+  EXPECT_EQ(stream.try_push(
+                [](std::span<std::byte> chunk) { EXPECT_EQ(chunk.size(), 3); }),
+            3);
   EXPECT_EQ(stream.size(), 8);
 
-  stream.pop([](std::span<std::byte> chunk) { EXPECT_EQ(chunk.size(), 0); }, 0);
+  EXPECT_EQ(
+      stream.try_pop(
+          [](std::span<std::byte> chunk) { EXPECT_EQ(chunk.size(), 0); }, 0),
+      0);
   EXPECT_EQ(stream.size(), 8);
 
-  stream.pop([](std::span<std::byte> chunk) { EXPECT_EQ(chunk.size(), 4); }, 4);
+  EXPECT_EQ(
+      stream.try_pop(
+          [](std::span<std::byte> chunk) { EXPECT_EQ(chunk.size(), 4); }, 4),
+      4);
   EXPECT_EQ(stream.size(), 4);
 
-  stream.pop(
-      [](std::span<std::byte> chunk) {
-        EXPECT_EQ(chunk.size(), 1);
-      },
+  EXPECT_EQ(
+      stream.try_pop(
+          [](std::span<std::byte> chunk) { EXPECT_EQ(chunk.size(), 1); }, 1),
       1);
   EXPECT_EQ(stream.size(), 3);
 }

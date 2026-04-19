@@ -22,12 +22,13 @@ concept stream = requires(T stream) {
 
 /**
  * @brief Generic byte stream that supports nonblocking operations
+ * @note Nonblocking methods return the number of bytes written/read
  * @note Nonblocking methods insert and remove as many bytes as possible and
  * return the number of bytes written/read
+ * @note Non-callback-based methods can operate on non-contiguous chunks of
+ * memory
  * @note Callback-based methods reserve the a chunk in the stream of size less
  * or equal than the size value provided by the caller
- * @note Callback-based methods return a boolean indicating whether the
- * insertion/removal of the chunk passed to the callback took place
  */
 template <typename T>
 concept nonblocking_stream =
@@ -35,8 +36,12 @@ concept nonblocking_stream =
     requires(T stream, std::span<std::byte> bytes,
              decltype([](std::span<std::byte>) noexcept {}) callback,
              typename T::index_type max_size) {
-      { stream.try_push(callback, max_size) } -> std::same_as<bool>;
-      { stream.try_pop(callback, max_size) } -> std::same_as<bool>;
+      {
+        stream.try_push(callback, max_size)
+      } -> std::same_as<typename T::index_type>;
+      {
+        stream.try_pop(callback, max_size)
+      } -> std::same_as<typename T::index_type>;
       { stream.try_push(bytes) } -> std::same_as<typename T::index_type>;
       { stream.try_pop(bytes) } -> std::same_as<typename T::index_type>;
     };
@@ -61,17 +66,15 @@ concept noexcept_nonblocking_stream =
  * @note Blocking methods wait until the whole input buffer is inserted into
  * the stream (for writes) / input buffer is full with the data from the stream
  * (for reads)
- * @note Callback-based methods reserve the a chunk in the stream of size less
- * or equal than the size value provided by the caller
+ * @note Non-callback-based methods can operate on non-contiguous chunks of
+ * memory
  */
 template <typename T>
 concept blocking_stream =
     stream<T> &&
     requires(T stream, std::span<std::byte> bytes,
              decltype([](std::span<std::byte>) noexcept {}) callback,
-             typename T::index_type max_size) {
-      { stream.push(callback, max_size) } -> std::same_as<void>;
-      { stream.pop(callback, max_size) } -> std::same_as<void>;
+             typename T::index_type size) {
       { stream.push(bytes) } -> std::same_as<void>;
       { stream.pop(bytes) } -> std::same_as<void>;
     };
@@ -84,9 +87,7 @@ concept noexcept_blocking_stream =
     blocking_stream<T> &&
     requires(T stream, std::span<std::byte> bytes,
              decltype([](std::span<std::byte>) noexcept {}) callback,
-             typename T::index_type max_size) {
-      requires noexcept(stream.push(callback, max_size));
-      requires noexcept(stream.pop(callback, max_size));
+             typename T::index_type size) {
       requires noexcept(stream.push(bytes));
       requires noexcept(stream.pop(bytes));
     };
@@ -99,9 +100,7 @@ concept cancellable_blocking_stream =
     blocking_stream<T> &&
     requires(T stream, std::span<std::byte> bytes, std::stop_token stop_token,
              decltype([](std::span<std::byte>) noexcept {}) callback,
-             typename T::index_type max_size) {
-      { stream.push(stop_token, callback, max_size) } -> std::same_as<bool>;
-      { stream.pop(stop_token, callback, max_size) } -> std::same_as<bool>;
+             typename T::index_type size) {
       { stream.push(stop_token, bytes) } -> std::same_as<bool>;
       { stream.pop(stop_token, bytes) } -> std::same_as<bool>;
     };
@@ -115,9 +114,7 @@ concept noexcept_cancellable_blocking_stream =
     cancellable_blocking_stream<T> &&
     requires(T stream, std::span<std::byte> bytes, std::stop_token stop_token,
              decltype([](std::span<std::byte>) noexcept {}) callback,
-             typename T::index_type max_size) {
-      requires noexcept(stream.push(stop_token, callback, max_size));
-      requires noexcept(stream.pop(stop_token, callback, max_size));
+             typename T::index_type size) {
       requires noexcept(stream.push(stop_token, bytes));
       requires noexcept(stream.pop(stop_token, bytes));
     };

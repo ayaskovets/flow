@@ -22,12 +22,11 @@ concept queue = requires(T queue, typename T::value_type) {
 
 /**
  * @brief Generic queue that supports nonblocking operations
- * @note Nonblocking methods return a boolean indicating whether
- * insertion/removal took place
- * @note Callback-based methods receive a reference to the value slot at the
- * moment the value is accessible for a write/read
- * @note Code inside the callback should be minimal not to block other
- * threads
+ * @note Nonblocking methods return a flag indicating whether operation took
+ * place
+ * @note Callback-based methods get a reference to the memory slot inside
+ * the queue buffer available for read/write
+ * @note Code inside the callback should be minimal and nonblocking
  */
 template <typename T>
 concept nonblocking_queue =
@@ -58,12 +57,10 @@ concept noexcept_nonblocking_queue =
 
 /**
  * @brief Generic queue that supports blocking operations
- * @note Blocking methods block until the value gets inserted or removed from
- * the queue
- * @note Callback-based methods receive a reference to the value slot at the
- * moment the value is accessible for a write/read
- * @note Code inside the callback should be minimal not to block other
- * threads
+ * @note Blocking methods wait until the operation is completed
+ * @note Callback-based methods get a reference to the memory slot inside
+ * the queue buffer available for read/write
+ * @note Code inside the callback should be minimal and nonblocking
  */
 template <typename T>
 concept blocking_queue =

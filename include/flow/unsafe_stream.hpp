@@ -8,6 +8,7 @@
 
 #include <swiss/conditionally_runtime.hpp>
 #include <swiss/dynamic_extent.hpp>
+#include <swiss/functional.hpp>
 #include <swiss/mixins.hpp>
 
 namespace flow {
@@ -15,6 +16,8 @@ namespace flow {
 /**
  * @brief Fixed-size stream for single-threaded usage
  * @note Implemented as a ring buffer
+ * @note If callback returns a value of index type, only a prefix of size equal
+ * to the returned value is affected by the operation
  * @warning Not thread-safe
  */
 template <std::unsigned_integral Index = std::size_t,
@@ -69,10 +72,11 @@ class unsafe_stream final : public swiss::non_copyable,
     }
 
     index_type const postfix = *capacity_ - push_to();
-    index_type const chunk   = std::min(max_size, std::min(postfix, free()));
+    index_type chunk         = std::min(max_size, std::min(postfix, free()));
 
-    std::invoke(std::forward<Callback>(callback),
-                std::span(ring_buffer_ + push_to(), chunk));
+    swiss::assign_invoke_result_if_not_void(
+        chunk, std::forward<Callback>(callback),
+        std::span(ring_buffer_ + push_to(), chunk));
 
     size_ += chunk;
     return chunk;
@@ -90,10 +94,11 @@ class unsafe_stream final : public swiss::non_copyable,
     }
 
     index_type const postfix = *capacity_ - pop_from_;
-    index_type const chunk   = std::min(max_size, std::min(postfix, size()));
+    index_type chunk         = std::min(max_size, std::min(postfix, size()));
 
-    std::invoke(std::forward<Callback>(callback),
-                std::span(ring_buffer_ + pop_from_, chunk));
+    swiss::assign_invoke_result_if_not_void(
+        chunk, std::forward<Callback>(callback),
+        std::span(ring_buffer_ + pop_from_, chunk));
 
     pop_from_ = next(pop_from_, chunk);
     size_ -= chunk;

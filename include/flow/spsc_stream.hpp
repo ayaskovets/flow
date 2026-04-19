@@ -11,6 +11,7 @@
 
 #include <swiss/conditionally_runtime.hpp>
 #include <swiss/dynamic_extent.hpp>
+#include <swiss/functional.hpp>
 #include <swiss/mixins.hpp>
 
 namespace flow {
@@ -81,13 +82,14 @@ class spsc_stream final : public swiss::non_copyable,
     }
 
     index_type const postfix = *writer_.capacity + 1 - push_to;
-    index_type const total   = std::min(max_size, std::min(postfix, _free));
+    index_type total         = std::min(max_size, std::min(postfix, _free));
     if (total == 0) {
       return 0;
     }
 
-    std::invoke(std::forward<Callback>(callback),
-                std::span(writer_.ring_buffer + push_to, total));
+    swiss::assign_invoke_result_if_not_void(
+        total, std::forward<Callback>(callback),
+        std::span(writer_.ring_buffer + push_to, total));
 
     writer_.index.store(next(*writer_.capacity, push_to, total),
                         std::memory_order::release);
@@ -110,13 +112,14 @@ class spsc_stream final : public swiss::non_copyable,
     }
 
     index_type const postfix = *reader_.capacity + 1 - pop_from;
-    index_type const total   = std::min(max_size, std::min(postfix, _size));
+    index_type total         = std::min(max_size, std::min(postfix, _size));
     if (total == 0) {
       return 0;
     }
 
-    std::invoke(std::forward<Callback>(callback),
-                std::span(reader_.ring_buffer + pop_from, total));
+    swiss::assign_invoke_result_if_not_void(
+        total, std::forward<Callback>(callback),
+        std::span(reader_.ring_buffer + pop_from, total));
 
     reader_.index.store(next(*reader_.capacity, pop_from, total),
                         std::memory_order::release);

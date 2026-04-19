@@ -94,6 +94,8 @@ concept noexcept_blocking_stream =
 
 /**
  * @brief Blocking byte stream that supports cancellation tokens
+ * @note Calcellable methods return false if operation was cancelled by
+ * stop_token
  */
 template <typename T>
 concept cancellable_blocking_stream =

@@ -91,6 +91,8 @@ concept noexcept_blocking_queue =
 
 /**
  * @brief Blocking queue that supports cancellation tokens
+ * @note Calcellable methods return false if operation was cancelled by
+ * stop_token
  */
 template <typename T>
 concept cancellable_blocking_queue =

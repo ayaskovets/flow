@@ -127,7 +127,7 @@ class unsafe_stream final : public swiss::non_copyable,
   }
 
   constexpr void push(std::span<std::byte const> bytes) {
-    if (free() < bytes.size()) {
+    if (free() < static_cast<index_type>(bytes.size())) {
       throw std::runtime_error("unsafe_stream::push(): not enough space");
     }
     try_push(bytes);
@@ -154,7 +154,7 @@ class unsafe_stream final : public swiss::non_copyable,
   }
 
   constexpr void pop(std::span<std::byte> bytes) {
-    if (size() < bytes.size()) {
+    if (size() < static_cast<index_type>(bytes.size())) {
       throw std::runtime_error("unsafe_stream::pop(): not enough data");
     }
     try_pop(bytes);

@@ -8,9 +8,6 @@ namespace flow::concepts {
 /**
  * @brief Generic queue of fixed capacity with custom allocator support and
  * typed items
- * @note Callback-based methods receiv a reference to the value slot at the
- * moment the value is accessible to write/read. Callback code should be minimal
- * not to block other threads
  */
 template <typename T>
 concept queue = requires(T queue, typename T::value_type) {
@@ -25,8 +22,12 @@ concept queue = requires(T queue, typename T::value_type) {
 
 /**
  * @brief Generic queue that supports nonblocking operations
- * @note Nonblocking methods return true only upon successful the insertion or
- * removal of the value
+ * @note Nonblocking methods return a boolean indicating whether
+ * insertion/removal took place
+ * @note Callback-based methods receive a reference to the value slot at the
+ * moment the value is accessible for a write/read
+ * @note Code inside the callback should be minimal not to block other
+ * threads
  */
 template <typename T>
 concept nonblocking_queue =
@@ -59,6 +60,10 @@ concept noexcept_nonblocking_queue =
  * @brief Generic queue that supports blocking operations
  * @note Blocking methods block until the value gets inserted or removed from
  * the queue
+ * @note Callback-based methods receive a reference to the value slot at the
+ * moment the value is accessible for a write/read
+ * @note Code inside the callback should be minimal not to block other
+ * threads
  */
 template <typename T>
 concept blocking_queue =

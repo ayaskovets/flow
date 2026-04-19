@@ -121,13 +121,6 @@ class unsafe_stream final : public swiss::non_copyable,
     return total;
   }
 
-  constexpr void push(std::span<std::byte const> bytes) {
-    if (free() < static_cast<index_type>(bytes.size())) {
-      throw std::runtime_error("unsafe_stream::push(): not enough space");
-    }
-    std::ignore = try_push(bytes);
-  }
-
   [[nodiscard]] constexpr auto try_pop(std::span<std::byte> bytes) noexcept
       -> index_type {
     index_type const total =
@@ -149,6 +142,14 @@ class unsafe_stream final : public swiss::non_copyable,
     return total;
   }
 
+ public:
+  constexpr void push(std::span<std::byte const> bytes) {
+    if (free() < static_cast<index_type>(bytes.size())) {
+      throw std::runtime_error("unsafe_stream::push(): not enough space");
+    }
+    std::ignore = try_push(bytes);
+  }
+
   constexpr void pop(std::span<std::byte> bytes) {
     if (size() < static_cast<index_type>(bytes.size())) {
       throw std::runtime_error("unsafe_stream::pop(): not enough data");
@@ -165,7 +166,6 @@ class unsafe_stream final : public swiss::non_copyable,
     return size_;
   }
 
- public:
   constexpr auto get_allocator() const noexcept -> allocator_type {
     return allocator_;
   }

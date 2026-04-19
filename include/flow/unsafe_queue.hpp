@@ -77,13 +77,6 @@ class unsafe_queue final : public swiss::non_copyable,
   }
 
   template <std::invocable<value_type &> Callback>
-  constexpr void push(Callback && callback) {
-    if (!try_push(std::forward<Callback>(callback))) {
-      throw std::runtime_error("unsafe_queue::push(): full");
-    }
-  }
-
-  template <std::invocable<value_type &> Callback>
   constexpr auto try_pop(Callback && callback) noexcept(
       std::is_nothrow_invocable_v<Callback, value_type &>) -> bool {
     if (empty()) {
@@ -95,6 +88,14 @@ class unsafe_queue final : public swiss::non_copyable,
     pop_from_ = next(pop_from_, 1);
     size_ -= 1;
     return true;
+  }
+
+ public:
+  template <std::invocable<value_type &> Callback>
+  constexpr void push(Callback && callback) {
+    if (!try_push(std::forward<Callback>(callback))) {
+      throw std::runtime_error("unsafe_queue::push(): full");
+    }
   }
 
   template <std::invocable<value_type &> Callback>
@@ -120,6 +121,16 @@ class unsafe_queue final : public swiss::non_copyable,
     return try_emplace(std::move(value));
   }
 
+  constexpr auto try_pop(value_type & value) noexcept(
+      std::is_nothrow_move_assignable_v<value_type> &&
+      std::is_nothrow_destructible_v<value_type>) -> bool {
+    return try_pop([this, &out = value](value_type & value) mutable {
+      out = std::move(value);
+      std::allocator_traits<allocator_type>::destroy(allocator_, &value);
+    });
+  }
+
+ public:
   template <typename... Args>
   constexpr void emplace(Args &&... args) {
     push([this,
@@ -130,15 +141,6 @@ class unsafe_queue final : public swiss::non_copyable,
   }
 
   constexpr void push(value_type value) { emplace(std::move(value)); }
-
-  constexpr auto try_pop(value_type & value) noexcept(
-      std::is_nothrow_move_assignable_v<value_type> &&
-      std::is_nothrow_destructible_v<value_type>) -> bool {
-    return try_pop([this, &out = value](value_type & value) mutable {
-      out = std::move(value);
-      std::allocator_traits<allocator_type>::destroy(allocator_, &value);
-    });
-  }
 
   constexpr void pop(value_type & value) {
     pop([this, &out = value](value_type & value) mutable {
@@ -156,7 +158,6 @@ class unsafe_queue final : public swiss::non_copyable,
     return size_;
   }
 
- public:
   constexpr auto get_allocator() const noexcept -> allocator_type {
     return allocator_;
   }

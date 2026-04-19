@@ -97,13 +97,6 @@ class unsafe_msgbuf final : public swiss::non_copyable,
   }
 
   template <std::invocable<std::span<std::byte>> Callback>
-  constexpr void push(index_type msg_size, Callback && callback) {
-    if (!try_push(msg_size, std::forward<Callback>(callback))) {
-      throw std::runtime_error("unsafe_msgbuf::push(): full");
-    }
-  }
-
-  template <std::invocable<std::span<std::byte>> Callback>
   constexpr auto try_pop(Callback && callback) noexcept(
       std::is_nothrow_invocable_v<Callback, std::span<std::byte>>)
       -> index_type {
@@ -128,6 +121,14 @@ class unsafe_msgbuf final : public swiss::non_copyable,
     return msg_size;
   }
 
+ public:
+  template <std::invocable<std::span<std::byte>> Callback>
+  constexpr void push(index_type msg_size, Callback && callback) {
+    if (!try_push(msg_size, std::forward<Callback>(callback))) {
+      throw std::runtime_error("unsafe_msgbuf::push(): full");
+    }
+  }
+
   template <std::invocable<std::span<std::byte>> Callback>
   constexpr auto pop(Callback && callback) -> index_type {
     index_type const msg_size = try_pop(std::forward<Callback>(callback));
@@ -145,17 +146,18 @@ class unsafe_msgbuf final : public swiss::non_copyable,
                     });
   }
 
-  constexpr void push(std::span<std::byte const> msg) {
-    push(msg.size(), [msg](std::span<std::byte> chunk) noexcept {
-      std::copy_n(msg.begin(), msg.size(), chunk.begin());
-    });
-  }
-
   [[nodiscard]] constexpr auto try_pop(std::span<std::byte> msg) noexcept
       -> index_type {
     return try_pop([msg](std::span<std::byte> chunk) noexcept {
       std::copy_n(chunk.begin(), std::min(msg.size(), chunk.size()),
                   msg.begin());
+    });
+  }
+
+ public:
+  constexpr void push(std::span<std::byte const> msg) {
+    push(msg.size(), [msg](std::span<std::byte> chunk) noexcept {
+      std::copy_n(msg.begin(), msg.size(), chunk.begin());
     });
   }
 
@@ -175,7 +177,6 @@ class unsafe_msgbuf final : public swiss::non_copyable,
     return size_;
   }
 
- public:
   constexpr auto get_allocator() const noexcept -> allocator_type {
     return allocator_;
   }

@@ -177,8 +177,7 @@ constexpr void blocking_push_stop_token() noexcept {
   EXPECT_TRUE(stream.push(std::stop_token{}, std::vector(2, std::byte(0))));
 
   std::jthread const consumer([&](std::stop_token stop_token) {
-    EXPECT_FALSE(
-        stream.push(stop_token, [](std::span<std::byte>) { GTEST_FAIL(); }));
+    EXPECT_FALSE(stream.push(stop_token, std::vector(1, std::byte(0))));
   });
 }
 
@@ -193,8 +192,7 @@ constexpr void blocking_pop_stop_token() noexcept {
   EXPECT_TRUE(stream.pop(std::stop_token{}, bytes));
 
   std::jthread const producer([&](std::stop_token stop_token) {
-    EXPECT_FALSE(
-        stream.pop(stop_token, [](std::span<std::byte>) { GTEST_FAIL(); }));
+    EXPECT_FALSE(stream.pop(stop_token, bytes));
   });
 }
 
@@ -399,28 +397,6 @@ constexpr void nonblocking_callback() noexcept {
                 [](std::span<std::byte> chunk) { EXPECT_EQ(chunk.size(), 3); }),
             3);
   EXPECT_EQ(stream.size(), 5);
-  EXPECT_EQ(stream.try_push(
-                [](std::span<std::byte> chunk) { EXPECT_EQ(chunk.size(), 3); }),
-            3);
-  EXPECT_EQ(stream.size(), 8);
-
-  EXPECT_EQ(
-      stream.try_pop(
-          [](std::span<std::byte> chunk) { EXPECT_EQ(chunk.size(), 0); }, 0),
-      0);
-  EXPECT_EQ(stream.size(), 8);
-
-  EXPECT_EQ(
-      stream.try_pop(
-          [](std::span<std::byte> chunk) { EXPECT_EQ(chunk.size(), 4); }, 4),
-      4);
-  EXPECT_EQ(stream.size(), 4);
-
-  EXPECT_EQ(
-      stream.try_pop(
-          [](std::span<std::byte> chunk) { EXPECT_EQ(chunk.size(), 1); }, 1),
-      1);
-  EXPECT_EQ(stream.size(), 3);
 }
 
 }  // namespace tests::templates

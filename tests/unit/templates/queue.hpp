@@ -189,6 +189,28 @@ constexpr void blocking_pop() noexcept {
 }
 
 template <flow::concepts::cancellable_blocking_queue Queue>
+constexpr void stop_token_noop() noexcept {
+  constexpr std::size_t kQueueCapacity = 2;
+
+  typename Queue::value_type value{};
+  Queue queue(kQueueCapacity);
+
+  EXPECT_TRUE(queue.push(std::stop_token{}, typename Queue::value_type{}));
+  EXPECT_TRUE(queue.push(std::stop_token{}, typename Queue::value_type{}));
+
+  std::stop_source stop_source;
+  EXPECT_TRUE(stop_source.request_stop());
+
+  EXPECT_FALSE(
+      queue.push(stop_source.get_token(), typename Queue::value_type{}));
+
+  EXPECT_TRUE(queue.pop(std::stop_token{}, value));
+  EXPECT_TRUE(queue.pop(std::stop_token{}, value));
+
+  EXPECT_FALSE(queue.pop(stop_source.get_token(), value));
+}
+
+template <flow::concepts::cancellable_blocking_queue Queue>
 constexpr void blocking_push_stop_token() noexcept {
   constexpr std::size_t kQueueCapacity = 2;
 

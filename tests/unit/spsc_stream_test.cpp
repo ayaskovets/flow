@@ -38,6 +38,8 @@ TEST_T(spsc_stream, blocking_push, flow::spsc_stream<>);
 
 TEST_T(spsc_stream, blocking_pop, flow::spsc_stream<>);
 
+TEST_T(spsc_stream, stop_token_noop, flow::spsc_stream<>);
+
 TEST_T(spsc_stream, blocking_push_stop_token, flow::spsc_stream<>);
 
 TEST_T(spsc_stream, blocking_pop_stop_token, flow::spsc_stream<>);

@@ -38,6 +38,8 @@ TEST(unsafe_msgbuf, blocking_push) { GTEST_SKIP(); }
 
 TEST(unsafe_msgbuf, blocking_pop) { GTEST_SKIP(); }
 
+TEST(unsafe_msgbuf, stop_token_noop) { GTEST_SKIP(); }
+
 TEST(unsafe_msgbuf, blocking_push_stop_token) { GTEST_SKIP(); }
 
 TEST(unsafe_msgbuf, blocking_pop_stop_token) { GTEST_SKIP(); }

@@ -40,6 +40,8 @@ TEST(unsafe_queue, blocking_push) { GTEST_SKIP(); }
 
 TEST(unsafe_queue, blocking_pop) { GTEST_SKIP(); }
 
+TEST(unsafe_queue, stop_token_noop) { GTEST_SKIP(); }
+
 TEST(unsafe_queue, blocking_push_stop_token) { GTEST_SKIP(); }
 
 TEST(unsafe_queue, blocking_pop_stop_token) { GTEST_SKIP(); }

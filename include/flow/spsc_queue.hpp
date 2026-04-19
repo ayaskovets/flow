@@ -124,15 +124,18 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     index_type const push_to = writer_.index.load(std::memory_order::relaxed);
     index_type const next_push_to = next(*writer_.capacity, push_to);
 
-    while (full(next_push_to, writer_.cache)) {
+    while (true) {
       if (stop_token.stop_requested()) {
         return false;
       }
 
-      writer_.cache = reader_.index.load(std::memory_order::acquire);
-      if (full(next_push_to, writer_.cache)) {
-        std::this_thread::yield();
+      if (!full(next_push_to, writer_.cache)) {
+        break;
       }
+
+      std::this_thread::yield();
+
+      writer_.cache = reader_.index.load(std::memory_order::acquire);
     }
 
     std::invoke(std::forward<Callback>(callback),
@@ -149,15 +152,18 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
     index_type const next_pop_from = next(*reader_.capacity, pop_from);
 
-    while (empty(reader_.cache, pop_from)) {
+    while (true) {
       if (stop_token.stop_requested()) {
         return false;
       }
 
-      reader_.cache = writer_.index.load(std::memory_order::acquire);
-      if (empty(reader_.cache, pop_from)) {
-        std::this_thread::yield();
+      if (!empty(reader_.cache, pop_from)) {
+        break;
       }
+
+      std::this_thread::yield();
+
+      reader_.cache = writer_.index.load(std::memory_order::acquire);
     }
 
     std::invoke(std::forward<Callback>(callback),

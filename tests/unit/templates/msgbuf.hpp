@@ -193,6 +193,28 @@ constexpr void blocking_pop() noexcept {
 }
 
 template <flow::concepts::cancellable_blocking_msgbuf Msgbuf>
+constexpr void stop_token_noop() noexcept {
+  constexpr std::size_t kMsgbufCapacity = 2;
+
+  std::array<std::byte, 1> msg{};
+  Msgbuf msgbuf(kMsgbufCapacity);
+
+  EXPECT_TRUE(msgbuf.push(std::stop_token{}, std::array<std::byte, 1>{}));
+  EXPECT_TRUE(msgbuf.push(std::stop_token{}, std::array<std::byte, 1>{}));
+
+  std::stop_source stop_source;
+  EXPECT_TRUE(stop_source.request_stop());
+
+  EXPECT_FALSE(
+      msgbuf.push(stop_source.get_token(), std::array<std::byte, 1>{}));
+
+  EXPECT_TRUE(msgbuf.pop(std::stop_token{}, msg));
+  EXPECT_TRUE(msgbuf.pop(std::stop_token{}, msg));
+
+  EXPECT_FALSE(msgbuf.pop(stop_source.get_token(), msg));
+}
+
+template <flow::concepts::cancellable_blocking_msgbuf Msgbuf>
 constexpr void blocking_push_stop_token() noexcept {
   constexpr std::size_t kMsgbufCapacity = 10;
 

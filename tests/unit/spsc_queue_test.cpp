@@ -39,6 +39,8 @@ TEST_T(spsc_queue, blocking_push, flow::spsc_queue<int>);
 
 TEST_T(spsc_queue, blocking_pop, flow::spsc_queue<int>);
 
+TEST_T(spsc_queue, stop_token_noop, flow::spsc_queue<int>);
+
 TEST_T(spsc_queue, blocking_push_stop_token, flow::spsc_queue<int>);
 
 TEST_T(spsc_queue, blocking_pop_stop_token, flow::spsc_queue<int>);

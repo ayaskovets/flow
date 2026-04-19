@@ -38,6 +38,8 @@ TEST(unsafe_stream, blocking_push) { GTEST_SKIP(); }
 
 TEST(unsafe_stream, blocking_pop) { GTEST_SKIP(); }
 
+TEST(unsafe_stream, stop_token_noop) { GTEST_SKIP(); }
+
 TEST(unsafe_stream, blocking_push_stop_token) { GTEST_SKIP(); }
 
 TEST(unsafe_stream, blocking_pop_stop_token) { GTEST_SKIP(); }

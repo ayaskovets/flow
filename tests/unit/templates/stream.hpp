@@ -169,6 +169,28 @@ constexpr void blocking_pop() noexcept {
 }
 
 template <flow::concepts::cancellable_blocking_stream Stream>
+constexpr void stop_token_noop() noexcept {
+  constexpr std::size_t kStreamCapacity = 2;
+
+  std::array<std::byte, 1> bytes{};
+  Stream stream(kStreamCapacity);
+
+  EXPECT_TRUE(stream.push(std::stop_token{}, std::array<std::byte, 1>{}));
+  EXPECT_TRUE(stream.push(std::stop_token{}, std::array<std::byte, 1>{}));
+
+  std::stop_source stop_source;
+  EXPECT_TRUE(stop_source.request_stop());
+
+  EXPECT_FALSE(
+      stream.push(stop_source.get_token(), std::array<std::byte, 1>{}));
+
+  EXPECT_TRUE(stream.pop(std::stop_token{}, bytes));
+  EXPECT_TRUE(stream.pop(std::stop_token{}, bytes));
+
+  EXPECT_FALSE(stream.pop(stop_source.get_token(), bytes));
+}
+
+template <flow::concepts::cancellable_blocking_stream Stream>
 constexpr void blocking_push_stop_token() noexcept {
   constexpr std::size_t kStreamCapacity = 2;
 

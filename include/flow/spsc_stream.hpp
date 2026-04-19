@@ -179,9 +179,13 @@ class spsc_stream final : public swiss::non_copyable,
     auto const bytes_size    = static_cast<index_type>(bytes.size());
     index_type const push_to = writer_.index.load(std::memory_order::relaxed);
 
-    while (bytes_size > free(*writer_.capacity, push_to, writer_.cache)) {
+    while (true) {
       if (stop_token.stop_requested()) {
         return false;
+      }
+
+      if (bytes_size <= free(*writer_.capacity, push_to, writer_.cache)) {
+        break;
       }
 
       std::this_thread::yield();
@@ -200,9 +204,13 @@ class spsc_stream final : public swiss::non_copyable,
     auto const bytes_size     = static_cast<index_type>(bytes.size());
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
 
-    while (bytes_size > size(*reader_.capacity, reader_.cache, pop_from)) {
+    while (true) {
       if (stop_token.stop_requested()) {
         return false;
+      }
+
+      if (bytes_size <= size(*reader_.capacity, reader_.cache, pop_from)) {
+        break;
       }
 
       std::this_thread::yield();

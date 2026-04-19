@@ -99,8 +99,8 @@ concept cancellable_blocking_queue =
     blocking_queue<T> &&
     requires(T queue, typename T::value_type value, std::stop_token stop_token,
              decltype([](typename T::value_type &) noexcept {}) callback) {
-      { queue.push(stop_token, callback) } -> std::same_as<void>;
-      { queue.pop(stop_token, callback) } -> std::same_as<void>;
+      { queue.push(stop_token, callback) } -> std::same_as<bool>;
+      { queue.pop(stop_token, callback) } -> std::same_as<bool>;
       { queue.emplace(stop_token, std::move(value)) } -> std::same_as<bool>;
       { queue.push(stop_token, std::move(value)) } -> std::same_as<bool>;
       { queue.pop(stop_token, value) } -> std::same_as<bool>;

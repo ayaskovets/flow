@@ -82,9 +82,8 @@ class unsafe_stream final : public swiss::non_copyable,
   constexpr auto try_pop(
       Callback && callback,
       index_type max_size = std::numeric_limits<index_type>::
-          max()) noexcept(noexcept(std::is_nothrow_invocable_v<Callback,
-                                                               std::span<
-                                                                   std::byte>>))
+          max()) noexcept(std::is_nothrow_invocable_v<Callback,
+                                                      std::span<std::byte>>)
       -> index_type {
     if (empty()) {
       return 0;

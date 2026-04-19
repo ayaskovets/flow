@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <limits>
 #include <memory>
 #include <span>
 #include <stdexcept>
@@ -57,50 +58,63 @@ class unsafe_stream final : public swiss::non_copyable,
 
  public:
   template <std::invocable<std::span<std::byte>> Callback>
-  constexpr auto try_push(Callback && callback) noexcept(
-      std::is_nothrow_invocable_v<Callback, std::span<std::byte>>) -> bool {
+  constexpr auto try_push(
+      Callback && callback,
+      index_type max_size = std::numeric_limits<index_type>::
+          max()) noexcept(std::is_nothrow_invocable_v<Callback,
+                                                      std::span<std::byte>>)
+      -> bool {
     if (full()) {
       return false;
     }
 
     index_type const postfix = *capacity_ - push_to();
-    index_type const chunk   = std::min(postfix, free());
-    index_type const cb_total =
-        std::invoke(std::forward<Callback>(callback),
-                    std::span(ring_buffer_ + push_to(), chunk));
+    index_type const chunk   = std::min(max_size, std::min(postfix, free()));
 
-    size_ += cb_total;
+    std::invoke(std::forward<Callback>(callback),
+                std::span(ring_buffer_ + push_to(), chunk));
+
+    size_ += chunk;
     return true;
   }
 
   template <std::invocable<std::span<std::byte>> Callback>
-  constexpr void push(Callback && callback) {
-    if (!try_push(std::forward<Callback>(callback))) {
+  constexpr void push(
+      Callback && callback,
+      index_type max_size = std::numeric_limits<index_type>::max()) {
+    if (!try_push(std::forward<Callback>(callback), max_size)) {
       throw std::runtime_error("unsafe_queue::push(): full");
     }
   }
 
   template <std::invocable<std::span<std::byte>> Callback>
-  constexpr auto try_pop(Callback && callback) noexcept(noexcept(
-      std::is_nothrow_invocable_v<Callback, std::span<std::byte>>)) -> bool {
+  constexpr auto try_pop(
+      Callback && callback,
+      index_type max_size = std::numeric_limits<index_type>::
+          max()) noexcept(noexcept(std::is_nothrow_invocable_v<Callback,
+                                                               std::span<
+                                                                   std::byte>>))
+      -> bool {
     if (empty()) {
       return false;
     }
 
     index_type const postfix = *capacity_ - pop_from_;
-    index_type const chunk   = std::min(postfix, size());
-    index_type const cb_total =
-        std::invoke(std::forward<Callback>(callback),
-                    std::span(ring_buffer_ + pop_from_, chunk));
+    index_type const chunk   = std::min(max_size, std::min(postfix, size()));
 
-    pop_from_ = next(pop_from_, cb_total);
-    size_ -= cb_total;
+    std::invoke(std::forward<Callback>(callback),
+                std::span(ring_buffer_ + pop_from_, chunk));
+
+    pop_from_ = next(pop_from_, chunk);
+    size_ -= chunk;
     return true;
   }
 
   template <std::invocable<std::span<std::byte>> Callback>
-  constexpr void pop(Callback && callback) {
-    if (!try_pop(std::forward<Callback>(callback))) {
+  constexpr void pop(
+      Callback && callback,
+      index_type max_size = std::numeric_limits<index_type>::max()) {
+    if (!try_pop(std::forward<Callback>(callback), max_size)) {
       throw std::runtime_error("unsafe_queue::pop(): empty");
     }
   }

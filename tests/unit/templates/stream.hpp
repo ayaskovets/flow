@@ -421,4 +421,37 @@ constexpr void nonblocking_callback() noexcept {
   EXPECT_EQ(stream.size(), 5);
 }
 
+template <flow::concepts::nonblocking_stream Stream>
+constexpr void nonblocking_callback_limit() noexcept {
+  constexpr std::size_t kStreamCapacity = 8;
+
+  Stream stream(kStreamCapacity);
+
+  EXPECT_EQ(stream.try_push(
+                [](std::span<std::byte> chunk) -> std::size_t {
+                  EXPECT_EQ(chunk.size(), 3);
+                  return 2;
+                },
+                3),
+            2);
+
+  EXPECT_EQ(stream.try_push([](std::span<std::byte> chunk) -> std::size_t {
+    EXPECT_EQ(chunk.size(), 6);
+    return 2;
+  }),
+            2);
+
+  EXPECT_EQ(stream.try_pop([](std::span<std::byte> chunk) -> std::size_t {
+    EXPECT_EQ(chunk.size(), 4);
+    return 1;
+  }),
+            1);
+
+  EXPECT_EQ(stream.try_pop([](std::span<std::byte> chunk) -> std::size_t {
+    EXPECT_EQ(chunk.size(), 3);
+    return 3;
+  }),
+            3);
+}
+
 }  // namespace tests::templates

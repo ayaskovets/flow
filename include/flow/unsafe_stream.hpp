@@ -120,13 +120,13 @@ class unsafe_stream final : public swiss::non_copyable,
       return 0;
     }
 
-    index_type const _push_to = push_to();
-    index_type const postfix  = *capacity_ - _push_to;
-    index_type const chunk    = std::min(max_size, postfix);
-    index_type const prefix   = max_size - chunk;
+    index_type const _push_to  = push_to();
+    index_type const postfix   = *capacity_ - _push_to;
+    index_type const chunk     = std::min(max_size, postfix);
+    index_type const remainder = max_size - chunk;
 
     std::copy_n(bytes.data(), chunk, ring_buffer_ + _push_to);
-    std::copy_n(bytes.subspan(chunk).data(), prefix, ring_buffer_);
+    std::copy_n(bytes.subspan(chunk).data(), remainder, ring_buffer_);
 
     size_ += max_size;
     return max_size;
@@ -141,12 +141,12 @@ class unsafe_stream final : public swiss::non_copyable,
       return 0;
     }
 
-    index_type const postfix = *capacity_ - pop_from_;
-    index_type const chunk   = std::min(max_size, postfix);
-    index_type const prefix  = max_size - chunk;
+    index_type const postfix   = *capacity_ - pop_from_;
+    index_type const chunk     = std::min(max_size, postfix);
+    index_type const remainder = max_size - chunk;
 
     std::copy_n(ring_buffer_ + pop_from_, chunk, bytes.data());
-    std::copy_n(ring_buffer_, prefix, bytes.subspan(chunk).data());
+    std::copy_n(ring_buffer_, remainder, bytes.subspan(chunk).data());
 
     size_ -= max_size;
     pop_from_ = next(pop_from_, max_size);

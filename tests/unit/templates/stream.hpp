@@ -25,40 +25,41 @@ constexpr void minimal_capacity(std::size_t capacity) noexcept {
 
 template <flow::concepts::blocking_stream Stream>
 constexpr void size_capacity() noexcept {
-  constexpr std::size_t kStreamCapacity = 8;
+  constexpr std::size_t kCapacity = 8;
 
   std::vector<std::byte> bytes(2);
-  Stream stream(kStreamCapacity);
+  Stream stream(kCapacity);
 
   EXPECT_EQ(stream.size(), 0);
-  EXPECT_EQ(stream.capacity(), kStreamCapacity);
+  EXPECT_EQ(stream.capacity(), kCapacity);
 
   stream.push(std::vector(4, std::byte(0)));
   EXPECT_EQ(stream.size(), 4);
-  EXPECT_EQ(stream.capacity(), kStreamCapacity);
+  EXPECT_EQ(stream.capacity(), kCapacity);
 
-  for (std::size_t i = 0; i < kStreamCapacity * kStreamCapacity * 2; ++i) {
+  for (std::size_t i = 0; i < kCapacity * kCapacity * 2; ++i) {
     stream.push(std::vector(2, std::byte(0)));
     EXPECT_EQ(stream.size(), 6);
-    EXPECT_EQ(stream.capacity(), kStreamCapacity);
+    EXPECT_EQ(stream.capacity(), kCapacity);
 
     stream.pop(bytes);
     EXPECT_EQ(stream.size(), 4);
-    EXPECT_EQ(stream.capacity(), kStreamCapacity);
+    EXPECT_EQ(stream.capacity(), kCapacity);
   }
 }
 
 template <flow::concepts::nonblocking_stream Stream>
 constexpr void nonblocking_smoke() noexcept {
-  constexpr std::size_t kStreamCapacity = 5;
+  constexpr std::size_t kCapacity = 8;
 
+  // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
   std::vector<std::byte> bytes(2);
-  Stream stream(kStreamCapacity);
+  Stream stream(kCapacity);
 
   EXPECT_EQ(stream.try_pop(bytes), 0);
 
   EXPECT_EQ(stream.try_push(std::vector(2, std::byte(0))), 2);
-  EXPECT_EQ(stream.try_push(std::vector(2, std::byte(1))), 2);
+  EXPECT_EQ(stream.try_push(std::vector(5, std::byte(1))), 5);
   EXPECT_EQ(stream.try_push(std::vector(2, std::byte(2))), 1);
   EXPECT_EQ(stream.try_push(std::vector(2, std::byte(3))), 0);
 
@@ -66,17 +67,19 @@ constexpr void nonblocking_smoke() noexcept {
   EXPECT_EQ(bytes, std::vector(2, std::byte(0)));
   EXPECT_EQ(stream.try_pop(bytes), 2);
   EXPECT_EQ(bytes, std::vector(2, std::byte(1)));
-
-  EXPECT_EQ(stream.try_pop(bytes), 1);
-  EXPECT_EQ(bytes, (std::vector{std::byte(2), std::byte{1}}));
+  EXPECT_EQ(stream.try_pop(bytes), 2);
+  EXPECT_EQ(bytes, std::vector(2, std::byte(1)));
+  EXPECT_EQ(stream.try_pop(bytes), 2);
+  EXPECT_EQ(bytes, (std::vector{std::byte(1), std::byte(2)}));
+  EXPECT_EQ(stream.try_pop(bytes), 0);
 }
 
 template <flow::concepts::blocking_stream Stream>
 constexpr void blocking_smoke() noexcept {
-  constexpr std::size_t kStreamCapacity = 5;
+  constexpr std::size_t kCapacity = 5;
 
   std::vector<std::byte> bytes(2);
-  Stream stream(kStreamCapacity);
+  Stream stream(kCapacity);
 
   stream.push(std::vector(2, std::byte(0)));
   stream.push(std::vector(2, std::byte(1)));
@@ -88,17 +91,17 @@ constexpr void blocking_smoke() noexcept {
   EXPECT_EQ(bytes, std::vector(2, std::byte(1)));
 
   stream.pop(std::span<std::byte, 1>(bytes));
-  EXPECT_EQ(bytes, (std::vector{std::byte(2), std::byte{1}}));
+  EXPECT_EQ(bytes, (std::vector{std::byte(2), std::byte(1)}));
 }
 
 template <typename Stream>
   requires(flow::concepts::blocking_stream<Stream> &&
            flow::concepts::nonblocking_stream<Stream>)
 constexpr void mixed_smoke() noexcept {
-  constexpr std::size_t kStreamCapacity = 5;
+  constexpr std::size_t kCapacity = 5;
 
   std::array<std::byte, 2> bytes{};
-  Stream stream(kStreamCapacity);
+  Stream stream(kCapacity);
 
   EXPECT_EQ(stream.size(), 0);
   EXPECT_EQ(stream.try_pop(bytes), 0);
@@ -132,10 +135,10 @@ constexpr void mixed_smoke() noexcept {
 
 template <flow::concepts::blocking_stream Stream>
 constexpr void blocking_push() noexcept {
-  constexpr std::size_t kStreamCapacity = 6;
+  constexpr std::size_t kCapacity = 6;
 
   std::array<std::byte, 4> bytes{};
-  Stream stream(kStreamCapacity);
+  Stream stream(kCapacity);
 
   stream.push(std::vector(3, std::byte(0)));
   stream.push(std::vector(3, std::byte(1)));
@@ -156,9 +159,9 @@ template <typename Stream>
   requires(flow::concepts::blocking_stream<Stream> &&
            flow::concepts::nonblocking_stream<Stream>)
 constexpr void blocking_pop() noexcept {
-  constexpr std::size_t kStreamCapacity = 2;
+  constexpr std::size_t kCapacity = 2;
 
-  Stream stream(kStreamCapacity);
+  Stream stream(kCapacity);
 
   std::jthread const producer(
       [&] { EXPECT_EQ(stream.try_push(std::vector(2, std::byte(1))), 2); });
@@ -170,10 +173,10 @@ constexpr void blocking_pop() noexcept {
 
 template <flow::concepts::cancellable_blocking_stream Stream>
 constexpr void stop_token_noop() noexcept {
-  constexpr std::size_t kStreamCapacity = 2;
+  constexpr std::size_t kCapacity = 2;
 
   std::array<std::byte, 1> bytes{};
-  Stream stream(kStreamCapacity);
+  Stream stream(kCapacity);
 
   EXPECT_TRUE(stream.push(std::stop_token{}, std::array<std::byte, 1>{}));
   EXPECT_TRUE(stream.push(std::stop_token{}, std::array<std::byte, 1>{}));
@@ -192,9 +195,9 @@ constexpr void stop_token_noop() noexcept {
 
 template <flow::concepts::cancellable_blocking_stream Stream>
 constexpr void blocking_push_stop_token() noexcept {
-  constexpr std::size_t kStreamCapacity = 2;
+  constexpr std::size_t kCapacity = 2;
 
-  Stream stream(kStreamCapacity);
+  Stream stream(kCapacity);
 
   EXPECT_TRUE(stream.push(std::stop_token{}, std::vector(2, std::byte(0))));
 
@@ -205,10 +208,10 @@ constexpr void blocking_push_stop_token() noexcept {
 
 template <flow::concepts::cancellable_blocking_stream Stream>
 constexpr void blocking_pop_stop_token() noexcept {
-  constexpr std::size_t kStreamCapacity = 2;
+  constexpr std::size_t kCapacity = 2;
 
   std::array<std::byte, 2> bytes{};
-  Stream stream(kStreamCapacity);
+  Stream stream(kCapacity);
 
   EXPECT_TRUE(stream.push(std::stop_token{}, std::vector(2, std::byte())));
   EXPECT_TRUE(stream.pop(std::stop_token{}, bytes));
@@ -220,7 +223,7 @@ constexpr void blocking_pop_stop_token() noexcept {
 
 template <flow::concepts::blocking_stream Stream>
 constexpr void allocator() noexcept {
-  constexpr std::size_t kStreamCapacity = 2;
+  constexpr std::size_t kCapacity = 2;
 
   swiss::leak_detector_allocator<typename Stream::allocator_type::value_type,
                                  true>
@@ -229,7 +232,7 @@ constexpr void allocator() noexcept {
 
   EXPECT_TRUE(allocator.empty());
   {
-    Stream const stream(kStreamCapacity, allocator);
+    Stream const stream(kCapacity, allocator);
     EXPECT_FALSE(allocator.empty());
   }
   EXPECT_TRUE(allocator.empty());
@@ -373,11 +376,11 @@ constexpr void blocking(auto const & param) noexcept {
 
 template <flow::concepts::nonblocking_stream Stream>
 constexpr void rollover() noexcept {
-  constexpr std::size_t kStreamCapacity = 8;
-  constexpr std::size_t kRepeats        = 3;
+  constexpr std::size_t kCapacity = 8;
+  constexpr std::size_t kRepeats  = 3;
 
   std::array<std::byte, 3> bytes{};
-  Stream stream(kStreamCapacity);
+  Stream stream(kCapacity);
 
   for (std::size_t repeat = 0; repeat < kRepeats; ++repeat) {
     for (std::size_t i = 0;
@@ -393,9 +396,9 @@ constexpr void rollover() noexcept {
 
 template <flow::concepts::nonblocking_stream Stream>
 constexpr void nonblocking_callback() noexcept {
-  constexpr std::size_t kStreamCapacity = 8;
+  constexpr std::size_t kCapacity = 8;
 
-  Stream stream(kStreamCapacity);
+  Stream stream(kCapacity);
 
   EXPECT_EQ(
       stream.try_push(
@@ -423,9 +426,9 @@ constexpr void nonblocking_callback() noexcept {
 
 template <flow::concepts::nonblocking_stream Stream>
 constexpr void nonblocking_callback_limit() noexcept {
-  constexpr std::size_t kStreamCapacity = 8;
+  constexpr std::size_t kCapacity = 8;
 
-  Stream stream(kStreamCapacity);
+  Stream stream(kCapacity);
 
   EXPECT_EQ(stream.try_push(
                 [](std::span<std::byte> chunk) -> std::size_t {
@@ -464,6 +467,26 @@ constexpr void nonblocking_callback_limit() noexcept {
     return 2;
   }),
             2);
+}
+
+template <flow::concepts::nonblocking_stream Stream>
+constexpr void exception_callback() noexcept {
+  constexpr std::size_t kCapacity = 32;
+
+  Stream stream(kCapacity);
+
+  EXPECT_ANY_THROW(stream.try_push(
+      [](std::span<std::byte>) { throw std::runtime_error(""); }));
+
+  EXPECT_TRUE(stream.try_push(std::vector(4, std::byte(0))));
+  EXPECT_EQ(stream.try_pop([](std::span<std::byte>) noexcept {}), 4);
+
+  EXPECT_TRUE(stream.try_push(std::vector(1, std::byte(0))));
+
+  EXPECT_ANY_THROW(stream.try_pop(
+      [](std::span<std::byte>) { throw std::runtime_error(""); }));
+
+  EXPECT_EQ(stream.try_pop([](std::span<std::byte>) noexcept {}), 1);
 }
 
 }  // namespace tests::templates

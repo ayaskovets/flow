@@ -80,4 +80,6 @@ TEST_T(unsafe_queue, nonblocking_callback, flow::unsafe_queue<int>);
 
 TEST_T(unsafe_queue, blocking_callback, flow::unsafe_queue<int>);
 
+TEST_T(unsafe_queue, exception_callback, flow::unsafe_queue<int>);
+
 }  // namespace tests::unit

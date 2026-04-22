@@ -611,7 +611,9 @@ constexpr void blocking_callback() noexcept {
   queue.pop([](int & value) { EXPECT_EQ(value, 2); });
 }
 
-template <flow::concepts::nonblocking_queue Queue>
+template <typename Queue>
+  requires(flow::concepts::blocking_queue<Queue> &&
+           flow::concepts::nonblocking_queue<Queue>)
 constexpr void exception_callback() noexcept {
   constexpr std::size_t kCapacity = 32;
 

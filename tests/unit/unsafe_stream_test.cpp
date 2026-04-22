@@ -60,4 +60,6 @@ TEST_T(unsafe_stream, nonblocking_callback, flow::unsafe_stream<>);
 
 TEST_T(unsafe_stream, nonblocking_callback_limit, flow::unsafe_stream<>);
 
+TEST_T(unsafe_stream, exception_callback, flow::unsafe_stream<>);
+
 }  // namespace tests::unit

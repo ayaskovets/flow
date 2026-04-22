@@ -104,7 +104,7 @@ constexpr void blocking_throughput(benchmark::State & state) noexcept {
     std::vector<std::byte> buffer(buffer_capacity);
     // NOLINTNEXTLINE(readability-identifier-length)
     for (auto const _ : state) {
-      msgbuf->pop(buffer);
+      std::ignore = msgbuf->pop(buffer);
       bytes += static_cast<std::int64_t>(buffer_capacity);
     }
 

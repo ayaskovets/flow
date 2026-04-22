@@ -522,7 +522,9 @@ constexpr void padding() noexcept {
   EXPECT_EQ(msgbuf.size(), 0);
 }
 
-template <flow::concepts::nonblocking_msgbuf Msgbuf>
+template <typename Msgbuf>
+  requires(flow::concepts::blocking_msgbuf<Msgbuf> &&
+           flow::concepts::nonblocking_msgbuf<Msgbuf>)
 constexpr void exception_callback() noexcept {
   constexpr std::size_t kCapacity = 32;
 

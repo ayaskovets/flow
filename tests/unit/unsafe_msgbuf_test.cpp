@@ -62,4 +62,6 @@ TEST_T(unsafe_msgbuf, blocking_callback, flow::unsafe_msgbuf<>);
 
 TEST_T(unsafe_msgbuf, padding, flow::unsafe_msgbuf<>);
 
+TEST_T(unsafe_msgbuf, exception_callback, flow::unsafe_msgbuf<>);
+
 }  // namespace tests::unit

@@ -67,12 +67,17 @@ class unsafe_msgbuf final : public swiss::non_copyable,
       return false;
     }
 
-    index_type const postfix = *capacity_ - push_to();
+    index_type padding       = 0;
+    index_type _push_to      = push_to();
+    index_type const postfix = *capacity_ - _push_to;
     index_type const prefix  = pop_from_;
     index_type const chunk   = std::min(postfix, free());
 
-    if (chunk < kHeaderSize + msg_size) {
-      if (prefix < kHeaderSize + msg_size || postfix != chunk) {
+    // NOLINTNEXTLINE(bugprone-branch-clone)
+    if (chunk >= kHeaderSize + msg_size) {
+    } else if (chunk == kHeaderSize && prefix >= msg_size) {
+    } else {
+      if (chunk != postfix || prefix < kHeaderSize + msg_size) {
         return false;
       }
 
@@ -80,19 +85,23 @@ class unsafe_msgbuf final : public swiss::non_copyable,
         std::copy_n(
             std::bit_cast<std::array<std::byte, kHeaderSize>>(kPaddingHeader)
                 .data(),
-            kHeaderSize, ring_buffer_ + push_to());
+            kHeaderSize, ring_buffer_ + _push_to);
       }
 
-      size_ += postfix;
+      padding  = postfix;
+      _push_to = 0;
     }
 
     std::copy_n(
         std::bit_cast<std::array<std::byte, kHeaderSize>>(msg_size).data(),
-        kHeaderSize, ring_buffer_ + push_to());
-    std::invoke(std::forward<Callback>(callback),
-                std::span(ring_buffer_ + push_to() + kHeaderSize, msg_size));
+        kHeaderSize, ring_buffer_ + _push_to);
 
-    size_ += kHeaderSize + msg_size;
+    _push_to = next(_push_to, kHeaderSize);
+
+    std::invoke(std::forward<Callback>(callback),
+                std::span(ring_buffer_ + _push_to, msg_size));
+
+    size_ += padding + kHeaderSize + msg_size;
     return true;
   }
 
@@ -104,20 +113,26 @@ class unsafe_msgbuf final : public swiss::non_copyable,
       return 0;
     }
 
-    index_type const postfix = *capacity_ - pop_from_;
-    index_type msg_size      = header(pop_from_);
+    index_type padding       = 0;
+    index_type _pop_from     = pop_from_;
+    index_type const postfix = *capacity_ - _pop_from;
+    index_type msg_size =
+        postfix < kHeaderSize ? kPaddingHeader : header(_pop_from);
 
-    if (postfix < kHeaderSize || msg_size == kPaddingHeader) {
-      pop_from_ = next(pop_from_, postfix);
-      size_ -= postfix;
-      msg_size = header(pop_from_);
+    if (msg_size == kPaddingHeader) {
+      padding   = postfix;
+      _pop_from = 0;
+
+      msg_size = header(_pop_from);
     }
 
-    std::invoke(std::forward<Callback>(callback),
-                std::span(ring_buffer_ + pop_from_ + kHeaderSize, msg_size));
+    _pop_from = next(_pop_from, kHeaderSize);
 
-    pop_from_ = next(pop_from_, kHeaderSize + msg_size);
-    size_ -= kHeaderSize + msg_size;
+    std::invoke(std::forward<Callback>(callback),
+                std::span(ring_buffer_ + _pop_from, msg_size));
+
+    pop_from_ = next(_pop_from, msg_size);
+    size_ -= padding + kHeaderSize + msg_size;
     return msg_size;
   }
 
@@ -194,9 +209,9 @@ class unsafe_msgbuf final : public swiss::non_copyable,
 
  private:
   [[nodiscard]] constexpr auto next(index_type index,
-                                    index_type msg_size) const noexcept
+                                    index_type bytes) const noexcept
       -> index_type {
-    index += msg_size;
+    index += bytes;
     return index >= *capacity_ ? index - *capacity_ : index;
   }
 

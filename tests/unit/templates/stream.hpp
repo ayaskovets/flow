@@ -449,9 +449,21 @@ constexpr void nonblocking_callback_limit() noexcept {
 
   EXPECT_EQ(stream.try_pop([](std::span<std::byte> chunk) -> std::size_t {
     EXPECT_EQ(chunk.size(), 3);
-    return 3;
+    return 100;
   }),
             3);
+
+  EXPECT_EQ(stream.try_push([](std::span<std::byte> chunk) -> std::size_t {
+    EXPECT_EQ(chunk.size(), 4);
+    return 100;
+  }),
+            4);
+
+  EXPECT_EQ(stream.try_pop([](std::span<std::byte> chunk) -> std::size_t {
+    EXPECT_EQ(chunk.size(), 4);
+    return 2;
+  }),
+            2);
 }
 
 }  // namespace tests::templates

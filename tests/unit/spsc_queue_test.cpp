@@ -90,4 +90,6 @@ TEST_T(spsc_queue, nonblocking_callback, flow::spsc_queue<int>);
 
 TEST_T(spsc_queue, blocking_callback, flow::spsc_queue<int>);
 
+TEST_T(spsc_queue, exception_callback, flow::spsc_queue<int>);
+
 }  // namespace tests::unit

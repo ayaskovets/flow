@@ -26,38 +26,38 @@ constexpr void minimal_capacity(std::size_t capacity) noexcept {
 
 template <flow::concepts::blocking_queue Queue>
 constexpr void size_capacity() noexcept {
-  constexpr std::size_t kQueueCapacity = 8;
-  constexpr std::size_t kRepeats       = 128;
+  constexpr std::size_t kCapacity = 8;
+  constexpr std::size_t kRepeats  = 128;
 
   typename Queue::value_type value{};
-  Queue queue(kQueueCapacity);
+  Queue queue(kCapacity);
 
   EXPECT_EQ(queue.size(), 0);
-  EXPECT_EQ(queue.capacity(), kQueueCapacity);
+  EXPECT_EQ(queue.capacity(), kCapacity);
 
   queue.push(value);
   queue.emplace();
   EXPECT_EQ(queue.size(), 2);
-  EXPECT_EQ(queue.capacity(), kQueueCapacity);
+  EXPECT_EQ(queue.capacity(), kCapacity);
 
   for (std::size_t repeat = 0; repeat < kRepeats; ++repeat) {
     queue.emplace();
     EXPECT_EQ(queue.size(), 3);
-    EXPECT_EQ(queue.capacity(), kQueueCapacity);
+    EXPECT_EQ(queue.capacity(), kCapacity);
 
     queue.pop(value);
     EXPECT_EQ(queue.size(), 2);
-    EXPECT_EQ(queue.capacity(), kQueueCapacity);
+    EXPECT_EQ(queue.capacity(), kCapacity);
   }
 }
 
 template <flow::concepts::nonblocking_queue Queue>
   requires(std::same_as<typename Queue::value_type, int>)
 constexpr void nonblocking_smoke() noexcept {
-  constexpr std::size_t kQueueCapacity = 4;
+  constexpr std::size_t kCapacity = 4;
 
   int value{};
-  Queue queue(kQueueCapacity);
+  Queue queue(kCapacity);
 
   EXPECT_FALSE(queue.try_pop(value));
 
@@ -85,10 +85,10 @@ constexpr void nonblocking_smoke() noexcept {
 template <flow::concepts::blocking_queue Queue>
   requires(std::same_as<typename Queue::value_type, int>)
 constexpr void blocking_smoke() noexcept {
-  constexpr std::size_t kQueueCapacity = 4;
+  constexpr std::size_t kCapacity = 4;
 
   int value{};
-  Queue queue(kQueueCapacity);
+  Queue queue(kCapacity);
 
   queue.push(0);
   queue.push(1);
@@ -114,10 +114,10 @@ template <typename Queue>
            flow::concepts::nonblocking_queue<Queue> &&
            std::same_as<typename Queue::value_type, int>)
 constexpr void mixed_smoke() noexcept {
-  constexpr std::size_t kQueueCapacity = 2;
+  constexpr std::size_t kCapacity = 2;
 
   int value{};
-  Queue queue(kQueueCapacity);
+  Queue queue(kCapacity);
 
   EXPECT_EQ(queue.size(), 0);
   EXPECT_FALSE(queue.try_pop(value));
@@ -154,9 +154,9 @@ constexpr void mixed_smoke() noexcept {
 template <flow::concepts::blocking_queue Queue>
   requires(std::same_as<typename Queue::value_type, int>)
 constexpr void blocking_push() noexcept {
-  constexpr std::size_t kQueueCapacity = 2;
+  constexpr std::size_t kCapacity = 2;
 
-  Queue queue(kQueueCapacity);
+  Queue queue(kCapacity);
 
   queue.push(1);
   queue.push(2);
@@ -177,9 +177,9 @@ constexpr void blocking_push() noexcept {
 template <flow::concepts::blocking_queue Queue>
   requires(std::same_as<typename Queue::value_type, int>)
 constexpr void blocking_pop() noexcept {
-  constexpr std::size_t kQueueCapacity = 2;
+  constexpr std::size_t kCapacity = 2;
 
-  Queue queue(kQueueCapacity);
+  Queue queue(kCapacity);
 
   std::jthread const producer([&] { EXPECT_TRUE(queue.try_push(2)); });
 
@@ -190,10 +190,10 @@ constexpr void blocking_pop() noexcept {
 
 template <flow::concepts::cancellable_blocking_queue Queue>
 constexpr void stop_token_noop() noexcept {
-  constexpr std::size_t kQueueCapacity = 2;
+  constexpr std::size_t kCapacity = 2;
 
   typename Queue::value_type value{};
-  Queue queue(kQueueCapacity);
+  Queue queue(kCapacity);
 
   EXPECT_TRUE(queue.push(std::stop_token{}, typename Queue::value_type{}));
   EXPECT_TRUE(queue.push(std::stop_token{}, typename Queue::value_type{}));
@@ -212,9 +212,9 @@ constexpr void stop_token_noop() noexcept {
 
 template <flow::concepts::cancellable_blocking_queue Queue>
 constexpr void blocking_push_stop_token() noexcept {
-  constexpr std::size_t kQueueCapacity = 2;
+  constexpr std::size_t kCapacity = 2;
 
-  Queue queue(kQueueCapacity);
+  Queue queue(kCapacity);
 
   EXPECT_TRUE(queue.push(std::stop_token{}, typename Queue::value_type{}));
   EXPECT_TRUE(queue.emplace(std::stop_token{}));
@@ -228,10 +228,10 @@ constexpr void blocking_push_stop_token() noexcept {
 
 template <flow::concepts::cancellable_blocking_queue Queue>
 constexpr void blocking_pop_stop_token() noexcept {
-  constexpr std::size_t kQueueCapacity = 2;
+  constexpr std::size_t kCapacity = 2;
 
   typename Queue::value_type value{};
-  Queue queue(kQueueCapacity);
+  Queue queue(kCapacity);
 
   EXPECT_TRUE(queue.emplace(std::stop_token{}));
   EXPECT_TRUE(queue.pop(std::stop_token{}, value));
@@ -245,10 +245,10 @@ constexpr void blocking_pop_stop_token() noexcept {
 template <flow::concepts::queue Queue>
   requires(std::same_as<typename Queue::value_type, int>)
 constexpr void capacity_one() noexcept {
-  constexpr std::size_t kQueueCapacity = 1;
+  constexpr std::size_t kCapacity = 1;
 
   int value{};
-  Queue queue(kQueueCapacity);
+  Queue queue(kCapacity);
 
   EXPECT_FALSE(queue.try_pop(value));
   queue.push(1);
@@ -269,12 +269,12 @@ constexpr void capacity_one() noexcept {
 template <flow::concepts::queue Queue>
   requires(std::same_as<typename Queue::value_type, std::shared_ptr<int>>)
 constexpr void queue_destructor() noexcept {
-  constexpr std::size_t kQueueCapacity = 2;
+  constexpr std::size_t kCapacity = 2;
 
   std::shared_ptr<int> const value = std::make_shared<int>();
 
   {
-    Queue queue(kQueueCapacity);
+    Queue queue(kCapacity);
 
     EXPECT_EQ(value.use_count(), 1);
     queue.push(value);
@@ -289,10 +289,10 @@ constexpr void queue_destructor() noexcept {
 template <flow::concepts::blocking_queue Queue>
   requires(std::same_as<typename Queue::value_type, std::shared_ptr<int>>)
 constexpr void item_destructor() noexcept {
-  constexpr std::size_t kQueueCapacity = 2;
+  constexpr std::size_t kCapacity = 2;
 
   std::shared_ptr<int> value = std::make_shared<int>();
-  Queue queue(kQueueCapacity);
+  Queue queue(kCapacity);
 
   EXPECT_EQ(value.use_count(), 1);
 
@@ -313,10 +313,10 @@ constexpr void item_destructor() noexcept {
 template <flow::concepts::queue Queue>
   requires(std::same_as<typename Queue::value_type, std::unique_ptr<int>>)
 constexpr void non_copyable_item_type() noexcept {
-  constexpr std::size_t kQueueCapacity = 2;
+  constexpr std::size_t kCapacity = 2;
 
   std::unique_ptr<int> value{};
-  Queue queue(kQueueCapacity);
+  Queue queue(kCapacity);
 
   queue.push(std::move(value));
   queue.pop(value);
@@ -328,7 +328,7 @@ constexpr void non_copyable_item_type() noexcept {
 template <flow::concepts::blocking_queue Queue>
   requires(std::same_as<typename Queue::value_type, int>)
 constexpr void allocator() noexcept {
-  constexpr std::size_t kQueueCapacity = 2;
+  constexpr std::size_t kCapacity = 2;
 
   swiss::leak_detector_allocator<typename Queue::allocator_type::value_type,
                                  true>
@@ -339,7 +339,7 @@ constexpr void allocator() noexcept {
 
   {
     int value{};
-    Queue queue(kQueueCapacity, allocator);
+    Queue queue(kCapacity, allocator);
     EXPECT_EQ(queue.get_allocator(), allocator);
 
     queue.push(1);
@@ -464,10 +464,10 @@ constexpr void blocking(auto const & param) noexcept {
 
 template <flow::concepts::queue Queue>
 constexpr void queued_producers_nonblocking() noexcept {
-  constexpr std::size_t kQueueCapacity = 2;
-  constexpr std::size_t kProducers     = 16;
+  constexpr std::size_t kCapacity  = 2;
+  constexpr std::size_t kProducers = 16;
 
-  Queue queue(kQueueCapacity);
+  Queue queue(kCapacity);
   std::latch latch(static_cast<std::ptrdiff_t>(kProducers + 1));
 
   queue.emplace();
@@ -491,10 +491,10 @@ constexpr void queued_producers_nonblocking() noexcept {
 
 template <flow::concepts::blocking_queue Queue>
 constexpr void queued_producers_blocking() noexcept {
-  constexpr std::size_t kQueueCapacity = 2;
-  constexpr std::size_t kProducers     = 16;
+  constexpr std::size_t kCapacity  = 2;
+  constexpr std::size_t kProducers = 16;
 
-  Queue queue(kQueueCapacity);
+  Queue queue(kCapacity);
   std::latch latch(static_cast<std::ptrdiff_t>(kProducers + 1));
 
   queue.emplace();
@@ -518,10 +518,10 @@ constexpr void queued_producers_blocking() noexcept {
 
 template <flow::concepts::nonblocking_queue Queue>
 constexpr void queued_consumers_nonblocking() noexcept {
-  constexpr std::size_t kQueueCapacity = 2;
-  constexpr std::size_t kConsumers     = 16;
+  constexpr std::size_t kCapacity  = 2;
+  constexpr std::size_t kConsumers = 16;
 
-  Queue queue(kQueueCapacity);
+  Queue queue(kCapacity);
   std::latch latch(static_cast<std::ptrdiff_t>(kConsumers + 1));
 
   std::vector<std::jthread> consumers;
@@ -542,10 +542,10 @@ constexpr void queued_consumers_nonblocking() noexcept {
 
 template <flow::concepts::queue Queue>
 constexpr void queued_consumers_blocking() noexcept {
-  constexpr std::size_t kQueueCapacity = 2;
-  constexpr std::size_t kConsumers     = 16;
+  constexpr std::size_t kCapacity  = 2;
+  constexpr std::size_t kConsumers = 16;
 
-  Queue queue(kQueueCapacity);
+  Queue queue(kCapacity);
   std::latch latch(static_cast<std::ptrdiff_t>(kConsumers + 1));
 
   std::vector<std::jthread> consumers;
@@ -567,11 +567,11 @@ constexpr void queued_consumers_blocking() noexcept {
 template <flow::concepts::nonblocking_queue Queue>
   requires(std::same_as<typename Queue::value_type, int>)
 constexpr void rollover() noexcept {
-  constexpr std::size_t kQueueCapacity = 8;
-  constexpr std::size_t kRepeats       = 3;
+  constexpr std::size_t kCapacity = 8;
+  constexpr std::size_t kRepeats  = 3;
 
   int value{};
-  Queue queue(kQueueCapacity);
+  Queue queue(kCapacity);
 
   for (std::size_t repeat = 0; repeat < kRepeats; ++repeat) {
     for (std::size_t i = 0;
@@ -585,9 +585,9 @@ constexpr void rollover() noexcept {
 
 template <flow::concepts::nonblocking_queue Queue>
 constexpr void nonblocking_callback() noexcept {
-  constexpr std::size_t kQueueCapacity = 2;
+  constexpr std::size_t kCapacity = 2;
 
-  Queue queue(kQueueCapacity);
+  Queue queue(kCapacity);
 
   EXPECT_TRUE(queue.try_push([](int & value) { value = 1; }));
   EXPECT_TRUE(queue.try_push([](int & value) { value = 2; }));
@@ -600,15 +600,39 @@ constexpr void nonblocking_callback() noexcept {
 
 template <flow::concepts::blocking_queue Queue>
 constexpr void blocking_callback() noexcept {
-  constexpr std::size_t kQueueCapacity = 2;
+  constexpr std::size_t kCapacity = 2;
 
-  Queue queue(kQueueCapacity);
+  Queue queue(kCapacity);
 
   queue.push([](int & value) { value = 1; });
   queue.push([](int & value) { value = 2; });
 
   queue.pop([](int & value) { EXPECT_EQ(value, 1); });
   queue.pop([](int & value) { EXPECT_EQ(value, 2); });
+}
+
+template <flow::concepts::nonblocking_queue Queue>
+constexpr void exception_callback() noexcept {
+  constexpr std::size_t kCapacity = 32;
+
+  Queue queue(kCapacity);
+
+  EXPECT_ANY_THROW(queue.try_push(
+      [](typename Queue::value_type &) { throw std::runtime_error(""); }));
+  EXPECT_ANY_THROW(queue.push(
+      [](typename Queue::value_type &) { throw std::runtime_error(""); }));
+
+  EXPECT_TRUE(queue.try_push(typename Queue::value_type{}));
+  EXPECT_TRUE(queue.try_pop([](typename Queue::value_type &) noexcept {}));
+
+  EXPECT_TRUE(queue.try_push(typename Queue::value_type{}));
+
+  EXPECT_ANY_THROW(queue.try_pop(
+      [](typename Queue::value_type &) { throw std::runtime_error(""); }));
+  EXPECT_ANY_THROW(queue.pop(
+      [](typename Queue::value_type &) { throw std::runtime_error(""); }));
+
+  EXPECT_TRUE(queue.try_pop([](typename Queue::value_type &) noexcept {}));
 }
 
 }  // namespace tests::templates

@@ -14,6 +14,7 @@
 #include <swiss/leak_detector_allocator.hpp>
 
 namespace tests::templates {
+// NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
 
 template <flow::concepts::msgbuf T>
 constexpr void minimal_capacity(std::size_t capacity) noexcept {
@@ -35,13 +36,11 @@ constexpr void size_capacity() noexcept {
   EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept { GTEST_FAIL(); }),
             0);
 
-  // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
   msgbuf.push(std::vector(8, std::byte(0)));
   EXPECT_EQ(msgbuf.size(), 16);
   EXPECT_EQ(msgbuf.capacity(), kCapacity);
 
   for (std::size_t i = 0; i < kCapacity * kCapacity * 2; ++i) {
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
     msgbuf.push(std::vector(8, std::byte(0)));
     EXPECT_EQ(msgbuf.size(), 32);
     EXPECT_EQ(msgbuf.capacity(), kCapacity);
@@ -444,7 +443,6 @@ constexpr void blocking_callback() noexcept {
   });
   EXPECT_EQ(msgbuf.size(), 11);
 
-  // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
   msgbuf.push(5, [](std::span<std::byte> chunk) noexcept {
     EXPECT_EQ(chunk.size(), 5);
   });
@@ -548,4 +546,5 @@ constexpr void exception_callback() noexcept {
   EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept {}), 1);
 }
 
+// NOLINTEND(cppcoreguidelines-avoid-magic-numbers)
 }  // namespace tests::templates

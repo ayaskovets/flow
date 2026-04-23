@@ -15,6 +15,7 @@
 #include <swiss/leak_detector_allocator.hpp>
 
 namespace tests::templates {
+// NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
 
 template <flow::concepts::queue T>
 constexpr void minimal_capacity(std::size_t capacity) noexcept {
@@ -637,4 +638,5 @@ constexpr void exception_callback() noexcept {
   EXPECT_TRUE(queue.try_pop([](typename Queue::value_type &) noexcept {}));
 }
 
+// NOLINTEND(cppcoreguidelines-avoid-magic-numbers)
 }  // namespace tests::templates

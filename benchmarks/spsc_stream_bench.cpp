@@ -13,21 +13,21 @@ using stream_t =
 
 BENCHMARK_T(spsc_stream, nonblocking_throughput, stream_t)
     /* stream_capacity, producers, consumers, buffer_capacity */
-    ->Args({63, 1, 1, 4})
-    ->Args({127, 1, 1, 8})
-    ->Args({127, 1, 1, 16})
+    ->Args({64, 1, 1, 4})
+    ->Args({128, 1, 1, 8})
+    ->Args({128, 1, 1, 16})
     ->Args({512, 1, 1, 54})
-    ->Args({1023, 1, 1, 128})
+    ->Args({1024, 1, 1, 128})
     ->UseRealTime()
     ->Threads(2);
 
 BENCHMARK_T(spsc_stream, blocking_throughput, stream_t)
     /* stream_capacity, producers, consumers, buffer_capacity */
-    ->Args({63, 1, 1, 4})
-    ->Args({127, 1, 1, 8})
-    ->Args({127, 1, 1, 16})
+    ->Args({64, 1, 1, 4})
+    ->Args({128, 1, 1, 8})
+    ->Args({128, 1, 1, 16})
     ->Args({512, 1, 1, 54})
-    ->Args({1023, 1, 1, 128})
+    ->Args({1024, 1, 1, 128})
     ->UseRealTime()
     ->Threads(2);
 

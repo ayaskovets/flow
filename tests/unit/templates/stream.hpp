@@ -14,6 +14,7 @@
 #include <swiss/leak_detector_allocator.hpp>
 
 namespace tests::templates {
+// NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
 
 template <flow::concepts::stream T>
 constexpr void minimal_capacity(std::size_t capacity) noexcept {
@@ -52,7 +53,6 @@ template <flow::concepts::nonblocking_stream Stream>
 constexpr void nonblocking_smoke() noexcept {
   constexpr std::size_t kCapacity = 8;
 
-  // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
   std::vector<std::byte> bytes(2);
   Stream stream(kCapacity);
 
@@ -76,29 +76,30 @@ constexpr void nonblocking_smoke() noexcept {
 
 template <flow::concepts::blocking_stream Stream>
 constexpr void blocking_smoke() noexcept {
-  constexpr std::size_t kCapacity = 5;
+  constexpr std::size_t kCapacity = 8;
 
   std::vector<std::byte> bytes(2);
   Stream stream(kCapacity);
 
   stream.push(std::vector(2, std::byte(0)));
-  stream.push(std::vector(2, std::byte(1)));
+  stream.push(std::vector(5, std::byte(1)));
   stream.push(std::vector(1, std::byte(2)));
 
   stream.pop(bytes);
   EXPECT_EQ(bytes, std::vector(2, std::byte(0)));
   stream.pop(bytes);
   EXPECT_EQ(bytes, std::vector(2, std::byte(1)));
-
-  stream.pop(std::span<std::byte, 1>(bytes));
-  EXPECT_EQ(bytes, (std::vector{std::byte(2), std::byte(1)}));
+  stream.pop(bytes);
+  EXPECT_EQ(bytes, std::vector(2, std::byte(1)));
+  stream.pop(bytes);
+  EXPECT_EQ(bytes, (std::vector{std::byte(1), std::byte(2)}));
 }
 
 template <typename Stream>
   requires(flow::concepts::blocking_stream<Stream> &&
            flow::concepts::nonblocking_stream<Stream>)
 constexpr void mixed_smoke() noexcept {
-  constexpr std::size_t kCapacity = 5;
+  constexpr std::size_t kCapacity = 8;
 
   std::array<std::byte, 2> bytes{};
   Stream stream(kCapacity);
@@ -112,43 +113,46 @@ constexpr void mixed_smoke() noexcept {
 
   stream.push(std::array{std::byte(2), std::byte(3)});
   EXPECT_EQ(stream.size(), 4);
-  EXPECT_EQ(stream.try_push(std::array{std::byte(4), std::byte(0)}), 1);
-  EXPECT_EQ(stream.size(), 5);
+  EXPECT_EQ(stream.try_push(std::array{std::byte(4), std::byte(0)}), 2);
+  EXPECT_EQ(stream.size(), 6);
 
   stream.pop(bytes);
   EXPECT_EQ(bytes, (std::array{std::byte(0), std::byte(1)}));
-  EXPECT_EQ(stream.size(), 3);
+  EXPECT_EQ(stream.size(), 4);
 
   EXPECT_EQ(stream.try_push(std::array{std::byte(5), std::byte(6)}), 2);
-  EXPECT_EQ(stream.size(), 5);
+  EXPECT_EQ(stream.size(), 6);
   stream.pop(bytes);
   EXPECT_EQ(bytes, (std::array{std::byte(2), std::byte(3)}));
-  EXPECT_EQ(stream.size(), 3);
+  EXPECT_EQ(stream.size(), 4);
 
   stream.pop(bytes);
-  EXPECT_EQ(bytes, (std::array{std::byte(4), std::byte(5)}));
-  EXPECT_EQ(stream.size(), 1);
+  EXPECT_EQ(bytes, (std::array{std::byte(4), std::byte(0)}));
+  EXPECT_EQ(stream.size(), 2);
 
-  EXPECT_EQ(stream.try_pop(bytes), 1);
-  EXPECT_EQ(bytes, (std::array{std::byte(6), std::byte(5)}));
+  EXPECT_EQ(stream.try_pop(bytes), 2);
+  EXPECT_EQ(bytes, (std::array{std::byte(5), std::byte(6)}));
+
+  EXPECT_EQ(stream.try_pop(bytes), 0);
 }
 
 template <flow::concepts::blocking_stream Stream>
 constexpr void blocking_push() noexcept {
-  constexpr std::size_t kCapacity = 6;
+  constexpr std::size_t kCapacity = 8;
 
-  std::array<std::byte, 4> bytes{};
   Stream stream(kCapacity);
 
-  stream.push(std::vector(3, std::byte(0)));
-  stream.push(std::vector(3, std::byte(1)));
+  stream.push(std::vector(4, std::byte(0)));
+  stream.push(std::vector(4, std::byte(1)));
 
   std::jthread const consumer([&] {
-    EXPECT_EQ(stream.try_pop(bytes), 4);
+    std::array<std::byte, 6> bytes{};
+    EXPECT_EQ(stream.try_pop(bytes), 6);
     EXPECT_EQ(bytes, (std::array{std::byte(0), std::byte(0), std::byte(0),
-                                 std::byte(1)}));
+                                 std::byte(0), std::byte(1), std::byte(1)}));
   });
 
+  std::array<std::byte, 4> bytes{};
   stream.push(std::vector(2, std::byte(2)));
   stream.pop(bytes);
   EXPECT_EQ(bytes, (std::array{std::byte(1), std::byte(1), std::byte(2),
@@ -489,4 +493,5 @@ constexpr void exception_callback() noexcept {
   EXPECT_EQ(stream.try_pop([](std::span<std::byte>) noexcept {}), 1);
 }
 
+// NOLINTEND(cppcoreguidelines-avoid-magic-numbers)
 }  // namespace tests::templates

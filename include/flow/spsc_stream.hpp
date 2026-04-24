@@ -11,7 +11,6 @@
 
 #include <swiss/conditionally_runtime.hpp>
 #include <swiss/dynamic_extent.hpp>
-#include <swiss/functional.hpp>
 #include <swiss/mixins.hpp>
 #include <swiss/predicates.hpp>
 

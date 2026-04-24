@@ -152,6 +152,7 @@ class mpsc_queue final : public swiss::non_copyable, public swiss::non_movable {
       }
 
       std::this_thread::yield();
+
       if (!vac) {
         push_to = writer_.index.load(std::memory_order::relaxed);
       }
@@ -172,7 +173,7 @@ class mpsc_queue final : public swiss::non_copyable, public swiss::non_movable {
     requires(std::is_nothrow_invocable_v<Callback, value_type &>)
   {
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
-    auto entry = reader_.ring_buffer + slot(*reader_.capacity, pop_from);
+    auto * entry = reader_.ring_buffer + slot(*reader_.capacity, pop_from);
 
     while (true) {
       if (stop_token.stop_requested()) {

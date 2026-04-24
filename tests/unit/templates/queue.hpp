@@ -222,7 +222,8 @@ constexpr void blocking_push_stop_token() noexcept {
 
   std::jthread const consumer([&](std::stop_token stop_token) {
     EXPECT_FALSE(queue.push(
-        stop_token, [](typename Queue::value_type &) { GTEST_FAIL(); }));
+        stop_token,
+        [](typename Queue::value_type &) noexcept { GTEST_FAIL(); }));
     EXPECT_FALSE(queue.emplace(stop_token));
   });
 }
@@ -238,8 +239,9 @@ constexpr void blocking_pop_stop_token() noexcept {
   EXPECT_TRUE(queue.pop(std::stop_token{}, value));
 
   std::jthread const producer([&](std::stop_token stop_token) {
-    EXPECT_FALSE(queue.pop(stop_token,
-                           [](typename Queue::value_type &) { GTEST_FAIL(); }));
+    EXPECT_FALSE(
+        queue.pop(stop_token,
+                  [](typename Queue::value_type &) noexcept { GTEST_FAIL(); }));
   });
 }
 
@@ -590,13 +592,13 @@ constexpr void nonblocking_callback() noexcept {
 
   Queue queue(kCapacity);
 
-  EXPECT_TRUE(queue.try_push([](int & value) { value = 1; }));
-  EXPECT_TRUE(queue.try_push([](int & value) { value = 2; }));
-  EXPECT_FALSE(queue.try_push([](int &) { GTEST_FAIL(); }));
+  EXPECT_TRUE(queue.try_push([](int & value) noexcept { value = 1; }));
+  EXPECT_TRUE(queue.try_push([](int & value) noexcept { value = 2; }));
+  EXPECT_FALSE(queue.try_push([](int &) noexcept { GTEST_FAIL(); }));
 
-  EXPECT_TRUE(queue.try_pop([](int & value) { EXPECT_EQ(value, 1); }));
-  EXPECT_TRUE(queue.try_pop([](int & value) { EXPECT_EQ(value, 2); }));
-  EXPECT_FALSE(queue.try_pop([](int &) { GTEST_FAIL(); }));
+  EXPECT_TRUE(queue.try_pop([](int & value) noexcept { EXPECT_EQ(value, 1); }));
+  EXPECT_TRUE(queue.try_pop([](int & value) noexcept { EXPECT_EQ(value, 2); }));
+  EXPECT_FALSE(queue.try_pop([](int &) noexcept { GTEST_FAIL(); }));
 }
 
 template <flow::concepts::blocking_queue Queue>
@@ -605,11 +607,11 @@ constexpr void blocking_callback() noexcept {
 
   Queue queue(kCapacity);
 
-  queue.push([](int & value) { value = 1; });
-  queue.push([](int & value) { value = 2; });
+  queue.push([](int & value) noexcept { value = 1; });
+  queue.push([](int & value) noexcept { value = 2; });
 
-  queue.pop([](int & value) { EXPECT_EQ(value, 1); });
-  queue.pop([](int & value) { EXPECT_EQ(value, 2); });
+  queue.pop([](int & value) noexcept { EXPECT_EQ(value, 1); });
+  queue.pop([](int & value) noexcept { EXPECT_EQ(value, 2); });
 }
 
 template <typename Queue>

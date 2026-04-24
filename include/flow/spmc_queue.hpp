@@ -183,6 +183,7 @@ class spmc_queue final : public swiss::non_copyable, public swiss::non_movable {
       }
 
       std::this_thread::yield();
+
       if (!occ) {
         pop_from = reader_.index.load(std::memory_order::relaxed);
       }

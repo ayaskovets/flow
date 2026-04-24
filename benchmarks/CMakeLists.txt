@@ -29,7 +29,6 @@ set(SOURCES
     templates/stream.hpp
     templates/templates.hpp
     cas128_mpmc_queue_bench.cpp
-    locked_deque_bench.cpp
     locked_ring_buffer_bench.cpp
     main.cpp
     mpmc_queue_bench.cpp

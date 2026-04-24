@@ -16,10 +16,7 @@ namespace flow {
 /**
  * @brief Locked ring buffer for many producers and many consumers
  * @note Implemented as a ring buffer
- * @note Provides mostly the same performance as a locked std::deque but with a
- * pre-allocated memory buffer
- * @warning Allocated buffer always contains one additional element to
- * differentiate the empty state
+ * @note Serves as a naive baseline implementation of an MPMC queue
  */
 template <typename Value, std::unsigned_integral Index = std::size_t,
           Index Capacity     = swiss::kDynamicExtent<Index>,

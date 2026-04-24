@@ -17,8 +17,6 @@ namespace flow {
 /**
  * @brief Fixed-size threadsafe queue for 1 producer and 1 consumer
  * @note Implemented as a ring buffer with cached pop and push indices
- * @warning Allocated buffer always contains one additional element to
- * differentiate the empty state
  */
 template <typename Value, std::unsigned_integral Index = std::size_t,
           Index Capacity     = swiss::kDynamicExtent<Index>,

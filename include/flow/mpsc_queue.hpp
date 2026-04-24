@@ -18,8 +18,6 @@ namespace flow {
  * @brief Fixed-size threadsafe queue for 1 consumer and many producers
  * @note Implemented as a ring buffer with cached pop and push indices
  * @note Capacity for this queue must be a power of 2 for efficient division
- * @warning Allocated buffer always contains one additional element to
- * differentiate the empty state
  * @warning std::allocator_traits construction/destruction is not supported
  */
 template <typename Value, std::unsigned_integral Index = std::size_t,

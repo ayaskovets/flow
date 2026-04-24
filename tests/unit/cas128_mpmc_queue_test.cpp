@@ -38,6 +38,8 @@ TEST_T(cas128_mpmc_queue, blocking_push, flow::cas128_mpmc_queue<int>);
 
 TEST_T(cas128_mpmc_queue, blocking_pop, flow::cas128_mpmc_queue<int>);
 
+TEST_T(cas128_mpmc_queue, stop_token_noop, flow::cas128_mpmc_queue<int>);
+
 TEST_T(cas128_mpmc_queue, blocking_push_stop_token,
        flow::cas128_mpmc_queue<int>);
 
@@ -89,8 +91,10 @@ TEST_T(cas128_mpmc_queue, queued_consumers_blocking,
 using uint8_index_queue_t = flow::cas128_mpmc_queue<int, std::uint8_t>;
 TEST_T(cas128_mpmc_queue, rollover, uint8_index_queue_t);
 
-TEST(cas128_mpmc_queue, back) { GTEST_SKIP(); }
+TEST_T(cas128_mpmc_queue, nonblocking_callback, flow::cas128_mpmc_queue<int>);
 
-TEST(cas128_mpmc_queue, front) { GTEST_SKIP(); }
+TEST_T(cas128_mpmc_queue, blocking_callback, flow::cas128_mpmc_queue<int>);
+
+TEST(cas128_mpmc_queue, exception_callback) { GTEST_SKIP(); }
 
 }  // namespace tests::unit

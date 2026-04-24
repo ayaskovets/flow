@@ -19,8 +19,6 @@ namespace flow {
 /**
  * @brief Fixed-size message buffer for 1 producer and 1 consumer
  * @note Implemented as a ring buffer
- * @warning Allocated buffer always contains one additional element to
- * differentiate the empty state
  */
 template <std::unsigned_integral Index = std::size_t,
           Index Capacity               = swiss::kDynamicExtent<Index>,

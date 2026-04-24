@@ -21,8 +21,6 @@ namespace flow {
  * @brief Fixed-size stream for 1 producer and 1 consumer
  * @note Implemented as a ring buffer
  * @note Capacity must be a power of 2
- * @warning Allocated buffer always contains one additional element to
- * differentiate the empty state
  */
 template <std::unsigned_integral Index = std::size_t,
           Index Capacity               = swiss::kDynamicExtent<Index>,

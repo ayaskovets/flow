@@ -118,7 +118,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
  public:
   template <std::invocable<value_type &> Callback>
   constexpr auto
-  push(std::stop_token const & stop_token, Callback && callback) noexcept(
+  push(std::stop_token stop_token, Callback && callback) noexcept(
       std::is_nothrow_invocable_v<Callback, value_type &>) -> bool {
     index_type const push_to = writer_.index.load(std::memory_order::relaxed);
 
@@ -144,8 +144,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
   }
 
   template <std::invocable<value_type &> Callback>
-  constexpr auto
-  pop(std::stop_token const & stop_token, Callback && callback) noexcept(
+  constexpr auto pop(std::stop_token stop_token, Callback && callback) noexcept(
       std::is_nothrow_invocable_v<Callback, value_type &>) -> bool {
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
 
@@ -211,7 +210,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
  public:
   template <typename... Args>
   constexpr auto emplace(std::stop_token stop_token, Args &&... args) noexcept(
-      std::is_nothrow_move_constructible_v<value_type>) -> bool {
+      std::is_nothrow_constructible_v<value_type, Args...>) -> bool {
     return push(stop_token, [this, ... args = std::forward<Args>(args)](
                                 value_type & value) mutable {
       std::allocator_traits<allocator_type>::construct(

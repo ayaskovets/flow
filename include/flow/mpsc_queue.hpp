@@ -132,8 +132,8 @@ class mpsc_queue final : public swiss::non_copyable, public swiss::non_movable {
 
  public:
   template <std::invocable<value_type &> Callback>
-  constexpr auto push(std::stop_token const & stop_token,
-                      Callback && callback) noexcept -> bool
+  constexpr auto push(std::stop_token stop_token, Callback && callback) noexcept
+      -> bool
     requires(std::is_nothrow_invocable_v<Callback, value_type &>)
   {
     index_type push_to = writer_.index.load(std::memory_order::relaxed);
@@ -168,8 +168,8 @@ class mpsc_queue final : public swiss::non_copyable, public swiss::non_movable {
   }
 
   template <std::invocable<value_type &> Callback>
-  constexpr auto pop(std::stop_token const & stop_token,
-                     Callback && callback) noexcept -> bool
+  constexpr auto pop(std::stop_token stop_token, Callback && callback) noexcept
+      -> bool
     requires(std::is_nothrow_invocable_v<Callback, value_type &>)
   {
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
@@ -243,7 +243,7 @@ class mpsc_queue final : public swiss::non_copyable, public swiss::non_movable {
   template <typename... Args>
   constexpr auto emplace(std::stop_token stop_token, Args &&... args) noexcept
       -> bool
-    requires((std::is_nothrow_move_constructible_v<value_type>))
+    requires(std::is_nothrow_constructible_v<value_type, Args...>)
   {
     return push(stop_token, [... args = std::forward<Args>(args)](
                                 value_type & value) mutable noexcept {
@@ -253,15 +253,15 @@ class mpsc_queue final : public swiss::non_copyable, public swiss::non_movable {
 
   constexpr auto push(std::stop_token stop_token, value_type value) noexcept
       -> bool
-    requires((std::is_nothrow_move_constructible_v<value_type>))
+    requires(std::is_nothrow_move_constructible_v<value_type>)
   {
     return emplace(stop_token, std::move(value));
   }
 
   constexpr auto pop(std::stop_token stop_token, value_type & value) noexcept
       -> bool
-    requires((std::is_nothrow_move_assignable_v<value_type> &&
-              std::is_nothrow_destructible_v<value_type>))
+    requires(std::is_nothrow_move_assignable_v<value_type> &&
+             std::is_nothrow_destructible_v<value_type>)
   {
     return pop(stop_token, [&out = value](value_type & value) mutable noexcept {
       out = std::move(value);
@@ -272,7 +272,7 @@ class mpsc_queue final : public swiss::non_copyable, public swiss::non_movable {
  public:
   template <typename... Args>
   constexpr void emplace(Args &&... args) noexcept
-    requires((std::is_nothrow_constructible_v<value_type, Args...>))
+    requires(std::is_nothrow_constructible_v<value_type, Args...>)
   {
     emplace(std::stop_token{}, std::forward<Args>(args)...);
   }

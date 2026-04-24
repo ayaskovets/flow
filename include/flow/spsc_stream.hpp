@@ -11,6 +11,7 @@
 
 #include <swiss/conditionally_runtime.hpp>
 #include <swiss/dynamic_extent.hpp>
+#include <swiss/functional.hpp>
 #include <swiss/mixins.hpp>
 #include <swiss/predicates.hpp>
 
@@ -184,7 +185,7 @@ class spsc_stream final : public swiss::non_copyable,
   }
 
  public:
-  constexpr auto push(std::stop_token const & stop_token,
+  constexpr auto push(std::stop_token stop_token,
                       std::span<std::byte const> bytes) noexcept -> bool {
     auto const bytes_size = static_cast<index_type>(bytes.size());
 
@@ -214,7 +215,7 @@ class spsc_stream final : public swiss::non_copyable,
     return true;
   }
 
-  constexpr auto pop(std::stop_token const & stop_token,
+  constexpr auto pop(std::stop_token stop_token,
                      std::span<std::byte> bytes) noexcept -> bool {
     auto const bytes_size = static_cast<index_type>(bytes.size());
 

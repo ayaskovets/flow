@@ -168,7 +168,7 @@ class spsc_msgbuf final : public swiss::non_copyable,
  public:
   template <std::invocable<std::span<std::byte>> Callback>
   constexpr auto push(
-      std::stop_token const & stop_token, index_type msg_size,
+      std::stop_token stop_token, index_type msg_size,
       Callback &&
           callback) noexcept(std::is_nothrow_invocable_v<Callback,
                                                          std::span<std::byte>>)
@@ -189,8 +189,7 @@ class spsc_msgbuf final : public swiss::non_copyable,
   }
 
   template <std::invocable<std::span<std::byte>> Callback>
-  constexpr auto
-  pop(std::stop_token const & stop_token, Callback && callback) noexcept(
+  constexpr auto pop(std::stop_token stop_token, Callback && callback) noexcept(
       std::is_nothrow_invocable_v<Callback, std::span<std::byte>>) -> bool {
     while (!stop_token.stop_requested()) {
       if (try_pop(std::forward<Callback>(callback)) != 0) {
@@ -245,7 +244,7 @@ class spsc_msgbuf final : public swiss::non_copyable,
   }
 
  public:
-  constexpr auto push(std::stop_token const & stop_token,
+  constexpr auto push(std::stop_token stop_token,
                       std::span<std::byte const> msg) noexcept -> bool {
     return push(stop_token, msg.size(),
                 [msg](std::span<std::byte> chunk) noexcept {
@@ -253,7 +252,7 @@ class spsc_msgbuf final : public swiss::non_copyable,
                 });
   }
 
-  constexpr auto pop(std::stop_token const & stop_token,
+  constexpr auto pop(std::stop_token stop_token,
                      std::span<std::byte> msg) noexcept -> bool {
     return pop(stop_token, [msg](std::span<std::byte> chunk) noexcept {
       std::copy_n(chunk.begin(), std::min(msg.size(), chunk.size()),

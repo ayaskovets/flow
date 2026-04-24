@@ -260,7 +260,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     index_type const push_to  = writer_.index.load(std::memory_order::relaxed);
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
 
-    return push_to - pop_from;
+    return size(push_to, pop_from);
   }
 
   constexpr auto get_allocator() const noexcept -> allocator_type {
@@ -284,10 +284,16 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
   CacheLine reader_;
 
  private:
+  [[nodiscard]] constexpr auto size(index_type push_to,
+                                    index_type pop_from) const noexcept
+      -> index_type {
+    return push_to - pop_from;
+  }
+
   [[nodiscard]] constexpr auto full(index_type capacity, index_type push_to,
                                     index_type pop_from) const noexcept
       -> bool {
-    return capacity == static_cast<index_type>(push_to - pop_from);
+    return capacity == size(push_to, pop_from);
   }
 
   [[nodiscard]] constexpr auto empty(index_type push_to,

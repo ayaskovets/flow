@@ -39,6 +39,8 @@ TEST_T(mpsc_queue, blocking_push, flow::mpsc_queue<int>);
 
 TEST_T(mpsc_queue, blocking_pop, flow::mpsc_queue<int>);
 
+TEST_T(mpsc_queue, stop_token_noop, flow::mpsc_queue<int>);
+
 TEST_T(mpsc_queue, blocking_push_stop_token, flow::mpsc_queue<int>);
 
 TEST_T(mpsc_queue, blocking_pop_stop_token, flow::mpsc_queue<int>);
@@ -85,8 +87,10 @@ TEST(mpsc_queue, queued_consumers_blocking) { GTEST_SKIP(); }
 using uint8_index_queue_t = flow::mpsc_queue<int, std::uint8_t>;
 TEST_T(mpsc_queue, rollover, uint8_index_queue_t);
 
-TEST(mpsc_queue, back) { GTEST_SKIP(); }
+TEST_T(mpsc_queue, nonblocking_callback, flow::mpsc_queue<int>);
 
-TEST_T(mpsc_queue, front, flow::mpsc_queue<int>);
+TEST_T(mpsc_queue, blocking_callback, flow::mpsc_queue<int>);
+
+TEST(mpsc_queue, exception_callback) { GTEST_SKIP(); }
 
 }  // namespace tests::unit

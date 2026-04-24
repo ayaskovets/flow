@@ -109,8 +109,7 @@ class unsafe_queue final : public swiss::non_copyable,
   template <typename... Args>
   constexpr auto try_emplace(Args &&... args) noexcept(
       std::is_nothrow_constructible_v<value_type, Args...>) -> bool {
-    return try_push([this, ... args = std::forward<Args>(args)](
-                        value_type & value) mutable {
+    return try_push([&](value_type & value) mutable {
       std::allocator_traits<allocator_type>::construct(
           allocator_, &value, std::forward<Args>(args)...);
     });
@@ -133,8 +132,7 @@ class unsafe_queue final : public swiss::non_copyable,
  public:
   template <typename... Args>
   constexpr void emplace(Args &&... args) {
-    push([this,
-          ... args = std::forward<Args>(args)](value_type & value) mutable {
+    push([&](value_type & value) mutable {
       std::allocator_traits<allocator_type>::construct(
           allocator_, &value, std::forward<Args>(args)...);
     });

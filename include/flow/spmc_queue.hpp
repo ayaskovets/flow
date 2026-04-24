@@ -132,8 +132,8 @@ class spmc_queue final : public swiss::non_copyable, public swiss::non_movable {
 
  public:
   template <std::invocable<value_type &> Callback>
-  constexpr auto push(std::stop_token stop_token, Callback && callback) noexcept
-      -> bool
+  constexpr auto push(std::stop_token const & stop_token,
+                      Callback && callback) noexcept -> bool
     requires(std::is_nothrow_invocable_v<Callback, value_type &>)
   {
     index_type const push_to = writer_.index.load(std::memory_order::relaxed);
@@ -162,8 +162,8 @@ class spmc_queue final : public swiss::non_copyable, public swiss::non_movable {
   }
 
   template <std::invocable<value_type &> Callback>
-  constexpr auto pop(std::stop_token stop_token, Callback && callback) noexcept
-      -> bool
+  constexpr auto pop(std::stop_token const & stop_token,
+                     Callback && callback) noexcept -> bool
     requires(std::is_nothrow_invocable_v<Callback, value_type &>)
   {
     index_type pop_from = reader_.index.load(std::memory_order::relaxed);
@@ -218,8 +218,7 @@ class spmc_queue final : public swiss::non_copyable, public swiss::non_movable {
   constexpr auto try_emplace(Args &&... args) noexcept -> bool
     requires(std::is_nothrow_constructible_v<value_type, Args...>)
   {
-    return try_push([... args = std::forward<Args>(args)](
-                        value_type & value) mutable noexcept {
+    return try_push([&](value_type & value) mutable noexcept {
       std::construct_at(&value, std::forward<Args>(args)...);
     });
   }
@@ -246,8 +245,7 @@ class spmc_queue final : public swiss::non_copyable, public swiss::non_movable {
       -> bool
     requires(std::is_nothrow_constructible_v<value_type, Args...>)
   {
-    return push(stop_token, [... args = std::forward<Args>(args)](
-                                value_type & value) mutable noexcept {
+    return push(stop_token, [&](value_type & value) mutable noexcept {
       std::construct_at(&value, std::forward<Args>(args)...);
     });
   }

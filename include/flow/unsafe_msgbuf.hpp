@@ -69,13 +69,15 @@ class unsafe_msgbuf final : public swiss::non_copyable,
 
     index_type padding       = 0;
     index_type _push_to      = push_to();
+    index_type const _free   = free();
     index_type const postfix = *capacity_ - _push_to;
     index_type const prefix  = pop_from_;
-    index_type const chunk   = std::min(postfix, free());
+    index_type const chunk   = std::min(postfix, _free);
 
     // NOLINTNEXTLINE(bugprone-branch-clone)
     if (chunk >= kHeaderSize + msg_size) {
-    } else if (chunk == kHeaderSize && prefix >= msg_size) {
+    } else if (postfix == kHeaderSize && prefix >= msg_size &&
+               _free >= kHeaderSize + msg_size) {
     } else {
       if (chunk != postfix || prefix < kHeaderSize + msg_size) {
         return false;

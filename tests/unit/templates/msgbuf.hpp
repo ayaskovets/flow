@@ -154,16 +154,18 @@ constexpr void mixed_smoke() noexcept {
 
 template <flow::concepts::blocking_msgbuf Msgbuf>
 constexpr void blocking_push() noexcept {
-  constexpr std::size_t kCapacity = 11;
+  constexpr std::size_t kCapacity = 16;
 
   Msgbuf msgbuf(kCapacity);
 
-  msgbuf.push(std::vector(3, std::byte(0)));
+  msgbuf.push(std::vector(8, std::byte(0)));
 
   std::jthread const consumer([&] {
-    std::array<std::byte, 3> msg{};
-    EXPECT_EQ(msgbuf.try_pop(msg), 3);
-    EXPECT_EQ(msg, (std::array{std::byte(0), std::byte(0), std::byte(0)}));
+    std::array<std::byte, 8> msg{};
+    EXPECT_EQ(msgbuf.try_pop(msg), 8);
+    EXPECT_EQ(msg, (std::array{std::byte(0), std::byte(0), std::byte(0),
+                               std::byte(0), std::byte(0), std::byte(0),
+                               std::byte(0), std::byte(0)}));
   });
 
   std::array<std::byte, 3> msg{};
@@ -176,7 +178,7 @@ template <typename Msgbuf>
   requires(flow::concepts::blocking_msgbuf<Msgbuf> &&
            flow::concepts::nonblocking_msgbuf<Msgbuf>)
 constexpr void blocking_pop() noexcept {
-  constexpr std::size_t kCapacity = 10;
+  constexpr std::size_t kCapacity = 16;
 
   Msgbuf msgbuf(kCapacity);
 
@@ -190,7 +192,7 @@ constexpr void blocking_pop() noexcept {
 
 template <flow::concepts::cancellable_blocking_msgbuf Msgbuf>
 constexpr void stop_token_noop() noexcept {
-  constexpr std::size_t kCapacity = 2;
+  constexpr std::size_t kCapacity = 32;
 
   std::array<std::byte, 1> msg{};
   Msgbuf msgbuf(kCapacity);
@@ -212,7 +214,7 @@ constexpr void stop_token_noop() noexcept {
 
 template <flow::concepts::cancellable_blocking_msgbuf Msgbuf>
 constexpr void blocking_push_stop_token() noexcept {
-  constexpr std::size_t kCapacity = 10;
+  constexpr std::size_t kCapacity = 16;
 
   Msgbuf msgbuf(kCapacity);
 
@@ -225,7 +227,7 @@ constexpr void blocking_push_stop_token() noexcept {
 
 template <flow::concepts::cancellable_blocking_msgbuf Msgbuf>
 constexpr void blocking_pop_stop_token() noexcept {
-  constexpr std::size_t kCapacity = 10;
+  constexpr std::size_t kCapacity = 16;
 
   std::array<std::byte, 2> msg{};
   Msgbuf msgbuf(kCapacity);
@@ -234,7 +236,7 @@ constexpr void blocking_pop_stop_token() noexcept {
   EXPECT_TRUE(msgbuf.pop(std::stop_token{}, msg));
 
   std::jthread const producer([&](std::stop_token stop_token) {
-    EXPECT_EQ(msgbuf.pop(stop_token, msg), 2);
+    EXPECT_FALSE(msgbuf.pop(stop_token, msg));
   });
 }
 
@@ -512,6 +514,7 @@ constexpr void padding() noexcept {
 
   EXPECT_TRUE(msgbuf.try_push(std::vector(16, std::byte(0))));
   EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept {}), 16);
+  EXPECT_EQ(msgbuf.size(), 0);
 
   EXPECT_TRUE(msgbuf.try_push(std::vector(30, std::byte(0))));
   EXPECT_EQ(msgbuf.size(), 62);

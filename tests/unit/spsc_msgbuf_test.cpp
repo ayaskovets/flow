@@ -38,6 +38,8 @@ TEST_T(spsc_msgbuf, blocking_push, flow::spsc_msgbuf<>);
 
 TEST_T(spsc_msgbuf, blocking_pop, flow::spsc_msgbuf<>);
 
+TEST_T(spsc_msgbuf, stop_token_noop, flow::spsc_msgbuf<>);
+
 TEST_T(spsc_msgbuf, blocking_push_stop_token, flow::spsc_msgbuf<>);
 
 TEST_T(spsc_msgbuf, blocking_pop_stop_token, flow::spsc_msgbuf<>);
@@ -64,5 +66,13 @@ INSTANTIATE_TEST_SUITE_P(spsc_msgbuf_workload, spsc_msgbuf_workload,
 
 using uint8_index_msgbuf_t = flow::spsc_msgbuf<std::uint8_t>;
 TEST_T(spsc_msgbuf, rollover, uint8_index_msgbuf_t);
+
+TEST_T(spsc_msgbuf, nonblocking_callback, flow::spsc_msgbuf<>);
+
+TEST_T(spsc_msgbuf, blocking_callback, flow::spsc_msgbuf<>);
+
+TEST_T(spsc_msgbuf, padding, flow::spsc_msgbuf<>);
+
+TEST_T(spsc_msgbuf, exception_callback, flow::spsc_msgbuf<>);
 
 }  // namespace tests::unit

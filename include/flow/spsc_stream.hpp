@@ -187,7 +187,12 @@ class spsc_stream final : public swiss::non_copyable,
  public:
   constexpr auto push(std::stop_token const & stop_token,
                       std::span<std::byte const> bytes) noexcept -> bool {
-    auto const bytes_size    = static_cast<index_type>(bytes.size());
+    auto const bytes_size = static_cast<index_type>(bytes.size());
+
+    if (bytes_size > *writer_.capacity) {
+      return false;
+    }
+
     index_type const push_to = writer_.index.load(std::memory_order::relaxed);
 
     while (true) {
@@ -212,7 +217,12 @@ class spsc_stream final : public swiss::non_copyable,
 
   constexpr auto pop(std::stop_token const & stop_token,
                      std::span<std::byte> bytes) noexcept -> bool {
-    auto const bytes_size     = static_cast<index_type>(bytes.size());
+    auto const bytes_size = static_cast<index_type>(bytes.size());
+
+    if (bytes_size > *reader_.capacity) {
+      return false;
+    }
+
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
 
     while (true) {

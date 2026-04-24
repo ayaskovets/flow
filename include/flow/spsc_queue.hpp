@@ -304,7 +304,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
   [[nodiscard]] constexpr auto slot(index_type capacity,
                                     index_type index) const noexcept
       -> index_type {
-    return index & (capacity - 1);
+    return index & static_cast<index_type>(capacity - 1);
   }
 };
 

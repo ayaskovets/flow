@@ -8,9 +8,8 @@
 
 #include <swiss/conditionally_runtime.hpp>
 #include <swiss/dynamic_extent.hpp>
-#include <swiss/functional.hpp>
 #include <swiss/mixins.hpp>
-#include <swiss/variadic_traits.hpp>
+#include <swiss/predicates.hpp>
 
 namespace flow {
 
@@ -39,10 +38,9 @@ class locked_ring_buffer final : public swiss::non_copyable,
     requires(Capacity != swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
         ring_buffer_(std::allocator_traits<allocator_type>::allocate(
-            allocator_, *capacity_ + 1)) {
-    static_assert(
-        Capacity > 0,
-        "locked_ring_buffer::locked_ring_buffer(): invalid capacity < 1");
+            allocator_, *capacity_)) {
+    static_assert(swiss::is_power_of_two(Capacity),
+                  "mpmc_queue::mpmc_queue(): invalid capacity != 2^n");
   }
 
   constexpr explicit locked_ring_buffer(
@@ -50,86 +48,177 @@ class locked_ring_buffer final : public swiss::non_copyable,
     requires(Capacity == swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
         capacity_(capacity),
-        ring_buffer_([this] {
-          if (*capacity_ == 0) {
+        ring_buffer_([this, capacity] {
+          if (!swiss::is_power_of_two(capacity)) {
             throw std::invalid_argument(
-                "locked_ring_buffer::locked_ring_buffer(): invalid capacity < "
-                "1");
+                "mpmc_queue::mpmc_queue(): invalid capacity != 2^n");
           }
-          return std::allocator_traits<allocator_type>::allocate(
-              allocator_, *capacity_ + 1);
+          return std::allocator_traits<allocator_type>::allocate(allocator_,
+                                                                 *capacity_);
         }()) {}
 
   /**
    * @warning Destructor requires exlusive access to the queue
    */
-  constexpr ~locked_ring_buffer() noexcept {
-    std::lock_guard const lock(mutex_);
-
-    while (!empty()) {
-      std::allocator_traits<allocator_type>::destroy(allocator_,
-                                                     ring_buffer_ + pop_from_);
-      pop_from_ = next(pop_from_);
+  constexpr ~locked_ring_buffer() noexcept
+    requires(std::is_nothrow_destructible_v<value_type>)
+  {
+    while (try_pop([this](value_type & value) noexcept {
+      std::allocator_traits<allocator_type>::destroy(allocator_, &value);
+    })) {
     }
 
     std::allocator_traits<allocator_type>::deallocate(allocator_, ring_buffer_,
-                                                      *capacity_ + 1);
+                                                      *capacity_);
+  }
+
+ public:
+  template <std::invocable<value_type &> Callback>
+  constexpr auto try_push(Callback && callback) noexcept(
+      std::is_nothrow_invocable_v<Callback, value_type &>) -> bool {
+    std::unique_lock lock(mutex_, std::defer_lock);
+    if (!lock.try_lock() || full()) {
+      return false;
+    }
+
+    std::invoke(std::forward<Callback>(callback),
+                *(ring_buffer_ + slot(push_to_)));
+
+    push_to_ = next(push_to_);
+    pop_available_cv_.notify_all();
+    return true;
+  }
+
+  template <std::invocable<value_type &> Callback>
+  constexpr auto try_pop(Callback && callback) noexcept(
+      std::is_nothrow_invocable_v<Callback, value_type &>) -> bool {
+    std::unique_lock lock(mutex_, std::defer_lock);
+    if (!lock.try_lock() || empty()) {
+      return false;
+    }
+
+    std::invoke(std::forward<Callback>(callback),
+                *(ring_buffer_ + slot(pop_from_)));
+
+    pop_from_ = next(pop_from_);
+    push_available_cv_.notify_all();
+    return true;
+  }
+
+ public:
+  template <std::invocable<value_type &> Callback>
+  constexpr auto
+  push(std::stop_token const & stop_token, Callback && callback) noexcept(
+      std::is_nothrow_invocable_v<Callback, value_type &>) -> bool {
+    std::unique_lock lock(mutex_);
+    if (!push_available_cv_.wait(lock, stop_token,
+                                 [this] { return !full(); })) {
+      return false;
+    }
+
+    std::invoke(std::forward<Callback>(callback),
+                *(ring_buffer_ + slot(push_to_)));
+
+    push_to_ = next(push_to_);
+    pop_available_cv_.notify_all();
+    return true;
+  }
+
+  template <std::invocable<value_type &> Callback>
+  constexpr auto
+  pop(std::stop_token const & stop_token, Callback && callback) noexcept(
+      std::is_nothrow_invocable_v<Callback, value_type &>) -> bool {
+    std::unique_lock lock(mutex_);
+    if (!pop_available_cv_.wait(lock, stop_token,
+                                [this] { return !empty(); })) {
+      return false;
+    }
+
+    std::invoke(std::forward<Callback>(callback),
+                *(ring_buffer_ + slot(pop_from_)));
+
+    pop_from_ = next(pop_from_);
+    push_available_cv_.notify_all();
+    return true;
+  }
+
+ public:
+  template <std::invocable<value_type &> Callback>
+  constexpr void push(Callback && callback) noexcept(
+      std::is_nothrow_invocable_v<Callback, value_type &>) {
+    push(std::stop_token{}, std::forward<Callback>(callback));
+  }
+
+  template <std::invocable<value_type &> Callback>
+  constexpr void pop(Callback && callback) noexcept(
+      std::is_nothrow_invocable_v<Callback, value_type &>) {
+    pop(std::stop_token{}, std::forward<Callback>(callback));
   }
 
  public:
   template <typename... Args>
   constexpr auto try_emplace(Args &&... args) noexcept(
       std::is_nothrow_constructible_v<value_type, Args...>) -> bool {
-    return emplace_impl<false, false>(std::forward<Args>(args)...);
+    return try_push([&](value_type & value) mutable {
+      std::allocator_traits<allocator_type>::construct(
+          allocator_, &value, std::forward<Args>(args)...);
+    });
   }
 
   constexpr auto try_push(value_type value) noexcept(
       std::is_nothrow_move_constructible_v<value_type>) -> bool {
-    return emplace_impl<false, false>(std::move(value));
+    return try_emplace(std::move(value));
   }
 
+  constexpr auto try_pop(value_type & value) noexcept(
+      std::is_nothrow_move_assignable_v<value_type> &&
+      std::is_nothrow_destructible_v<value_type>) -> bool {
+    return try_pop([this, &out = value](value_type & value) mutable {
+      out = std::move(value);
+      std::allocator_traits<allocator_type>::destroy(allocator_, &value);
+    });
+  }
+
+ public:
   template <typename... Args>
   constexpr auto emplace(std::stop_token stop_token, Args &&... args) noexcept(
       std::is_nothrow_constructible_v<value_type, Args...>) -> bool {
-    return emplace_impl<true, true>(stop_token, std::forward<Args>(args)...);
+    return push(stop_token, [&](value_type & value) mutable {
+      std::allocator_traits<allocator_type>::construct(
+          allocator_, &value, std::forward<Args>(args)...);
+    });
   }
 
   constexpr auto push(std::stop_token stop_token, value_type value) noexcept(
       std::is_nothrow_move_constructible_v<value_type>) -> bool {
-    return emplace_impl<true, true>(stop_token, std::move(value));
+    return emplace(stop_token, std::move(value));
   }
 
+  constexpr auto pop(std::stop_token stop_token, value_type & value) noexcept(
+      std::is_nothrow_move_assignable_v<value_type> &&
+      std::is_nothrow_destructible_v<value_type>) -> bool {
+    return pop(stop_token, [this, &out = value](value_type & value) mutable {
+      out = std::move(value);
+      std::allocator_traits<allocator_type>::destroy(allocator_, &value);
+    });
+  }
+
+ public:
   template <typename... Args>
   constexpr void emplace(Args &&... args) noexcept(
       std::is_nothrow_constructible_v<value_type, Args...>) {
-    emplace_impl<true, false>(std::forward<Args>(args)...);
+    emplace(std::stop_token{}, std::forward<Args>(args)...);
   }
 
   constexpr void push(value_type value) noexcept(
       std::is_nothrow_move_constructible_v<value_type>) {
-    emplace_impl<true, false>(std::move(value));
+    push(std::stop_token{}, std::move(value));
   }
 
-  constexpr auto try_pop(value_type & value) noexcept -> bool
-    requires(std::is_nothrow_move_assignable_v<value_type> &&
-             std::is_nothrow_destructible_v<value_type>)
-  {
-    return pop_impl<false, false>(value);
-  }
-
-  constexpr auto pop(std::stop_token stop_token, value_type & value) noexcept
-      -> bool
-    requires(std::is_nothrow_move_assignable_v<value_type> &&
-             std::is_nothrow_destructible_v<value_type>)
-  {
-    return pop_impl<true, true>(stop_token, value);
-  }
-
-  constexpr void pop(value_type & value) noexcept
-    requires(std::is_nothrow_move_assignable_v<value_type> &&
-             std::is_nothrow_destructible_v<value_type>)
-  {
-    pop_impl<true, false>(value);
+  constexpr void pop(value_type & value) noexcept(
+      std::is_nothrow_move_assignable_v<value_type> &&
+      std::is_nothrow_destructible_v<value_type>) {
+    pop(std::stop_token{}, value);
   }
 
  public:
@@ -139,11 +228,10 @@ class locked_ring_buffer final : public swiss::non_copyable,
 
   [[nodiscard]] constexpr auto size() const noexcept -> index_type {
     std::lock_guard const lock(mutex_);
-    return pop_from_ <= push_to_ ? push_to_ - pop_from_
-                                 : *capacity_ + push_to_ + 1 - pop_from_;
+
+    return size(push_to_, pop_from_);
   }
 
- public:
   constexpr auto get_allocator() const noexcept -> allocator_type {
     return allocator_;
   }
@@ -163,8 +251,14 @@ class locked_ring_buffer final : public swiss::non_copyable,
   // NOLINTEND(cppcoreguidelines-avoid-const-or-ref-data-members)
 
  private:
+  [[nodiscard]] constexpr auto size(index_type push_to,
+                                    index_type pop_from) const noexcept
+      -> index_type {
+    return push_to - pop_from;
+  }
+
   [[nodiscard]] constexpr auto full() const noexcept -> bool {
-    return next(push_to_) == pop_from_;
+    return *capacity_ == size(push_to_, pop_from_);
   }
 
   [[nodiscard]] constexpr auto empty() const noexcept -> bool {
@@ -173,103 +267,12 @@ class locked_ring_buffer final : public swiss::non_copyable,
 
   [[nodiscard]] constexpr auto next(index_type index) const noexcept
       -> index_type {
-    return index == *capacity_ ? 0 : index + 1;
+    return index + 1;
   }
 
- private:
-  template <bool Blocking, bool Cancellable, typename... Args>
-  constexpr auto emplace_impl(Args &&... args) -> decltype(auto) {
-    auto const emplace_and_notify = [this](auto &&... args) {
-      if constexpr (Cancellable) {
-        swiss::invoke_tail(
-            [this](auto &&... tail) {
-              std::allocator_traits<allocator_type>::construct(
-                  allocator_, ring_buffer_ + push_to_,
-                  std::forward<decltype(tail)>(tail)...);
-            },
-            std::forward<Args>(args)...);
-      }
-
-      if constexpr (!Cancellable) {
-        std::allocator_traits<allocator_type>::construct(
-            allocator_, ring_buffer_ + push_to_, std::forward<Args>(args)...);
-      }
-
-      push_to_ = next(push_to_);
-      pop_available_cv_.notify_all();
-    };
-
-    if constexpr (Blocking) {
-      std::unique_lock lock(mutex_);
-
-      if constexpr (Cancellable) {
-        std::stop_token const & stop_token =
-            swiss::variadic_nth<0>(std::forward<Args>(args)...);
-        if (!push_available_cv_.wait(lock, stop_token,
-                                     [this] { return !full(); })) {
-          return false;
-        }
-        emplace_and_notify(std::forward<Args>(args)...);
-        return true;
-      }
-
-      if constexpr (!Cancellable) {
-        push_available_cv_.wait(lock, [this] { return !full(); });
-        emplace_and_notify(std::forward<Args>(args)...);
-      }
-    }
-
-    if constexpr (!Blocking) {
-      std::unique_lock lock(mutex_, std::defer_lock);
-      if (!lock.try_lock() || full()) {
-        return false;
-      }
-      emplace_and_notify(std::forward<Args>(args)...);
-      return true;
-    }
-  }
-
-  template <bool Blocking, bool Cancellable, typename... Args>
-  constexpr auto pop_impl(Args &&... args) -> decltype(auto) {
-    auto const pop_and_notify = [this](auto &&... args) {
-      value_type & value = swiss::variadic_nth<Cancellable ? 1 : 0>(
-          std::forward<decltype(args)>(args)...);
-      value = std::move(*(ring_buffer_ + pop_from_));
-      std::allocator_traits<allocator_type>::destroy(allocator_,
-                                                     ring_buffer_ + pop_from_);
-
-      pop_from_ = next(pop_from_);
-      push_available_cv_.notify_all();
-    };
-
-    if constexpr (Blocking) {
-      std::unique_lock lock(mutex_);
-
-      if constexpr (Cancellable) {
-        std::stop_token const & stop_token =
-            swiss::variadic_nth<0>(std::forward<Args>(args)...);
-        if (!pop_available_cv_.wait(lock, stop_token,
-                                    [this] { return !empty(); })) {
-          return false;
-        }
-        pop_and_notify(std::forward<Args>(args)...);
-        return true;
-      }
-
-      if constexpr (!Cancellable) {
-        pop_available_cv_.wait(lock, [this] { return !empty(); });
-        pop_and_notify(std::forward<Args>(args)...);
-      }
-    }
-
-    if constexpr (!Blocking) {
-      std::unique_lock lock(mutex_, std::defer_lock);
-      if (!lock.try_lock() || empty()) {
-        return false;
-      }
-      pop_and_notify(std::forward<Args>(args)...);
-      return true;
-    }
+  [[nodiscard]] constexpr auto slot(index_type index) const noexcept
+      -> index_type {
+    return index & static_cast<index_type>(*capacity_ - 1);
   }
 };
 

@@ -42,6 +42,8 @@ TEST_T(locked_ring_buffer, blocking_push, flow::locked_ring_buffer<int>);
 
 TEST_T(locked_ring_buffer, blocking_pop, flow::locked_ring_buffer<int>);
 
+TEST_T(locked_ring_buffer, stop_token_noop, flow::locked_ring_buffer<int>);
+
 TEST_T(locked_ring_buffer, blocking_push_stop_token,
        flow::locked_ring_buffer<int>);
 
@@ -98,8 +100,10 @@ TEST_T(locked_ring_buffer, queued_consumers_blocking,
 using uint8_index_queue_t = flow::locked_ring_buffer<int, std::uint8_t>;
 TEST_T(locked_ring_buffer, rollover, uint8_index_queue_t);
 
-TEST(locked_ring_buffer, back) { GTEST_SKIP(); }
+TEST_T(locked_ring_buffer, nonblocking_callback, flow::locked_ring_buffer<int>);
 
-TEST(locked_ring_buffer, front) { GTEST_SKIP(); }
+TEST_T(locked_ring_buffer, blocking_callback, flow::locked_ring_buffer<int>);
+
+TEST_T(locked_ring_buffer, exception_callback, flow::locked_ring_buffer<int>);
 
 }  // namespace tests::unit

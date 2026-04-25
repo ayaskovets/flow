@@ -28,11 +28,11 @@ TEST(queue, locked_ring_buffer) {
 
   static_assert(flow::concepts::queue<queue_t>);
   static_assert(flow::concepts::nonblocking_queue<queue_t>);
-  static_assert(flow::concepts::noexcept_nonblocking_queue<queue_t>);
+  static_assert(!flow::concepts::noexcept_nonblocking_queue<queue_t>);
   static_assert(flow::concepts::blocking_queue<queue_t>);
-  static_assert(flow::concepts::noexcept_blocking_queue<queue_t>);
+  static_assert(!flow::concepts::noexcept_blocking_queue<queue_t>);
   static_assert(flow::concepts::cancellable_blocking_queue<queue_t>);
-  static_assert(flow::concepts::noexcept_cancellable_blocking_queue<queue_t>);
+  static_assert(!flow::concepts::noexcept_cancellable_blocking_queue<queue_t>);
 }
 
 TEST(queue, mpmc_queue) {

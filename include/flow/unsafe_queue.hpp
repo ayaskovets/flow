@@ -50,9 +50,7 @@ class unsafe_queue final : public swiss::non_copyable,
                                                                  capacity);
         }()) {}
 
-  constexpr ~unsafe_queue() noexcept
-    requires(std::is_nothrow_destructible_v<value_type>)
-  {
+  constexpr ~unsafe_queue() {
     while (try_pop([&](value_type * front) {
       std::allocator_traits<allocator_type>::destroy(allocator_, front);
     })) {

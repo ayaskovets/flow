@@ -11,7 +11,7 @@
 namespace benchmarks::templates {
 
 template <flow::concepts::nonblocking_queue Queue>
-constexpr void nonblocking_throughput(benchmark::State & state) noexcept {
+constexpr void nonblocking_throughput(benchmark::State & state) {
   auto const queue_capacity = static_cast<std::size_t>(state.range(0));
   auto const producers      = state.range(1);
   auto const consumers      = state.range(2);
@@ -69,7 +69,7 @@ constexpr void nonblocking_throughput(benchmark::State & state) noexcept {
 }
 
 template <flow::concepts::blocking_queue Queue>
-constexpr void blocking_throughput(benchmark::State & state) noexcept {
+constexpr void blocking_throughput(benchmark::State & state) {
   auto const queue_capacity = static_cast<std::size_t>(state.range(0));
   auto const producers      = state.range(1);
   auto const consumers      = state.range(2);

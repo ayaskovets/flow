@@ -14,10 +14,6 @@ concept msgbuf = requires(T msgbuf) {
   { msgbuf.capacity() } -> std::same_as<typename T::index_type>;
   { msgbuf.size() } -> std::same_as<typename T::index_type>;
   { msgbuf.get_allocator() } -> std::same_as<typename T::allocator_type>;
-
-  requires noexcept(msgbuf.capacity());
-  requires noexcept(msgbuf.size());
-  requires noexcept(msgbuf.get_allocator());
 };
 
 /**

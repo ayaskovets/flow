@@ -14,10 +14,6 @@ concept queue = requires(T queue, typename T::value_type) {
   { queue.capacity() } -> std::same_as<typename T::index_type>;
   { queue.size() } -> std::same_as<typename T::index_type>;
   { queue.get_allocator() } -> std::same_as<typename T::allocator_type>;
-
-  requires noexcept(queue.capacity());
-  requires noexcept(queue.size());
-  requires noexcept(queue.get_allocator());
 };
 
 /**

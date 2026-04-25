@@ -17,7 +17,7 @@ namespace tests::templates {
 // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
 
 template <flow::concepts::msgbuf T>
-constexpr void minimal_capacity(std::size_t capacity) noexcept {
+constexpr void minimal_capacity(std::size_t capacity) {
   for (std::size_t i = 0; i < capacity; ++i) {
     EXPECT_ANY_THROW((T(i)));
   }
@@ -25,7 +25,7 @@ constexpr void minimal_capacity(std::size_t capacity) noexcept {
 }
 
 template <flow::concepts::blocking_msgbuf Msgbuf>
-constexpr void size_capacity() noexcept {
+constexpr void size_capacity() {
   constexpr std::size_t kCapacity = 32;
 
   std::vector<std::byte> msg(4);
@@ -33,8 +33,7 @@ constexpr void size_capacity() noexcept {
 
   EXPECT_EQ(msgbuf.size(), 0);
   EXPECT_EQ(msgbuf.capacity(), kCapacity);
-  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept { GTEST_FAIL(); }),
-            0);
+  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) { GTEST_FAIL(); }), 0);
 
   msgbuf.push(std::vector(8, std::byte(0)));
   EXPECT_EQ(msgbuf.size(), 16);
@@ -52,14 +51,13 @@ constexpr void size_capacity() noexcept {
 }
 
 template <flow::concepts::nonblocking_msgbuf Msgbuf>
-constexpr void nonblocking_smoke() noexcept {
+constexpr void nonblocking_smoke() {
   constexpr std::size_t kCapacity = 32;
 
   std::vector<std::byte> msg(4);
   Msgbuf msgbuf(kCapacity);
 
-  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept { GTEST_FAIL(); }),
-            0);
+  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) { GTEST_FAIL(); }), 0);
 
   EXPECT_TRUE(msgbuf.try_push(std::vector(2, std::byte(0))));
   EXPECT_TRUE(msgbuf.try_push(std::vector(4, std::byte(1))));
@@ -81,12 +79,11 @@ constexpr void nonblocking_smoke() noexcept {
   EXPECT_EQ(msg, (std::vector{std::byte(4), std::byte(2), std::byte(1),
                               std::byte(1)}));
 
-  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept { GTEST_FAIL(); }),
-            0);
+  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) { GTEST_FAIL(); }), 0);
 }
 
 template <flow::concepts::blocking_msgbuf Msgbuf>
-constexpr void blocking_smoke() noexcept {
+constexpr void blocking_smoke() {
   constexpr std::size_t kCapacity = 32;
 
   std::vector<std::byte> msg(4);
@@ -114,7 +111,7 @@ constexpr void blocking_smoke() noexcept {
 template <typename Msgbuf>
   requires(flow::concepts::blocking_msgbuf<Msgbuf> &&
            flow::concepts::nonblocking_msgbuf<Msgbuf>)
-constexpr void mixed_smoke() noexcept {
+constexpr void mixed_smoke() {
   constexpr std::size_t kCapacity = 32;
 
   std::array<std::byte, 3> msg{};
@@ -153,7 +150,7 @@ constexpr void mixed_smoke() noexcept {
 }
 
 template <flow::concepts::blocking_msgbuf Msgbuf>
-constexpr void blocking_push() noexcept {
+constexpr void blocking_push() {
   constexpr std::size_t kCapacity = 16;
 
   Msgbuf msgbuf(kCapacity);
@@ -177,7 +174,7 @@ constexpr void blocking_push() noexcept {
 template <typename Msgbuf>
   requires(flow::concepts::blocking_msgbuf<Msgbuf> &&
            flow::concepts::nonblocking_msgbuf<Msgbuf>)
-constexpr void blocking_pop() noexcept {
+constexpr void blocking_pop() {
   constexpr std::size_t kCapacity = 16;
 
   Msgbuf msgbuf(kCapacity);
@@ -191,7 +188,7 @@ constexpr void blocking_pop() noexcept {
 }
 
 template <flow::concepts::cancellable_blocking_msgbuf Msgbuf>
-constexpr void stop_token_noop() noexcept {
+constexpr void stop_token_noop() {
   constexpr std::size_t kCapacity = 32;
 
   std::array<std::byte, 1> msg{};
@@ -213,7 +210,7 @@ constexpr void stop_token_noop() noexcept {
 }
 
 template <flow::concepts::cancellable_blocking_msgbuf Msgbuf>
-constexpr void blocking_push_stop_token() noexcept {
+constexpr void blocking_push_stop_token() {
   constexpr std::size_t kCapacity = 16;
 
   Msgbuf msgbuf(kCapacity);
@@ -226,7 +223,7 @@ constexpr void blocking_push_stop_token() noexcept {
 }
 
 template <flow::concepts::cancellable_blocking_msgbuf Msgbuf>
-constexpr void blocking_pop_stop_token() noexcept {
+constexpr void blocking_pop_stop_token() {
   constexpr std::size_t kCapacity = 16;
 
   std::array<std::byte, 2> msg{};
@@ -241,7 +238,7 @@ constexpr void blocking_pop_stop_token() noexcept {
 }
 
 template <flow::concepts::blocking_msgbuf Msgbuf>
-constexpr void allocator() noexcept {
+constexpr void allocator() {
   constexpr std::size_t kCapacity = 2;
 
   swiss::leak_detector_allocator<typename Msgbuf::allocator_type::value_type,
@@ -258,7 +255,7 @@ constexpr void allocator() noexcept {
 }
 
 template <flow::concepts::nonblocking_msgbuf Msgbuf>
-constexpr void nonblocking(auto const & param) noexcept {
+constexpr void nonblocking(auto const & param) {
   auto const & [msg_count, msgbuf_capacity, producers, consumers] = param;
 
   std::size_t const msg_size = std::max<std::size_t>(1, msgbuf_capacity / 7);
@@ -319,7 +316,7 @@ constexpr void nonblocking(auto const & param) noexcept {
 }
 
 template <flow::concepts::blocking_msgbuf Msgbuf>
-constexpr void blocking(auto const & param) noexcept {
+constexpr void blocking(auto const & param) {
   auto const & [msg_count, msgbuf_capacity, producers, consumers] = param;
 
   std::size_t const msg_size = std::max<std::size_t>(1, msgbuf_capacity / 7);
@@ -378,7 +375,7 @@ constexpr void blocking(auto const & param) noexcept {
 }
 
 template <flow::concepts::nonblocking_msgbuf Msgbuf>
-constexpr void rollover() noexcept {
+constexpr void rollover() {
   constexpr std::size_t kCapacity = 32;
   constexpr std::size_t kRepeats  = 3;
 
@@ -397,7 +394,7 @@ constexpr void rollover() noexcept {
 }
 
 template <flow::concepts::nonblocking_msgbuf Msgbuf>
-constexpr void nonblocking_callback() noexcept {
+constexpr void nonblocking_callback() {
   constexpr std::size_t kCapacity = 32;
 
   Msgbuf msgbuf(kCapacity);
@@ -435,7 +432,7 @@ constexpr void nonblocking_callback() noexcept {
 }
 
 template <flow::concepts::blocking_msgbuf Msgbuf>
-constexpr void blocking_callback() noexcept {
+constexpr void blocking_callback() {
   constexpr std::size_t kCapacity = 32;
 
   Msgbuf msgbuf(kCapacity);
@@ -473,7 +470,7 @@ constexpr void blocking_callback() noexcept {
 }
 
 template <flow::concepts::nonblocking_msgbuf Msgbuf>
-constexpr void padding() noexcept {
+constexpr void padding() {
   constexpr std::size_t kCapacity = 64;
 
   Msgbuf msgbuf(kCapacity);
@@ -526,7 +523,7 @@ constexpr void padding() noexcept {
 template <typename Msgbuf>
   requires(flow::concepts::blocking_msgbuf<Msgbuf> &&
            flow::concepts::nonblocking_msgbuf<Msgbuf>)
-constexpr void exception_callback() noexcept {
+constexpr void exception_callback() {
   constexpr std::size_t kCapacity = 32;
 
   Msgbuf msgbuf(kCapacity);

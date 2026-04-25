@@ -14,10 +14,6 @@ concept stream = requires(T stream) {
   { stream.capacity() } -> std::same_as<typename T::index_type>;
   { stream.size() } -> std::same_as<typename T::index_type>;
   { stream.get_allocator() } -> std::same_as<typename T::allocator_type>;
-
-  requires noexcept(stream.capacity());
-  requires noexcept(stream.size());
-  requires noexcept(stream.get_allocator());
 };
 
 /**

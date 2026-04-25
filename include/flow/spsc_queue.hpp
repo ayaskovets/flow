@@ -62,9 +62,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
    * @warning Destructor is not thread safe and assumes that there is only one
    * thread operating on the queue during the destruction
    */
-  constexpr ~spsc_queue() noexcept
-    requires(std::is_nothrow_destructible_v<value_type>)
-  {
+  constexpr ~spsc_queue() {
     while (try_pop([this](value_type * front) {
       std::allocator_traits<allocator_type>::destroy(allocator_, front);
     })) {

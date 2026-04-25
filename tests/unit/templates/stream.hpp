@@ -17,7 +17,7 @@ namespace tests::templates {
 // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
 
 template <flow::concepts::stream T>
-constexpr void minimal_capacity(std::size_t capacity) noexcept {
+constexpr void minimal_capacity(std::size_t capacity) {
   for (std::size_t i = 0; i < capacity; ++i) {
     EXPECT_ANY_THROW((T(i)));
   }
@@ -25,7 +25,7 @@ constexpr void minimal_capacity(std::size_t capacity) noexcept {
 }
 
 template <flow::concepts::blocking_stream Stream>
-constexpr void size_capacity() noexcept {
+constexpr void size_capacity() {
   constexpr std::size_t kCapacity = 8;
 
   std::vector<std::byte> bytes(2);
@@ -50,7 +50,7 @@ constexpr void size_capacity() noexcept {
 }
 
 template <flow::concepts::nonblocking_stream Stream>
-constexpr void nonblocking_smoke() noexcept {
+constexpr void nonblocking_smoke() {
   constexpr std::size_t kCapacity = 8;
 
   std::vector<std::byte> bytes(2);
@@ -75,7 +75,7 @@ constexpr void nonblocking_smoke() noexcept {
 }
 
 template <flow::concepts::blocking_stream Stream>
-constexpr void blocking_smoke() noexcept {
+constexpr void blocking_smoke() {
   constexpr std::size_t kCapacity = 8;
 
   std::vector<std::byte> bytes(2);
@@ -98,7 +98,7 @@ constexpr void blocking_smoke() noexcept {
 template <typename Stream>
   requires(flow::concepts::blocking_stream<Stream> &&
            flow::concepts::nonblocking_stream<Stream>)
-constexpr void mixed_smoke() noexcept {
+constexpr void mixed_smoke() {
   constexpr std::size_t kCapacity = 8;
 
   std::array<std::byte, 2> bytes{};
@@ -137,7 +137,7 @@ constexpr void mixed_smoke() noexcept {
 }
 
 template <flow::concepts::blocking_stream Stream>
-constexpr void blocking_push() noexcept {
+constexpr void blocking_push() {
   constexpr std::size_t kCapacity = 8;
 
   Stream stream(kCapacity);
@@ -162,7 +162,7 @@ constexpr void blocking_push() noexcept {
 template <typename Stream>
   requires(flow::concepts::blocking_stream<Stream> &&
            flow::concepts::nonblocking_stream<Stream>)
-constexpr void blocking_pop() noexcept {
+constexpr void blocking_pop() {
   constexpr std::size_t kCapacity = 2;
 
   Stream stream(kCapacity);
@@ -176,7 +176,7 @@ constexpr void blocking_pop() noexcept {
 }
 
 template <flow::concepts::cancellable_blocking_stream Stream>
-constexpr void stop_token_noop() noexcept {
+constexpr void stop_token_noop() {
   constexpr std::size_t kCapacity = 2;
 
   std::array<std::byte, 1> bytes{};
@@ -198,7 +198,7 @@ constexpr void stop_token_noop() noexcept {
 }
 
 template <flow::concepts::cancellable_blocking_stream Stream>
-constexpr void blocking_push_stop_token() noexcept {
+constexpr void blocking_push_stop_token() {
   constexpr std::size_t kCapacity = 2;
 
   Stream stream(kCapacity);
@@ -211,7 +211,7 @@ constexpr void blocking_push_stop_token() noexcept {
 }
 
 template <flow::concepts::cancellable_blocking_stream Stream>
-constexpr void blocking_pop_stop_token() noexcept {
+constexpr void blocking_pop_stop_token() {
   constexpr std::size_t kCapacity = 2;
 
   std::array<std::byte, 2> bytes{};
@@ -226,7 +226,7 @@ constexpr void blocking_pop_stop_token() noexcept {
 }
 
 template <flow::concepts::blocking_stream Stream>
-constexpr void allocator() noexcept {
+constexpr void allocator() {
   constexpr std::size_t kCapacity = 2;
 
   swiss::leak_detector_allocator<typename Stream::allocator_type::value_type,
@@ -243,7 +243,7 @@ constexpr void allocator() noexcept {
 }
 
 template <flow::concepts::nonblocking_stream Stream>
-constexpr void nonblocking(auto const & param) noexcept {
+constexpr void nonblocking(auto const & param) {
   auto const & [bytes_count, stream_capacity, producers, consumers] = param;
 
   std::size_t const producer_bytes =
@@ -314,7 +314,7 @@ constexpr void nonblocking(auto const & param) noexcept {
 }
 
 template <flow::concepts::blocking_stream Stream>
-constexpr void blocking(auto const & param) noexcept {
+constexpr void blocking(auto const & param) {
   auto const & [bytes_count, stream_capacity, producers, consumers] = param;
 
   std::size_t const producer_bytes =
@@ -379,7 +379,7 @@ constexpr void blocking(auto const & param) noexcept {
 }
 
 template <flow::concepts::nonblocking_stream Stream>
-constexpr void rollover() noexcept {
+constexpr void rollover() {
   constexpr std::size_t kCapacity = 8;
   constexpr std::size_t kRepeats  = 3;
 
@@ -399,7 +399,7 @@ constexpr void rollover() noexcept {
 }
 
 template <flow::concepts::nonblocking_stream Stream>
-constexpr void nonblocking_callback() noexcept {
+constexpr void nonblocking_callback() {
   constexpr std::size_t kCapacity = 8;
 
   Stream stream(kCapacity);
@@ -429,7 +429,7 @@ constexpr void nonblocking_callback() noexcept {
 }
 
 template <flow::concepts::nonblocking_stream Stream>
-constexpr void nonblocking_callback_limit() noexcept {
+constexpr void nonblocking_callback_limit() {
   constexpr std::size_t kCapacity = 8;
 
   Stream stream(kCapacity);
@@ -474,7 +474,7 @@ constexpr void nonblocking_callback_limit() noexcept {
 }
 
 template <flow::concepts::nonblocking_stream Stream>
-constexpr void exception_callback() noexcept {
+constexpr void exception_callback() {
   constexpr std::size_t kCapacity = 32;
 
   Stream stream(kCapacity);

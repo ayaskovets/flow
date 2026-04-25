@@ -56,6 +56,9 @@ TEST_T(unsafe_queue, item_destructor, flow::unsafe_queue<std::shared_ptr<int>>);
 TEST_T(unsafe_queue, non_copyable_item_type,
        flow::unsafe_queue<std::unique_ptr<int>>);
 
+TEST_T(unsafe_queue, non_default_constructible_item_type,
+       flow::unsafe_queue<std::reference_wrapper<int>>);
+
 using allocator_queue_t =
     flow::unsafe_queue<int, std::size_t, swiss::kDynamicExtent<std::size_t>,
                        swiss::leak_detector_allocator<int, true>>;

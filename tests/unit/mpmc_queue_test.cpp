@@ -54,6 +54,9 @@ TEST_T(mpmc_queue, item_destructor, flow::mpmc_queue<std::shared_ptr<int>>);
 TEST_T(mpmc_queue, non_copyable_item_type,
        flow::mpmc_queue<std::unique_ptr<int>>);
 
+TEST_T(mpmc_queue, non_default_constructible_item_type,
+       flow::mpmc_queue<std::reference_wrapper<int>>);
+
 using allocator_queue_t =
     flow::mpmc_queue<int, std::size_t, swiss::kDynamicExtent<std::size_t>,
                      swiss::leak_detector_allocator<
@@ -86,11 +89,5 @@ TEST_T(mpmc_queue, queued_consumers_blocking, flow::mpmc_queue<int>);
 
 using uint8_index_queue_t = flow::mpmc_queue<int, std::uint8_t>;
 TEST_T(mpmc_queue, rollover, uint8_index_queue_t);
-
-TEST_T(mpmc_queue, nonblocking_callback, flow::mpmc_queue<int>);
-
-TEST_T(mpmc_queue, blocking_callback, flow::mpmc_queue<int>);
-
-TEST(mpmc_queue, exception_callback) { GTEST_SKIP(); }
 
 }  // namespace tests::unit

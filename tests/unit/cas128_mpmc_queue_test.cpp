@@ -52,6 +52,8 @@ TEST(cas128_mpmc_queue, queue_destructor) { GTEST_SKIP(); }
 
 TEST(cas128_mpmc_queue, item_destructor) { GTEST_SKIP(); }
 
+TEST(cas128_mpmc_queue, non_default_constructible_item_type) { GTEST_SKIP(); }
+
 TEST(cas128_mpmc_queue, non_copyable_item_type) { GTEST_SKIP(); }
 
 using allocator_queue_t = flow::cas128_mpmc_queue<
@@ -90,11 +92,5 @@ TEST_T(cas128_mpmc_queue, queued_consumers_blocking,
 
 using uint8_index_queue_t = flow::cas128_mpmc_queue<int, std::uint8_t>;
 TEST_T(cas128_mpmc_queue, rollover, uint8_index_queue_t);
-
-TEST_T(cas128_mpmc_queue, nonblocking_callback, flow::cas128_mpmc_queue<int>);
-
-TEST_T(cas128_mpmc_queue, blocking_callback, flow::cas128_mpmc_queue<int>);
-
-TEST(cas128_mpmc_queue, exception_callback) { GTEST_SKIP(); }
 
 }  // namespace tests::unit

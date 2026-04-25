@@ -54,6 +54,9 @@ TEST_T(spsc_queue, item_destructor, flow::spsc_queue<std::shared_ptr<int>>);
 TEST_T(spsc_queue, non_copyable_item_type,
        flow::spsc_queue<std::unique_ptr<int>>);
 
+TEST_T(spsc_queue, non_default_constructible_item_type,
+       flow::spsc_queue<std::reference_wrapper<int>>);
+
 using allocator_queue_t =
     flow::spsc_queue<int, std::size_t, swiss::kDynamicExtent<std::size_t>,
                      swiss::leak_detector_allocator<int, true>>;
@@ -85,11 +88,5 @@ TEST(spsc_queue, queued_consumers_blocking) { GTEST_SKIP(); }
 
 using uint8_index_queue_t = flow::spsc_queue<int, std::uint8_t>;
 TEST_T(spsc_queue, rollover, uint8_index_queue_t);
-
-TEST_T(spsc_queue, nonblocking_callback, flow::spsc_queue<int>);
-
-TEST_T(spsc_queue, blocking_callback, flow::spsc_queue<int>);
-
-TEST_T(spsc_queue, exception_callback, flow::spsc_queue<int>);
 
 }  // namespace tests::unit

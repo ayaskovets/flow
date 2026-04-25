@@ -324,6 +324,23 @@ constexpr void non_copyable_item_type() noexcept {
   EXPECT_TRUE(queue.try_pop(value));
 }
 
+template <flow::concepts::queue Queue>
+  requires(
+      std::same_as<typename Queue::value_type, std::reference_wrapper<int>>)
+constexpr void non_default_constructible_item_type() noexcept {
+  constexpr std::size_t kCapacity = 2;
+
+  int value{};
+  std::reference_wrapper<int> ref(value);
+  Queue queue(kCapacity);
+
+  queue.push(ref);
+  queue.pop(ref);
+
+  EXPECT_TRUE(queue.try_push(ref));
+  EXPECT_TRUE(queue.try_pop(ref));
+}
+
 template <flow::concepts::blocking_queue Queue>
   requires(std::same_as<typename Queue::value_type, int>)
 constexpr void allocator() noexcept {

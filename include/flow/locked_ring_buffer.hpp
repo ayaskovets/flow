@@ -170,9 +170,9 @@ class locked_ring_buffer final : public swiss::non_copyable,
   constexpr auto try_pop(value_type & value) noexcept(
       std::is_nothrow_move_assignable_v<value_type> &&
       std::is_nothrow_destructible_v<value_type>) -> bool {
-    return try_pop([this, &out = value](value_type & value) mutable {
-      out = std::move(value);
-      std::allocator_traits<allocator_type>::destroy(allocator_, &value);
+    return try_pop([&](value_type & front) mutable {
+      value = std::move(front);
+      std::allocator_traits<allocator_type>::destroy(allocator_, &front);
     });
   }
 
@@ -194,9 +194,9 @@ class locked_ring_buffer final : public swiss::non_copyable,
   constexpr auto pop(std::stop_token stop_token, value_type & value) noexcept(
       std::is_nothrow_move_assignable_v<value_type> &&
       std::is_nothrow_destructible_v<value_type>) -> bool {
-    return pop(stop_token, [this, &out = value](value_type & value) mutable {
-      out = std::move(value);
-      std::allocator_traits<allocator_type>::destroy(allocator_, &value);
+    return pop(stop_token, [&](value_type & front) mutable {
+      value = std::move(front);
+      std::allocator_traits<allocator_type>::destroy(allocator_, &front);
     });
   }
 

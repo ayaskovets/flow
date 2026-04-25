@@ -70,20 +70,23 @@ class spsc_msgbuf final : public swiss::non_copyable,
 
  public:
   template <std::invocable<std::span<std::byte>> Callback>
-  constexpr auto try_push(index_type msg_size, Callback && callback) noexcept(
+  constexpr auto
+  try_push(index_type msg_size, Callback const & callback) noexcept(
       std::is_nothrow_invocable_v<Callback, std::span<std::byte>>) -> bool {
     if (msg_size == 0) {
       return false;
     }
 
     index_type push_to = writer_.index.load(std::memory_order::relaxed);
-    index_type _free   = free(*writer_.capacity, push_to, writer_.cache);
     index_type const postfix =
         *writer_.capacity - slot(*writer_.capacity, push_to);
-    index_type chunk  = std::min(postfix, _free);
-    index_type prefix = slot(*writer_.capacity, writer_.cache);
+    index_type const required = kHeaderSize + msg_size;
 
-    if (chunk < kHeaderSize + msg_size || prefix < msg_size) {
+    index_type prefix = slot(*writer_.capacity, writer_.cache);
+    index_type _free  = free(*writer_.capacity, push_to, writer_.cache);
+    index_type chunk  = std::min(postfix, _free);
+
+    if (chunk < required || prefix < msg_size) {
       writer_.cache = reader_.index.load(std::memory_order::acquire);
 
       prefix = slot(*writer_.capacity, writer_.cache);
@@ -92,42 +95,34 @@ class spsc_msgbuf final : public swiss::non_copyable,
     }
 
     // NOLINTNEXTLINE(bugprone-branch-clone)
-    if (chunk >= kHeaderSize + msg_size) {
+    if (chunk >= required) {
     } else if (postfix == kHeaderSize && prefix >= msg_size &&
-               _free >= kHeaderSize + msg_size) {
+               _free >= required) {
     } else {
-      if (chunk != postfix || prefix < kHeaderSize + msg_size) {
+      if (chunk != postfix || prefix < required) {
         return false;
       }
 
       if (postfix >= kHeaderSize) {
-        std::copy_n(
-            std::bit_cast<std::array<std::byte, kHeaderSize>>(kPaddingHeader)
-                .data(),
-            kHeaderSize,
-            writer_.ring_buffer + slot(*writer_.capacity, push_to));
+        write_header(writer_.ring_buffer, *writer_.capacity, push_to,
+                     kPaddingHeader);
       }
-
       push_to = next(push_to, postfix);
     }
 
-    std::copy_n(
-        std::bit_cast<std::array<std::byte, kHeaderSize>>(msg_size).data(),
-        kHeaderSize, writer_.ring_buffer + slot(*writer_.capacity, push_to));
-
+    write_header(writer_.ring_buffer, *writer_.capacity, push_to, msg_size);
     push_to = next(push_to, kHeaderSize);
 
-    std::invoke(
-        std::forward<Callback>(callback),
-        std::span(writer_.ring_buffer + slot(*writer_.capacity, push_to),
-                  msg_size));
+    std::invoke(callback, std::span(writer_.ring_buffer +
+                                        slot(*writer_.capacity, push_to),
+                                    msg_size));
 
     writer_.index.store(next(push_to, msg_size), std::memory_order::release);
     return true;
   }
 
   template <std::invocable<std::span<std::byte>> Callback>
-  constexpr auto try_pop(Callback && callback) noexcept(
+  constexpr auto try_pop(Callback const & callback) noexcept(
       std::is_nothrow_invocable_v<Callback, std::span<std::byte>>)
       -> index_type {
     index_type pop_from = reader_.index.load(std::memory_order::relaxed);
@@ -144,20 +139,18 @@ class spsc_msgbuf final : public swiss::non_copyable,
     index_type msg_size =
         postfix < kHeaderSize
             ? kPaddingHeader
-            : header(reader_.ring_buffer, *reader_.capacity, pop_from);
+            : read_header(reader_.ring_buffer, *reader_.capacity, pop_from);
 
     if (msg_size == kPaddingHeader) {
       pop_from = next(pop_from, postfix);
-
-      msg_size = header(reader_.ring_buffer, *reader_.capacity, pop_from);
+      msg_size = read_header(reader_.ring_buffer, *reader_.capacity, pop_from);
     }
 
     pop_from = next(pop_from, kHeaderSize);
 
-    std::invoke(
-        std::forward<Callback>(callback),
-        std::span(reader_.ring_buffer + slot(*reader_.capacity, pop_from),
-                  msg_size));
+    std::invoke(callback, std::span(reader_.ring_buffer +
+                                        slot(*reader_.capacity, pop_from),
+                                    msg_size));
 
     reader_.index.store(next(pop_from, msg_size), std::memory_order::release);
     return msg_size;
@@ -171,12 +164,13 @@ class spsc_msgbuf final : public swiss::non_copyable,
           callback) noexcept(std::is_nothrow_invocable_v<Callback,
                                                          std::span<std::byte>>)
       -> bool {
-    if (msg_size + kHeaderSize > *writer_.capacity) {
+    index_type const required = kHeaderSize + msg_size;
+    if (required > *writer_.capacity) {
       return false;
     }
 
     while (!stop_token.stop_requested()) {
-      if (try_push(msg_size, std::forward<Callback>(callback))) {
+      if (try_push(msg_size, callback)) {
         return true;
       }
 
@@ -188,10 +182,10 @@ class spsc_msgbuf final : public swiss::non_copyable,
 
   template <std::invocable<std::span<std::byte>> Callback>
   constexpr auto
-  pop(std::stop_token const & stop_token, Callback && callback) noexcept(
+  pop(std::stop_token const & stop_token, Callback const & callback) noexcept(
       std::is_nothrow_invocable_v<Callback, std::span<std::byte>>) -> bool {
     while (!stop_token.stop_requested()) {
-      if (try_pop(std::forward<Callback>(callback)) != 0) {
+      if (try_pop(callback) != 0) {
         return true;
       }
 
@@ -203,26 +197,20 @@ class spsc_msgbuf final : public swiss::non_copyable,
 
  public:
   template <std::invocable<std::span<std::byte>> Callback>
-  constexpr void push(index_type msg_size, Callback && callback) noexcept(
+  constexpr void push(index_type msg_size, Callback const & callback) noexcept(
       std::is_nothrow_invocable_v<Callback, std::span<std::byte>>) {
-    push(std::stop_token{}, msg_size, std::forward<Callback>(callback));
+    push(std::stop_token{}, msg_size, callback);
   }
 
   template <std::invocable<std::span<std::byte>> Callback>
-  constexpr auto pop(Callback && callback) noexcept(
+  constexpr auto pop(Callback const & callback) noexcept(
       std::is_nothrow_invocable_v<Callback, std::span<std::byte>>)
       -> index_type {
     index_type msg_size{};
-    pop(std::stop_token{},
-        [&msg_size, callback = std::forward<Callback>(callback)](
-            std::span<std::byte>
-                chunk) mutable noexcept(std::
-                                            is_nothrow_invocable_v<
-                                                Callback,
-                                                std::span<std::byte>>) {
-          msg_size = chunk.size();
-          std::invoke(std::forward<Callback>(callback), chunk);
-        });
+    pop(std::stop_token{}, [&](std::span<std::byte> chunk) {
+      msg_size = chunk.size();
+      std::invoke(callback, chunk);
+    });
     return msg_size;
   }
 
@@ -281,7 +269,9 @@ class spsc_msgbuf final : public swiss::non_copyable,
     index_type const push_to  = writer_.index.load(std::memory_order::relaxed);
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
 
-    return size(push_to, pop_from);
+    return push_to >= pop_from
+               ? std::min(*reader_.capacity, size(push_to, pop_from))
+               : 0;
   }
 
   constexpr auto get_allocator() const noexcept -> allocator_type {
@@ -336,9 +326,17 @@ class spsc_msgbuf final : public swiss::non_copyable,
     return index & static_cast<index_type>(capacity - 1);
   }
 
-  [[nodiscard]] constexpr auto header(std::byte const * ring_buffer,
-                                      index_type capacity,
-                                      index_type index) const noexcept
+  constexpr void write_header(std::byte * ring_buffer, index_type capacity,
+                              index_type index,
+                              index_type msg_size) const noexcept {
+    std::copy_n(
+        std::bit_cast<std::array<std::byte, kHeaderSize>>(msg_size).data(),
+        kHeaderSize, ring_buffer + slot(capacity, index));
+  }
+
+  [[nodiscard]] constexpr auto read_header(std::byte const * ring_buffer,
+                                           index_type capacity,
+                                           index_type index) const noexcept
       -> index_type {
     std::array<std::byte, kHeaderSize> msg_size{};
     std::copy_n(ring_buffer + slot(capacity, index), kHeaderSize,

@@ -62,7 +62,7 @@ class unsafe_stream final : public swiss::non_copyable,
  public:
   template <std::invocable<std::span<std::byte>> Callback>
   constexpr auto try_push(
-      Callback && callback,
+      Callback const & callback,
       index_type max_size = std::numeric_limits<index_type>::
           max()) noexcept(std::is_nothrow_invocable_v<Callback,
                                                       std::span<std::byte>>)
@@ -77,8 +77,7 @@ class unsafe_stream final : public swiss::non_copyable,
 
     index_type callback_chunk = chunk;
     swiss::assign_invoke_result_if_not_void(
-        callback_chunk, std::forward<Callback>(callback),
-        std::span(ring_buffer_ + _push_to, chunk));
+        callback_chunk, callback, std::span(ring_buffer_ + _push_to, chunk));
     chunk = std::min(chunk, callback_chunk);
 
     size_ += chunk;
@@ -87,7 +86,7 @@ class unsafe_stream final : public swiss::non_copyable,
 
   template <std::invocable<std::span<std::byte>> Callback>
   constexpr auto try_pop(
-      Callback && callback,
+      Callback const & callback,
       index_type max_size = std::numeric_limits<index_type>::
           max()) noexcept(std::is_nothrow_invocable_v<Callback,
                                                       std::span<std::byte>>)
@@ -101,8 +100,7 @@ class unsafe_stream final : public swiss::non_copyable,
 
     index_type callback_chunk = chunk;
     swiss::assign_invoke_result_if_not_void(
-        callback_chunk, std::forward<Callback>(callback),
-        std::span(ring_buffer_ + pop_from_, chunk));
+        callback_chunk, callback, std::span(ring_buffer_ + pop_from_, chunk));
     chunk = std::min(chunk, callback_chunk);
 
     pop_from_ = next(pop_from_, chunk);

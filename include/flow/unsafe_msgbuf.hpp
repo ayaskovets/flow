@@ -61,14 +61,16 @@ class unsafe_msgbuf final : public swiss::non_copyable,
 
  public:
   template <std::invocable<std::span<std::byte>> Callback>
-  constexpr auto try_push(index_type msg_size, Callback && callback) noexcept(
+  constexpr auto
+  try_push(index_type msg_size, Callback const & callback) noexcept(
       std::is_nothrow_invocable_v<Callback, std::span<std::byte>>) -> bool {
     if (msg_size == 0) {
       return false;
     }
 
-    index_type padding        = 0;
-    index_type _push_to       = push_to();
+    index_type padding  = 0;
+    index_type _push_to = push_to();
+
     index_type const _free    = free();
     index_type const postfix  = *capacity_ - _push_to;
     index_type const prefix   = pop_from_;
@@ -85,54 +87,47 @@ class unsafe_msgbuf final : public swiss::non_copyable,
       }
 
       if (postfix >= kHeaderSize) {
-        std::copy_n(
-            std::bit_cast<std::array<std::byte, kHeaderSize>>(kPaddingHeader)
-                .data(),
-            kHeaderSize, ring_buffer_ + _push_to);
+        write_header(_push_to, kPaddingHeader);
       }
-
       padding  = postfix;
       _push_to = 0;
     }
 
-    std::copy_n(
-        std::bit_cast<std::array<std::byte, kHeaderSize>>(msg_size).data(),
-        kHeaderSize, ring_buffer_ + _push_to);
-
+    write_header(_push_to, msg_size);
     _push_to = next(_push_to, kHeaderSize);
 
-    std::invoke(std::forward<Callback>(callback),
-                std::span(ring_buffer_ + _push_to, msg_size));
+    std::invoke(callback, std::span(ring_buffer_ + _push_to, msg_size));
 
     size_ += padding + required;
     return true;
   }
 
   template <std::invocable<std::span<std::byte>> Callback>
-  constexpr auto try_pop(Callback && callback) noexcept(
+  constexpr auto try_pop(Callback const & callback) noexcept(
       std::is_nothrow_invocable_v<Callback, std::span<std::byte>>)
       -> index_type {
     if (size_ == 0) {
       return 0;
     }
 
-    index_type padding       = 0;
-    index_type _pop_from     = pop_from_;
-    index_type const postfix = *capacity_ - _pop_from;
+    index_type padding   = 0;
+    index_type _pop_from = pop_from_;
+
+    index_type const postfix = *capacity_ - pop_from_;
+
     index_type msg_size =
-        postfix < kHeaderSize ? kPaddingHeader : header(_pop_from);
+        postfix < kHeaderSize ? kPaddingHeader : read_header(pop_from_);
 
     if (msg_size == kPaddingHeader) {
       padding   = postfix;
       _pop_from = 0;
 
-      msg_size = header(_pop_from);
+      msg_size = read_header(_pop_from);
     }
 
     _pop_from = next(_pop_from, kHeaderSize);
 
-    std::invoke(std::forward<Callback>(callback),
-                std::span(ring_buffer_ + _pop_from, msg_size));
+    std::invoke(callback, std::span(ring_buffer_ + _pop_from, msg_size));
 
     pop_from_ = next(_pop_from, msg_size);
     size_ -= padding + kHeaderSize + msg_size;
@@ -141,15 +136,15 @@ class unsafe_msgbuf final : public swiss::non_copyable,
 
  public:
   template <std::invocable<std::span<std::byte>> Callback>
-  constexpr void push(index_type msg_size, Callback && callback) {
-    if (!try_push(msg_size, std::forward<Callback>(callback))) {
+  constexpr void push(index_type msg_size, Callback const & callback) {
+    if (!try_push(msg_size, callback)) {
       throw std::runtime_error("unsafe_msgbuf::push(): full");
     }
   }
 
   template <std::invocable<std::span<std::byte>> Callback>
-  constexpr auto pop(Callback && callback) -> index_type {
-    index_type const msg_size = try_pop(std::forward<Callback>(callback));
+  constexpr auto pop(Callback const & callback) -> index_type {
+    index_type const msg_size = try_pop(callback);
     if (msg_size == 0) {
       throw std::runtime_error("unsafe_msgbuf::pop(): empty");
     }
@@ -226,7 +221,14 @@ class unsafe_msgbuf final : public swiss::non_copyable,
     return next(pop_from_, size_);
   }
 
-  [[nodiscard]] constexpr auto header(index_type index) const noexcept
+  constexpr void write_header(index_type index,
+                              index_type msg_size) const noexcept {
+    std::copy_n(
+        std::bit_cast<std::array<std::byte, kHeaderSize>>(msg_size).data(),
+        kHeaderSize, ring_buffer_ + index);
+  }
+
+  [[nodiscard]] constexpr auto read_header(index_type index) const noexcept
       -> index_type {
     std::array<std::byte, kHeaderSize> msg_size{};
     std::copy_n(ring_buffer_ + index, kHeaderSize, msg_size.data());

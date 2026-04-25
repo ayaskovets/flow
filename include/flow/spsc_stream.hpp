@@ -193,13 +193,13 @@ class spsc_stream final : public swiss::non_copyable,
 
     index_type const push_to = writer_.index.load(std::memory_order::relaxed);
 
-    while (true) {
-      if (stop_token.stop_requested()) {
-        return false;
-      }
-
+    while (!stop_token.stop_requested()) {
       if (bytes_size <= free(*writer_.capacity, push_to, writer_.cache)) {
-        break;
+        write_unchecked(*writer_.capacity, writer_.ring_buffer, push_to, bytes);
+
+        writer_.index.store(next(push_to, bytes_size),
+                            std::memory_order::release);
+        return true;
       }
 
       std::this_thread::yield();
@@ -207,10 +207,7 @@ class spsc_stream final : public swiss::non_copyable,
       writer_.cache = reader_.index.load(std::memory_order::acquire);
     }
 
-    write_unchecked(*writer_.capacity, writer_.ring_buffer, push_to, bytes);
-
-    writer_.index.store(next(push_to, bytes_size), std::memory_order::release);
-    return true;
+    return false;
   }
 
   constexpr auto pop(std::stop_token const & stop_token,
@@ -223,13 +220,13 @@ class spsc_stream final : public swiss::non_copyable,
 
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
 
-    while (true) {
-      if (stop_token.stop_requested()) {
-        return false;
-      }
-
+    while (!stop_token.stop_requested()) {
       if (bytes_size <= size(reader_.cache, pop_from)) {
-        break;
+        read_unchecked(*reader_.capacity, reader_.ring_buffer, pop_from, bytes);
+
+        reader_.index.store(next(pop_from, bytes_size),
+                            std::memory_order::release);
+        return true;
       }
 
       std::this_thread::yield();
@@ -237,10 +234,7 @@ class spsc_stream final : public swiss::non_copyable,
       reader_.cache = writer_.index.load(std::memory_order::acquire);
     }
 
-    read_unchecked(*reader_.capacity, reader_.ring_buffer, pop_from, bytes);
-
-    reader_.index.store(next(pop_from, bytes_size), std::memory_order::release);
-    return true;
+    return false;
   }
 
  public:
@@ -261,7 +255,7 @@ class spsc_stream final : public swiss::non_copyable,
     index_type const push_to  = writer_.index.load(std::memory_order::relaxed);
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
 
-    return size(push_to, pop_from);
+    return std::min(capacity(), size(push_to, pop_from));
   }
 
   constexpr auto get_allocator() const noexcept -> allocator_type {

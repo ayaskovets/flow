@@ -149,7 +149,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     index_type const push_to  = writer_.index.load(std::memory_order::relaxed);
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
 
-    return size(push_to, pop_from);
+    return std::min(capacity(), size(push_to, pop_from));
   }
 
   constexpr auto get_allocator() const noexcept -> allocator_type {

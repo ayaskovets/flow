@@ -45,13 +45,13 @@ class unsafe_stream final : public swiss::non_copyable,
     requires(Capacity == swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
         capacity_(capacity),
-        ring_buffer_([this] {
-          if (*capacity_ == 0) {
+        ring_buffer_([&] {
+          if (capacity < 1) {
             throw std::invalid_argument(
                 "unsafe_stream::unsafe_stream(): invalid capacity < 1");
           }
           return std::allocator_traits<allocator_type>::allocate(allocator_,
-                                                                 *capacity_);
+                                                                 capacity);
         }()) {}
 
   constexpr ~unsafe_stream() noexcept {

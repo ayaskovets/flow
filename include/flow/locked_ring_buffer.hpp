@@ -35,7 +35,7 @@ class locked_ring_buffer final : public swiss::non_copyable,
     requires(Capacity != swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
         ring_buffer_(std::allocator_traits<allocator_type>::allocate(
-            allocator_, *capacity_)) {
+            allocator_, Capacity)) {
     static_assert(swiss::is_power_of_two(Capacity),
                   "mpmc_queue::mpmc_queue(): invalid capacity != 2^n");
   }
@@ -45,13 +45,13 @@ class locked_ring_buffer final : public swiss::non_copyable,
     requires(Capacity == swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
         capacity_(capacity),
-        ring_buffer_([this, capacity] {
+        ring_buffer_([&] {
           if (!swiss::is_power_of_two(capacity)) {
             throw std::invalid_argument(
                 "mpmc_queue::mpmc_queue(): invalid capacity != 2^n");
           }
           return std::allocator_traits<allocator_type>::allocate(allocator_,
-                                                                 *capacity_);
+                                                                 capacity);
         }()) {}
 
   /**

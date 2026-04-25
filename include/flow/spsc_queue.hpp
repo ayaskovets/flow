@@ -46,13 +46,13 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
         writer_{
             .capacity{capacity},
             .ring_buffer =
-                [this] {
-                  if (!swiss::is_power_of_two(*writer_.capacity)) {
+                [&] {
+                  if (!swiss::is_power_of_two(capacity)) {
                     throw std::invalid_argument(
                         "spsc_queue::spsc_queue(): invalid capacity != 2^n");
                   }
                   return std::allocator_traits<allocator_type>::allocate(
-                      allocator_, *writer_.capacity);
+                      allocator_, capacity);
                 }(),
         },
         reader_{.capacity    = writer_.capacity,

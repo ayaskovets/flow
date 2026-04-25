@@ -54,15 +54,14 @@ class spmc_queue final : public swiss::non_copyable, public swiss::non_movable {
         writer_{
             .capacity{capacity},
             .ring_buffer =
-                [this] {
-                  if (!swiss::is_power_of_two(*writer_.capacity) ||
-                      *writer_.capacity < 2) {
+                [&] {
+                  if (!swiss::is_power_of_two(capacity) || capacity < 2) {
                     throw std::invalid_argument(
                         "spmc_queue::spmc_queue(): invalid capacity != 2^n or "
                         "< 2");
                   }
                   return std::allocator_traits<allocator_type>::allocate(
-                      allocator_, *writer_.capacity);
+                      allocator_, capacity);
                 }(),
         },
         reader_{.capacity    = writer_.capacity,

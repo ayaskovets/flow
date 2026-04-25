@@ -50,13 +50,13 @@ class spsc_stream final : public swiss::non_copyable,
         writer_{
             .capacity{capacity},
             .ring_buffer =
-                [this] {
-                  if (!swiss::is_power_of_two(*writer_.capacity)) {
+                [&] {
+                  if (!swiss::is_power_of_two(capacity)) {
                     throw std::invalid_argument(
                         "spsc_stream::spsc_stream(): invalid capacity != 2^n");
                   }
                   return std::allocator_traits<allocator_type>::allocate(
-                      allocator_, *writer_.capacity);
+                      allocator_, capacity);
                 }()},
         reader_{.capacity    = writer_.capacity,
                 .ring_buffer = writer_.ring_buffer} {}

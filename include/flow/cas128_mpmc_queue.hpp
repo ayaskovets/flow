@@ -41,7 +41,7 @@ class cas128_mpmc_queue final : public swiss::non_copyable,
     requires(Capacity != swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
         writer_{.ring_buffer = std::allocator_traits<allocator_type>::allocate(
-                    allocator_, Capacity)},
+                    allocator, Capacity)},
         reader_{.ring_buffer = writer_.ring_buffer} {
     static_assert(swiss::is_power_of_two(Capacity) && Capacity >= 2,
                   "cas128_mpmc_queue::cas128_mpmc_queue(): invalid capacity != "
@@ -65,16 +65,14 @@ class cas128_mpmc_queue final : public swiss::non_copyable,
         writer_{
             .capacity{capacity},
             .ring_buffer =
-                [this] {
-                  if (!swiss::is_power_of_two(*writer_.capacity) ||
-                      *writer_.capacity < 2) {
+                [&] {
+                  if (!swiss::is_power_of_two(capacity) || capacity < 2) {
                     throw std::invalid_argument(
                         "cas128_mpmc_queue::cas128_mpmc_queue(): invalid "
-                        "capacity != 2^n or "
-                        "< 2");
+                        "capacity != 2^n or < 2");
                   }
                   return std::allocator_traits<allocator_type>::allocate(
-                      allocator_, *writer_.capacity);
+                      allocator_, capacity);
                 }(),
         },
         reader_{.capacity    = writer_.capacity,

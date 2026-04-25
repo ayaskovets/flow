@@ -160,7 +160,7 @@ class spsc_msgbuf final : public swiss::non_copyable,
   template <std::invocable<std::span<std::byte>> Callback>
   constexpr auto push(
       std::stop_token const & stop_token, index_type msg_size,
-      Callback &&
+      Callback const &
           callback) noexcept(std::is_nothrow_invocable_v<Callback,
                                                          std::span<std::byte>>)
       -> bool {

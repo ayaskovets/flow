@@ -77,11 +77,9 @@ class mpmc_queue final : public swiss::non_copyable, public swiss::non_movable {
    * @warning Destructor is not thread safe and assumes that there is only one
    * thread operating on the queue during the destruction
    */
-  constexpr ~mpmc_queue() noexcept
-    requires(std::is_nothrow_destructible_v<value_type>)
-  {
+  constexpr ~mpmc_queue() {
     while (
-        try_pop([](value_type & value) noexcept { std::destroy_at(&value); })) {
+        try_pop([](value_type * front) noexcept { std::destroy_at(front); })) {
     }
 
     std::allocator_traits<allocator_type>::deallocate(
@@ -89,142 +87,12 @@ class mpmc_queue final : public swiss::non_copyable, public swiss::non_movable {
   }
 
  public:
-  template <std::invocable<value_type &> Callback>
-  constexpr auto try_push(Callback && callback) noexcept -> bool
-    requires(std::is_nothrow_invocable_v<Callback, value_type &>)
-  {
-    index_type push_to = writer_.index.load(std::memory_order::relaxed);
-    auto * entry       = writer_.ring_buffer + slot(*writer_.capacity, push_to);
-
-    auto & [item, seqnum] = *entry;
-    if (!vacant(push_to, seqnum.load(std::memory_order::acquire)) ||
-        !writer_.index.compare_exchange_strong(push_to, next(push_to),
-                                               std::memory_order::relaxed)) {
-      return false;
-    }
-
-    std::invoke(std::forward<Callback>(callback), item);
-
-    seqnum.store(push_to + 1, std::memory_order::release);
-    return true;
-  }
-
-  template <std::invocable<value_type &> Callback>
-  constexpr auto try_pop(Callback && callback) noexcept -> bool
-    requires(std::is_nothrow_invocable_v<Callback, value_type &>)
-  {
-    index_type pop_from = reader_.index.load(std::memory_order::relaxed);
-    auto * entry = reader_.ring_buffer + slot(*reader_.capacity, pop_from);
-
-    auto & [item, seqnum] = *entry;
-    if (!occupied(pop_from, seqnum.load(std::memory_order::acquire)) ||
-        !reader_.index.compare_exchange_strong(pop_from, next(pop_from),
-                                               std::memory_order::relaxed)) {
-      return false;
-    }
-
-    std::invoke(std::forward<Callback>(callback), item);
-
-    seqnum.store(pop_from + *reader_.capacity, std::memory_order::release);
-    return true;
-  }
-
- public:
-  template <std::invocable<value_type &> Callback>
-  constexpr auto push(std::stop_token const & stop_token,
-                      Callback && callback) noexcept -> bool
-    requires(std::is_nothrow_invocable_v<Callback, value_type &>)
-  {
-    index_type push_to = writer_.index.load(std::memory_order::relaxed);
-    auto * entry       = writer_.ring_buffer + slot(*writer_.capacity, push_to);
-
-    while (true) {
-      if (stop_token.stop_requested()) {
-        return false;
-      }
-
-      auto const & [_, seqnum] = *entry;
-      bool const vac = vacant(push_to, seqnum.load(std::memory_order::acquire));
-      if (vac && writer_.index.compare_exchange_weak(
-                     push_to, next(push_to), std::memory_order::relaxed)) {
-        break;
-      }
-
-      std::this_thread::yield();
-
-      if (!vac) {
-        push_to = writer_.index.load(std::memory_order::relaxed);
-      }
-      entry = writer_.ring_buffer + slot(*writer_.capacity, push_to);
-    }
-
-    auto & [item, seqnum] = *entry;
-
-    std::invoke(std::forward<Callback>(callback), item);
-
-    seqnum.store(push_to + 1, std::memory_order::release);
-    return true;
-  }
-
-  template <std::invocable<value_type &> Callback>
-  constexpr auto pop(std::stop_token const & stop_token,
-                     Callback && callback) noexcept -> bool
-    requires(std::is_nothrow_invocable_v<Callback, value_type &>)
-  {
-    index_type pop_from = reader_.index.load(std::memory_order::relaxed);
-    auto * entry = reader_.ring_buffer + slot(*reader_.capacity, pop_from);
-
-    while (true) {
-      if (stop_token.stop_requested()) {
-        return false;
-      }
-
-      auto const & [_, seqnum] = *entry;
-      bool const occ =
-          occupied(pop_from, seqnum.load(std::memory_order::acquire));
-      if (occ && reader_.index.compare_exchange_weak(
-                     pop_from, next(pop_from), std::memory_order::relaxed)) {
-        break;
-      }
-
-      std::this_thread::yield();
-
-      if (!occ) {
-        pop_from = reader_.index.load(std::memory_order::relaxed);
-      }
-      entry = reader_.ring_buffer + slot(*reader_.capacity, pop_from);
-    }
-
-    auto & [item, seqnum] = *entry;
-
-    std::invoke(std::forward<Callback>(callback), item);
-
-    seqnum.store(pop_from + *reader_.capacity, std::memory_order::release);
-    return true;
-  }
-
- public:
-  template <std::invocable<value_type &> Callback>
-  constexpr void push(Callback && callback) noexcept
-    requires(std::is_nothrow_invocable_v<Callback, value_type &>)
-  {
-    push(std::stop_token{}, std::forward<Callback>(callback));
-  }
-
-  template <std::invocable<value_type &> Callback>
-  constexpr void pop(Callback && callback) noexcept
-    requires(std::is_nothrow_invocable_v<Callback, value_type &>)
-  {
-    pop(std::stop_token{}, std::forward<Callback>(callback));
-  }
-
- public:
   template <typename... Args>
   constexpr auto try_emplace(Args &&... args) noexcept -> bool
     requires(std::is_nothrow_constructible_v<value_type, Args...>)
   {
-    return try_push([&](value_type & value) mutable noexcept {
-      std::construct_at(&value, std::forward<Args>(args)...);
+    return try_push([&](value_type * front) noexcept {
+      std::construct_at(front, std::forward<Args>(args)...);
     });
   }
 
@@ -238,9 +106,9 @@ class mpmc_queue final : public swiss::non_copyable, public swiss::non_movable {
     requires(std::is_nothrow_move_assignable_v<value_type> &&
              std::is_nothrow_destructible_v<value_type>)
   {
-    return try_pop([&out = value](value_type & value) mutable noexcept {
-      out = std::move(value);
-      std::destroy_at(&value);
+    return try_pop([&](value_type * front) noexcept {
+      value = std::move(*front);
+      std::destroy_at(front);
     });
   }
 
@@ -250,8 +118,8 @@ class mpmc_queue final : public swiss::non_copyable, public swiss::non_movable {
       -> bool
     requires(std::is_nothrow_constructible_v<value_type, Args...>)
   {
-    return push(stop_token, [&](value_type & value) mutable noexcept {
-      std::construct_at(&value, std::forward<Args>(args)...);
+    return push(stop_token, [&](value_type * front) noexcept {
+      std::construct_at(front, std::forward<Args>(args)...);
     });
   }
 
@@ -267,9 +135,9 @@ class mpmc_queue final : public swiss::non_copyable, public swiss::non_movable {
     requires(std::is_nothrow_move_assignable_v<value_type> &&
              std::is_nothrow_destructible_v<value_type>)
   {
-    return pop(stop_token, [&out = value](value_type & value) mutable noexcept {
-      out = std::move(value);
-      std::destroy_at(&value);
+    return pop(stop_token, [&](value_type * front) noexcept {
+      value = std::move(*front);
+      std::destroy_at(front);
     });
   }
 
@@ -303,7 +171,9 @@ class mpmc_queue final : public swiss::non_copyable, public swiss::non_movable {
     index_type const push_to  = writer_.index.load(std::memory_order::relaxed);
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
 
-    return size(push_to, pop_from);
+    return push_to >= pop_from
+               ? std::min(*reader_.capacity, size(push_to, pop_from))
+               : 0;
   }
 
   constexpr auto get_allocator() const noexcept -> allocator_type {
@@ -359,6 +229,109 @@ class mpmc_queue final : public swiss::non_copyable, public swiss::non_movable {
                                     index_type index) const noexcept
       -> index_type {
     return index & static_cast<index_type>(capacity - 1);
+  }
+
+ private:
+  template <std::invocable<value_type *> Callback>
+  constexpr auto try_push(Callback const & callback) noexcept -> bool
+    requires(std::is_nothrow_invocable_v<Callback, value_type *>)
+  {
+    index_type push_to = writer_.index.load(std::memory_order::relaxed);
+    auto * entry       = writer_.ring_buffer + slot(*writer_.capacity, push_to);
+
+    auto & [item, seqnum] = *entry;
+    if (!vacant(push_to, seqnum.load(std::memory_order::acquire)) ||
+        !writer_.index.compare_exchange_strong(push_to, next(push_to),
+                                               std::memory_order::relaxed)) {
+      return false;
+    }
+
+    std::invoke(callback, &item);
+
+    seqnum.store(push_to + 1, std::memory_order::release);
+    return true;
+  }
+
+  template <std::invocable<value_type *> Callback>
+  constexpr auto try_pop(Callback const & callback) noexcept -> bool
+    requires(std::is_nothrow_invocable_v<Callback, value_type *>)
+  {
+    index_type pop_from = reader_.index.load(std::memory_order::relaxed);
+    auto * entry = reader_.ring_buffer + slot(*reader_.capacity, pop_from);
+
+    auto & [item, seqnum] = *entry;
+    if (!occupied(pop_from, seqnum.load(std::memory_order::acquire)) ||
+        !reader_.index.compare_exchange_strong(pop_from, next(pop_from),
+                                               std::memory_order::relaxed)) {
+      return false;
+    }
+
+    std::invoke(callback, &item);
+
+    seqnum.store(pop_from + *reader_.capacity, std::memory_order::release);
+    return true;
+  }
+
+ private:
+  template <std::invocable<value_type *> Callback>
+  constexpr auto push(std::stop_token const & stop_token,
+                      Callback const & callback) noexcept -> bool
+    requires(std::is_nothrow_invocable_v<Callback, value_type *>)
+  {
+    index_type push_to = writer_.index.load(std::memory_order::relaxed);
+    auto * entry       = writer_.ring_buffer + slot(*writer_.capacity, push_to);
+
+    while (!stop_token.stop_requested()) {
+      auto & [item, seqnum] = *entry;
+      bool const vac = vacant(push_to, seqnum.load(std::memory_order::acquire));
+      if (vac && writer_.index.compare_exchange_weak(
+                     push_to, next(push_to), std::memory_order::relaxed)) {
+        std::invoke(callback, &item);
+
+        seqnum.store(push_to + 1, std::memory_order::release);
+        return true;
+      }
+
+      std::this_thread::yield();
+
+      if (!vac) {
+        push_to = writer_.index.load(std::memory_order::relaxed);
+      }
+      entry = writer_.ring_buffer + slot(*writer_.capacity, push_to);
+    }
+
+    return false;
+  }
+
+  template <std::invocable<value_type *> Callback>
+  constexpr auto pop(std::stop_token const & stop_token,
+                     Callback const & callback) noexcept -> bool
+    requires(std::is_nothrow_invocable_v<Callback, value_type *>)
+  {
+    index_type pop_from = reader_.index.load(std::memory_order::relaxed);
+    auto * entry = reader_.ring_buffer + slot(*reader_.capacity, pop_from);
+
+    while (!stop_token.stop_requested()) {
+      auto & [item, seqnum] = *entry;
+      bool const occ =
+          occupied(pop_from, seqnum.load(std::memory_order::acquire));
+      if (occ && reader_.index.compare_exchange_weak(
+                     pop_from, next(pop_from), std::memory_order::relaxed)) {
+        std::invoke(callback, &item);
+
+        seqnum.store(pop_from + *reader_.capacity, std::memory_order::release);
+        return true;
+      }
+
+      std::this_thread::yield();
+
+      if (!occ) {
+        pop_from = reader_.index.load(std::memory_order::relaxed);
+      }
+      entry = reader_.ring_buffer + slot(*reader_.capacity, pop_from);
+    }
+
+    return false;
   }
 };
 

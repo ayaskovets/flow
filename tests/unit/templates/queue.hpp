@@ -221,9 +221,7 @@ constexpr void blocking_push_stop_token() noexcept {
   EXPECT_TRUE(queue.emplace(std::stop_token{}));
 
   std::jthread const consumer([&](std::stop_token stop_token) {
-    EXPECT_FALSE(queue.push(
-        stop_token,
-        [](typename Queue::value_type &) noexcept { GTEST_FAIL(); }));
+    EXPECT_FALSE(queue.push(stop_token, typename Queue::value_type{}));
     EXPECT_FALSE(queue.emplace(stop_token));
   });
 }
@@ -239,9 +237,7 @@ constexpr void blocking_pop_stop_token() noexcept {
   EXPECT_TRUE(queue.pop(std::stop_token{}, value));
 
   std::jthread const producer([&](std::stop_token stop_token) {
-    EXPECT_FALSE(
-        queue.pop(stop_token,
-                  [](typename Queue::value_type &) noexcept { GTEST_FAIL(); }));
+    EXPECT_FALSE(queue.pop(stop_token, value));
   });
 }
 
@@ -584,60 +580,6 @@ constexpr void rollover() noexcept {
       EXPECT_EQ(value, static_cast<int>(i));
     }
   }
-}
-
-template <flow::concepts::nonblocking_queue Queue>
-constexpr void nonblocking_callback() noexcept {
-  constexpr std::size_t kCapacity = 2;
-
-  Queue queue(kCapacity);
-
-  EXPECT_TRUE(queue.try_push([](int & value) noexcept { value = 1; }));
-  EXPECT_TRUE(queue.try_push([](int & value) noexcept { value = 2; }));
-  EXPECT_FALSE(queue.try_push([](int &) noexcept { GTEST_FAIL(); }));
-
-  EXPECT_TRUE(queue.try_pop([](int & value) noexcept { EXPECT_EQ(value, 1); }));
-  EXPECT_TRUE(queue.try_pop([](int & value) noexcept { EXPECT_EQ(value, 2); }));
-  EXPECT_FALSE(queue.try_pop([](int &) noexcept { GTEST_FAIL(); }));
-}
-
-template <flow::concepts::blocking_queue Queue>
-constexpr void blocking_callback() noexcept {
-  constexpr std::size_t kCapacity = 2;
-
-  Queue queue(kCapacity);
-
-  queue.push([](int & value) noexcept { value = 1; });
-  queue.push([](int & value) noexcept { value = 2; });
-
-  queue.pop([](int & value) noexcept { EXPECT_EQ(value, 1); });
-  queue.pop([](int & value) noexcept { EXPECT_EQ(value, 2); });
-}
-
-template <typename Queue>
-  requires(flow::concepts::blocking_queue<Queue> &&
-           flow::concepts::nonblocking_queue<Queue>)
-constexpr void exception_callback() noexcept {
-  constexpr std::size_t kCapacity = 32;
-
-  Queue queue(kCapacity);
-
-  EXPECT_ANY_THROW(queue.try_push(
-      [](typename Queue::value_type &) { throw std::runtime_error(""); }));
-  EXPECT_ANY_THROW(queue.push(
-      [](typename Queue::value_type &) { throw std::runtime_error(""); }));
-
-  EXPECT_TRUE(queue.try_push(typename Queue::value_type{}));
-  EXPECT_TRUE(queue.try_pop([](typename Queue::value_type &) noexcept {}));
-
-  EXPECT_TRUE(queue.try_push(typename Queue::value_type{}));
-
-  EXPECT_ANY_THROW(queue.try_pop(
-      [](typename Queue::value_type &) { throw std::runtime_error(""); }));
-  EXPECT_ANY_THROW(queue.pop(
-      [](typename Queue::value_type &) { throw std::runtime_error(""); }));
-
-  EXPECT_TRUE(queue.try_pop([](typename Queue::value_type &) noexcept {}));
 }
 
 // NOLINTEND(cppcoreguidelines-avoid-magic-numbers)

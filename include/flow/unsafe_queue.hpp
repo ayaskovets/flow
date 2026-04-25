@@ -53,8 +53,8 @@ class unsafe_queue final : public swiss::non_copyable,
   constexpr ~unsafe_queue() noexcept
     requires(std::is_nothrow_destructible_v<value_type>)
   {
-    while (try_pop([this](value_type & value) {
-      std::allocator_traits<allocator_type>::destroy(allocator_, &value);
+    while (try_pop([&](value_type * front) {
+      std::allocator_traits<allocator_type>::destroy(allocator_, front);
     })) {
     }
 
@@ -63,55 +63,12 @@ class unsafe_queue final : public swiss::non_copyable,
   }
 
  public:
-  template <std::invocable<value_type &> Callback>
-  constexpr auto try_push(Callback && callback) noexcept(
-      std::is_nothrow_invocable_v<Callback, value_type &>) -> bool {
-    if (full()) {
-      return false;
-    }
-
-    std::invoke(std::forward<Callback>(callback), *(ring_buffer_ + push_to()));
-
-    size_ += 1;
-    return true;
-  }
-
-  template <std::invocable<value_type &> Callback>
-  constexpr auto try_pop(Callback && callback) noexcept(
-      std::is_nothrow_invocable_v<Callback, value_type &>) -> bool {
-    if (empty()) {
-      return false;
-    }
-
-    std::invoke(std::forward<Callback>(callback), *(ring_buffer_ + pop_from_));
-
-    pop_from_ = next(pop_from_, 1);
-    size_ -= 1;
-    return true;
-  }
-
- public:
-  template <std::invocable<value_type &> Callback>
-  constexpr void push(Callback && callback) {
-    if (!try_push(std::forward<Callback>(callback))) {
-      throw std::runtime_error("unsafe_queue::push(): full");
-    }
-  }
-
-  template <std::invocable<value_type &> Callback>
-  constexpr void pop(Callback && callback) {
-    if (!try_pop(std::forward<Callback>(callback))) {
-      throw std::runtime_error("unsafe_queue::pop(): empty");
-    }
-  }
-
- public:
   template <typename... Args>
   constexpr auto try_emplace(Args &&... args) noexcept(
       std::is_nothrow_constructible_v<value_type, Args...>) -> bool {
-    return try_push([&](value_type & value) mutable {
+    return try_push([&](value_type * front) {
       std::allocator_traits<allocator_type>::construct(
-          allocator_, &value, std::forward<Args>(args)...);
+          allocator_, front, std::forward<Args>(args)...);
     });
   }
 
@@ -123,27 +80,27 @@ class unsafe_queue final : public swiss::non_copyable,
   constexpr auto try_pop(value_type & value) noexcept(
       std::is_nothrow_move_assignable_v<value_type> &&
       std::is_nothrow_destructible_v<value_type>) -> bool {
-    return try_pop([this, &out = value](value_type & value) mutable {
-      out = std::move(value);
-      std::allocator_traits<allocator_type>::destroy(allocator_, &value);
+    return try_pop([&](value_type * front) {
+      value = std::move(*front);
+      std::allocator_traits<allocator_type>::destroy(allocator_, front);
     });
   }
 
  public:
   template <typename... Args>
   constexpr void emplace(Args &&... args) {
-    push([&](value_type & value) mutable {
+    push([&](value_type * front) {
       std::allocator_traits<allocator_type>::construct(
-          allocator_, &value, std::forward<Args>(args)...);
+          allocator_, front, std::forward<Args>(args)...);
     });
   }
 
   constexpr void push(value_type value) { emplace(std::move(value)); }
 
   constexpr void pop(value_type & value) {
-    pop([this, &out = value](value_type & value) mutable {
-      out = std::move(value);
-      std::allocator_traits<allocator_type>::destroy(allocator_, &value);
+    pop([&](value_type * front) {
+      value = std::move(*front);
+      std::allocator_traits<allocator_type>::destroy(allocator_, front);
     });
   }
 
@@ -187,7 +144,51 @@ class unsafe_queue final : public swiss::non_copyable,
   [[nodiscard]] constexpr auto next(index_type index,
                                     index_type distance) const noexcept
       -> index_type {
-    return (index += distance) >= *capacity_ ? index - *capacity_ : index;
+    index += distance;
+    return index >= *capacity_ ? index - *capacity_ : index;
+  }
+
+ private:
+  template <std::invocable<value_type *> Callback>
+  constexpr auto try_push(Callback && callback) noexcept(
+      std::is_nothrow_invocable_v<Callback, value_type *>) -> bool {
+    if (full()) {
+      return false;
+    }
+
+    std::invoke(std::forward<Callback>(callback), ring_buffer_ + push_to());
+
+    size_ += 1;
+    return true;
+  }
+
+  template <std::invocable<value_type *> Callback>
+  constexpr auto try_pop(Callback && callback) noexcept(
+      std::is_nothrow_invocable_v<Callback, value_type *>) -> bool {
+    if (empty()) {
+      return false;
+    }
+
+    std::invoke(std::forward<Callback>(callback), ring_buffer_ + pop_from_);
+
+    pop_from_ = next(pop_from_, 1);
+    size_ -= 1;
+    return true;
+  }
+
+ private:
+  template <std::invocable<value_type *> Callback>
+  constexpr void push(Callback && callback) {
+    if (!try_push(std::forward<Callback>(callback))) {
+      throw std::runtime_error("unsafe_queue::push(): full");
+    }
+  }
+
+  template <std::invocable<value_type *> Callback>
+  constexpr void pop(Callback && callback) {
+    if (!try_pop(std::forward<Callback>(callback))) {
+      throw std::runtime_error("unsafe_queue::pop(): empty");
+    }
   }
 };
 

@@ -67,19 +67,20 @@ class unsafe_msgbuf final : public swiss::non_copyable,
       return false;
     }
 
-    index_type padding       = 0;
-    index_type _push_to      = push_to();
-    index_type const _free   = free();
-    index_type const postfix = *capacity_ - _push_to;
-    index_type const prefix  = pop_from_;
-    index_type const chunk   = std::min(postfix, _free);
+    index_type padding        = 0;
+    index_type _push_to       = push_to();
+    index_type const _free    = free();
+    index_type const postfix  = *capacity_ - _push_to;
+    index_type const prefix   = pop_from_;
+    index_type const chunk    = std::min(postfix, _free);
+    index_type const required = kHeaderSize + msg_size;
 
     // NOLINTNEXTLINE(bugprone-branch-clone)
-    if (chunk >= kHeaderSize + msg_size) {
+    if (chunk >= required) {
     } else if (postfix == kHeaderSize && prefix >= msg_size &&
-               _free >= kHeaderSize + msg_size) {
+               _free >= required) {
     } else {
-      if (chunk != postfix || prefix < kHeaderSize + msg_size) {
+      if (chunk != postfix || prefix < required) {
         return false;
       }
 
@@ -103,7 +104,7 @@ class unsafe_msgbuf final : public swiss::non_copyable,
     std::invoke(std::forward<Callback>(callback),
                 std::span(ring_buffer_ + _push_to, msg_size));
 
-    size_ += padding + kHeaderSize + msg_size;
+    size_ += padding + required;
     return true;
   }
 

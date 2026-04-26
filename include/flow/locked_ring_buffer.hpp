@@ -88,7 +88,7 @@ class locked_ring_buffer : public swiss::non_copyable,
     return try_emplace(std::move(value));
   }
 
-  constexpr auto try_pop(value_type & value) -> bool {
+  constexpr auto try_pop(auto & value) -> bool {
     return try_pop([&](value_type * front) {
       value = std::move(*front);
       std::allocator_traits<allocator_type>::destroy(allocator_, front);
@@ -114,8 +114,7 @@ class locked_ring_buffer : public swiss::non_copyable,
     return emplace(stop_token, std::move(value));
   }
 
-  constexpr auto pop(std::stop_token const & stop_token, value_type & value)
-      -> bool {
+  constexpr auto pop(std::stop_token const & stop_token, auto & value) -> bool {
     return pop(stop_token, [&](value_type * front) {
       value = std::move(*front);
       std::allocator_traits<allocator_type>::destroy(allocator_, front);
@@ -136,7 +135,7 @@ class locked_ring_buffer : public swiss::non_copyable,
     push(std::stop_token{}, std::move(value));
   }
 
-  constexpr void pop(value_type & value) { pop(std::stop_token{}, value); }
+  constexpr void pop(auto & value) { pop(std::stop_token{}, value); }
 
  public:
   [[nodiscard]] constexpr auto capacity() const noexcept -> index_type {

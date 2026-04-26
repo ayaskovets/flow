@@ -95,8 +95,8 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     return try_emplace(std::move(value));
   }
 
-  constexpr auto try_pop(value_type & value) noexcept(
-      std::is_nothrow_move_assignable_v<value_type> &&
+  constexpr auto try_pop(auto & value) noexcept(
+      std::is_nothrow_assignable_v<decltype(value), value_type> &&
       std::is_nothrow_destructible_v<value_type>) -> bool {
     return try_pop([&](value_type * front) {
       value = std::move(*front);
@@ -126,9 +126,8 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     return emplace(stop_token, std::move(value));
   }
 
-  constexpr auto
-  pop(std::stop_token const & stop_token, value_type & value) noexcept(
-      std::is_nothrow_move_assignable_v<value_type> &&
+  constexpr auto pop(std::stop_token const & stop_token, auto & value) noexcept(
+      std::is_nothrow_assignable_v<decltype(value), value_type> &&
       std::is_nothrow_destructible_v<value_type>) -> bool {
     return pop(stop_token, [&](value_type * front) {
       value = std::move(*front);
@@ -153,8 +152,8 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     emplace(std::stop_token{}, std::move(value));
   }
 
-  constexpr void pop(value_type & value) noexcept(
-      std::is_nothrow_move_assignable_v<value_type> &&
+  constexpr void pop(auto & value) noexcept(
+      std::is_nothrow_assignable_v<decltype(value), value_type> &&
       std::is_nothrow_destructible_v<value_type>) {
     pop(std::stop_token{}, value);
   }

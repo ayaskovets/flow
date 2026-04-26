@@ -327,7 +327,7 @@ constexpr void non_copyable_item_type() {
 template <flow::concepts::queue Queue>
   requires(
       std::same_as<typename Queue::value_type, std::reference_wrapper<int>>)
-constexpr void non_default_constructible_item_type() {
+constexpr void non_default_constructible_type() {
   constexpr std::size_t kCapacity = 2;
 
   int value{};
@@ -339,6 +339,25 @@ constexpr void non_default_constructible_item_type() {
 
   EXPECT_TRUE(queue.try_push(ref));
   EXPECT_TRUE(queue.try_pop(ref));
+}
+
+template <flow::concepts::queue Queue>
+  requires(std::same_as<typename Queue::value_type, int>)
+constexpr void pop_assignable_type() {
+  constexpr std::size_t kCapacity = 2;
+
+  float value{};
+  Queue queue(kCapacity);
+
+  queue.push(42);
+  queue.pop(value);
+  EXPECT_EQ(value, 42);
+
+  value = {};
+
+  EXPECT_TRUE(queue.try_push(42));
+  EXPECT_TRUE(queue.try_pop(value));
+  EXPECT_EQ(value, 42);
 }
 
 template <flow::concepts::blocking_queue Queue>

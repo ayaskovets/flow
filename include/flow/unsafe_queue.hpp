@@ -79,8 +79,8 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
     return try_emplace(std::move(value));
   }
 
-  constexpr auto try_pop(value_type & value) noexcept(
-      std::is_nothrow_move_assignable_v<value_type> &&
+  constexpr auto try_pop(auto & value) noexcept(
+      std::is_nothrow_assignable_v<decltype(value), value_type> &&
       std::is_nothrow_destructible_v<value_type>) -> bool {
     return try_pop([&](value_type * front) {
       value = std::move(*front);
@@ -101,7 +101,7 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
 
   constexpr void push(value_type && value) { emplace(std::move(value)); }
 
-  constexpr void pop(value_type & value) {
+  constexpr void pop(auto & value) {
     pop([&](value_type * front) {
       value = std::move(*front);
       std::allocator_traits<allocator_type>::destroy(allocator_, front);

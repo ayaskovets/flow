@@ -60,8 +60,10 @@ TEST_T(mpmc_queue, item_destructor, flow::mpmc_queue<std::shared_ptr<int>>);
 TEST_T(mpmc_queue, non_copyable_item_type,
        flow::mpmc_queue<std::unique_ptr<int>>);
 
-TEST_T(mpmc_queue, non_default_constructible_item_type,
+TEST_T(mpmc_queue, non_default_constructible_type,
        flow::mpmc_queue<std::reference_wrapper<int>>);
+
+TEST_T(mpmc_queue, pop_assignable_type, flow::mpmc_queue<int>);
 
 using allocator_queue_t =
     flow::mpmc_queue<int, std::size_t, swiss::kDynamicExtent<std::size_t>,

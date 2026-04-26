@@ -66,8 +66,10 @@ TEST_T(locked_ring_buffer, item_destructor,
 TEST_T(locked_ring_buffer, non_copyable_item_type,
        flow::locked_ring_buffer<std::unique_ptr<int>>);
 
-TEST_T(locked_ring_buffer, non_default_constructible_item_type,
+TEST_T(locked_ring_buffer, non_default_constructible_type,
        flow::locked_ring_buffer<std::reference_wrapper<int>>);
+
+TEST_T(locked_ring_buffer, pop_assignable_type, flow::locked_ring_buffer<int>);
 
 using allocator_queue_t =
     flow::locked_ring_buffer<int, std::size_t,

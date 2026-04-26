@@ -57,7 +57,9 @@ TEST(cas128_mpmc_queue, queue_destructor) { GTEST_SKIP(); }
 
 TEST(cas128_mpmc_queue, item_destructor) { GTEST_SKIP(); }
 
-TEST(cas128_mpmc_queue, non_default_constructible_item_type) { GTEST_SKIP(); }
+TEST(cas128_mpmc_queue, non_default_constructible_type) { GTEST_SKIP(); }
+
+TEST_T(cas128_mpmc_queue, pop_assignable_type, flow::cas128_mpmc_queue<int>);
 
 TEST(cas128_mpmc_queue, non_copyable_item_type) { GTEST_SKIP(); }
 

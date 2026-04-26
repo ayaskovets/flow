@@ -23,17 +23,16 @@ namespace flow {
  * @warning std::allocator_traits construction/destruction is not supported
  */
 template <typename Value, std::unsigned_integral Index = std::size_t,
-          Index Capacity = swiss::kDynamicExtent<Index>,
-          typename Allocator =
-              std::allocator<std::atomic<swiss::trivial_pair<Value, Index>>>>
-  requires(Allocator::value_type::is_always_lock_free)
+          Index Capacity     = swiss::kDynamicExtent<Index>,
+          typename Allocator = std::allocator<Value>>
 // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class cas128_mpmc_queue final : public swiss::non_copyable,
                                 public swiss::non_movable {
  public:
   using value_type     = Value;
   using index_type     = Index;
-  using allocator_type = Allocator;
+  using allocator_type = std::allocator_traits<
+      Allocator>::template rebind_alloc<swiss::trivial_pair<Value, Index>>;
 
  public:
   constexpr explicit cas128_mpmc_queue(

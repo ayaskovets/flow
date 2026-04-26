@@ -59,8 +59,7 @@ TEST_T(mpmc_queue, non_default_constructible_item_type,
 
 using allocator_queue_t =
     flow::mpmc_queue<int, std::size_t, swiss::kDynamicExtent<std::size_t>,
-                     swiss::leak_detector_allocator<
-                         std::pair<int, std::atomic<std::size_t>>, true>>;
+                     swiss::leak_detector_allocator<int, true>>;
 TEST_T(mpmc_queue, allocator, allocator_queue_t);
 
 class mpmc_queue_workload

@@ -56,10 +56,10 @@ TEST(cas128_mpmc_queue, non_default_constructible_item_type) { GTEST_SKIP(); }
 
 TEST(cas128_mpmc_queue, non_copyable_item_type) { GTEST_SKIP(); }
 
-using allocator_queue_t = flow::cas128_mpmc_queue<
-    int, std::size_t, swiss::kDynamicExtent<std::size_t>,
-    swiss::leak_detector_allocator<
-        std::atomic<swiss::trivial_pair<int, std::size_t>>, true>>;
+using allocator_queue_t =
+    flow::cas128_mpmc_queue<int, std::size_t,
+                            swiss::kDynamicExtent<std::size_t>,
+                            swiss::leak_detector_allocator<int, true>>;
 TEST_T(cas128_mpmc_queue, allocator, allocator_queue_t);
 
 class cas128_mpmc_queue_workload

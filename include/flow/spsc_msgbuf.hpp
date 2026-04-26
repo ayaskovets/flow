@@ -231,7 +231,7 @@ class spsc_msgbuf final : public swiss::non_copyable,
   }
 
  public:
-  constexpr auto push(std::stop_token stop_token,
+  constexpr auto push(std::stop_token const & stop_token,
                       std::span<std::byte const> msg) noexcept -> bool {
     return push(stop_token, msg.size(),
                 [msg](std::span<std::byte> chunk) noexcept {
@@ -239,7 +239,7 @@ class spsc_msgbuf final : public swiss::non_copyable,
                 });
   }
 
-  constexpr auto pop(std::stop_token stop_token,
+  constexpr auto pop(std::stop_token const & stop_token,
                      std::span<std::byte> msg) noexcept -> bool {
     return pop(stop_token, [msg](std::span<std::byte> chunk) noexcept {
       std::copy_n(chunk.begin(), std::min(msg.size(), chunk.size()),

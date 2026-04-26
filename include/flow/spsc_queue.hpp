@@ -106,12 +106,14 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     });
   }
 
-  constexpr auto push(std::stop_token stop_token, value_type value) noexcept(
+  constexpr auto
+  push(std::stop_token const & stop_token, value_type value) noexcept(
       std::is_nothrow_move_constructible_v<value_type>) -> bool {
     return emplace(stop_token, std::move(value));
   }
 
-  constexpr auto pop(std::stop_token stop_token, value_type & value) noexcept(
+  constexpr auto
+  pop(std::stop_token const & stop_token, value_type & value) noexcept(
       std::is_nothrow_move_assignable_v<value_type> &&
       std::is_nothrow_destructible_v<value_type>) -> bool {
     return pop(stop_token, [&](value_type * front) {

@@ -123,15 +123,15 @@ class mpmc_queue final : public swiss::non_copyable, public swiss::non_movable {
     });
   }
 
-  constexpr auto push(std::stop_token stop_token, value_type value) noexcept
-      -> bool
+  constexpr auto push(std::stop_token const & stop_token,
+                      value_type value) noexcept -> bool
     requires(std::is_nothrow_move_constructible_v<value_type>)
   {
     return emplace(stop_token, std::move(value));
   }
 
-  constexpr auto pop(std::stop_token stop_token, value_type & value) noexcept
-      -> bool
+  constexpr auto pop(std::stop_token const & stop_token,
+                     value_type & value) noexcept -> bool
     requires(std::is_nothrow_move_assignable_v<value_type> &&
              std::is_nothrow_destructible_v<value_type>)
   {

@@ -97,11 +97,13 @@ class locked_ring_buffer final : public swiss::non_copyable,
     });
   }
 
-  constexpr auto push(std::stop_token stop_token, value_type value) -> bool {
+  constexpr auto push(std::stop_token const & stop_token, value_type value)
+      -> bool {
     return emplace(stop_token, std::move(value));
   }
 
-  constexpr auto pop(std::stop_token stop_token, value_type & value) -> bool {
+  constexpr auto pop(std::stop_token const & stop_token, value_type & value)
+      -> bool {
     return pop(stop_token, [&](value_type * front) {
       value = std::move(*front);
       std::allocator_traits<allocator_type>::destroy(allocator_, front);

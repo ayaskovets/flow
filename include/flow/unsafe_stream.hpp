@@ -24,8 +24,7 @@ template <std::unsigned_integral Index = std::size_t,
           Index Capacity               = swiss::kDynamicExtent<Index>,
           typename Allocator           = std::allocator<std::byte>>
 // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
-class unsafe_stream final : public swiss::non_copyable,
-                            public swiss::non_movable {
+class unsafe_stream : public swiss::non_copyable, public swiss::non_movable {
  public:
   using index_type     = Index;
   using allocator_type = Allocator;

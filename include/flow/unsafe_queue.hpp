@@ -19,8 +19,7 @@ template <typename Value, std::unsigned_integral Index = std::size_t,
           Index Capacity     = swiss::kDynamicExtent<Index>,
           typename Allocator = std::allocator<Value>>
 // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
-class unsafe_queue final : public swiss::non_copyable,
-                           public swiss::non_movable {
+class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
  public:
   using value_type     = Value;
   using index_type     = Index;
@@ -70,7 +69,12 @@ class unsafe_queue final : public swiss::non_copyable,
     });
   }
 
-  constexpr auto try_push(value_type value) noexcept(
+  constexpr auto try_push(value_type const & value) noexcept(
+      std::is_nothrow_copy_constructible_v<value_type>) -> bool {
+    return try_emplace(value);
+  }
+
+  constexpr auto try_push(value_type && value) noexcept(
       std::is_nothrow_move_constructible_v<value_type>) -> bool {
     return try_emplace(std::move(value));
   }
@@ -93,7 +97,9 @@ class unsafe_queue final : public swiss::non_copyable,
     });
   }
 
-  constexpr void push(value_type value) { emplace(std::move(value)); }
+  constexpr void push(value_type const & value) { emplace(value); }
+
+  constexpr void push(value_type && value) { emplace(std::move(value)); }
 
   constexpr void pop(value_type & value) {
     pop([&](value_type * front) {

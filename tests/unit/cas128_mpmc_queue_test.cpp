@@ -34,6 +34,11 @@ TEST_T(cas128_mpmc_queue, blocking_smoke, flow::cas128_mpmc_queue<int>);
 
 TEST_T(cas128_mpmc_queue, mixed_smoke, flow::cas128_mpmc_queue<int>);
 
+using alignment_queue_t = flow::cas128_mpmc_queue<
+    int, std::size_t, swiss::kDynamicExtent<std::size_t>, alignof(int) * 4,
+    swiss::leak_detector_allocator<int, true>>;
+TEST_T(cas128_mpmc_queue, mixed_smoke, alignment_queue_t);
+
 TEST_T(cas128_mpmc_queue, blocking_push, flow::cas128_mpmc_queue<int>);
 
 TEST_T(cas128_mpmc_queue, blocking_pop, flow::cas128_mpmc_queue<int>);
@@ -56,10 +61,10 @@ TEST(cas128_mpmc_queue, non_default_constructible_item_type) { GTEST_SKIP(); }
 
 TEST(cas128_mpmc_queue, non_copyable_item_type) { GTEST_SKIP(); }
 
-using allocator_queue_t =
-    flow::cas128_mpmc_queue<int, std::size_t,
-                            swiss::kDynamicExtent<std::size_t>,
-                            swiss::leak_detector_allocator<int, true>>;
+using allocator_queue_t = flow::cas128_mpmc_queue<
+    int, std::size_t, swiss::kDynamicExtent<std::size_t>,
+    alignof(std::atomic<swiss::trivial_pair<int, std::size_t>>),
+    swiss::leak_detector_allocator<int, true>>;
 TEST_T(cas128_mpmc_queue, allocator, allocator_queue_t);
 
 class cas128_mpmc_queue_workload

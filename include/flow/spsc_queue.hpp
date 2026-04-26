@@ -7,6 +7,7 @@
 #include <stop_token>
 #include <thread>
 
+#include <swiss/aligned.hpp>
 #include <swiss/conditionally_runtime.hpp>
 #include <swiss/dynamic_extent.hpp>
 #include <swiss/mixins.hpp>
@@ -20,13 +21,15 @@ namespace flow {
  */
 template <typename Value, std::unsigned_integral Index = std::size_t,
           Index Capacity     = swiss::kDynamicExtent<Index>,
+          Index Alignment    = alignof(Value),
           typename Allocator = std::allocator<Value>>
 // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
  public:
   using value_type     = Value;
   using index_type     = Index;
-  using allocator_type = Allocator;
+  using allocator_type = std::allocator_traits<
+      Allocator>::template rebind_alloc<swiss::aligned<Value, Alignment>>;
 
  public:
   constexpr explicit spsc_queue(allocator_type allocator = allocator_type())
@@ -82,7 +85,12 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     });
   }
 
-  constexpr auto try_push(value_type value) noexcept(
+  constexpr auto try_push(value_type const & value) noexcept(
+      std::is_nothrow_copy_constructible_v<value_type>) -> bool {
+    return try_emplace(value);
+  }
+
+  constexpr auto try_push(value_type && value) noexcept(
       std::is_nothrow_move_constructible_v<value_type>) -> bool {
     return try_emplace(std::move(value));
   }
@@ -107,7 +115,13 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
   }
 
   constexpr auto
-  push(std::stop_token const & stop_token, value_type value) noexcept(
+  push(std::stop_token const & stop_token, value_type const & value) noexcept(
+      std::is_nothrow_copy_constructible_v<value_type>) -> bool {
+    return emplace(stop_token, value);
+  }
+
+  constexpr auto
+  push(std::stop_token const & stop_token, value_type && value) noexcept(
       std::is_nothrow_move_constructible_v<value_type>) -> bool {
     return emplace(stop_token, std::move(value));
   }
@@ -129,9 +143,14 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     emplace(std::stop_token{}, std::forward<Args>(args)...);
   }
 
-  constexpr void push(value_type value) noexcept(
+  constexpr void push(value_type const & value) noexcept(
+      std::is_nothrow_copy_constructible_v<value_type>) {
+    emplace(std::stop_token{}, value);
+  }
+
+  constexpr void push(value_type && value) noexcept(
       std::is_nothrow_move_constructible_v<value_type>) {
-    push(std::stop_token{}, std::move(value));
+    emplace(std::stop_token{}, std::move(value));
   }
 
   constexpr void pop(value_type & value) noexcept(
@@ -166,7 +185,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     [[no_unique_address]] swiss::conditionally_runtime<
         index_type, Capacity == swiss::kDynamicExtent<index_type>,
         Capacity> const capacity;
-    value_type * const ring_buffer;
+    swiss::aligned<value_type, Alignment> * const ring_buffer;
     // NOLINTEND(cppcoreguidelines-avoid-const-or-ref-data-members)
   };
 
@@ -204,6 +223,12 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     return index & static_cast<index_type>(capacity - 1);
   }
 
+  [[nodiscard]] constexpr auto at(
+      swiss::aligned<value_type, Alignment> * ring_buffer, index_type capacity,
+      index_type index) const noexcept -> value_type * {
+    return &**(ring_buffer + slot(capacity, index));
+  }
+
  private:
   template <std::invocable<value_type *> Callback>
   constexpr auto try_push(Callback const & callback) noexcept(
@@ -217,8 +242,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
       }
     }
 
-    std::invoke(callback,
-                writer_.ring_buffer + slot(*writer_.capacity, push_to));
+    std::invoke(callback, at(writer_.ring_buffer, *writer_.capacity, push_to));
 
     writer_.index.store(next(push_to), std::memory_order::release);
     return true;
@@ -236,8 +260,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
       }
     }
 
-    std::invoke(callback,
-                reader_.ring_buffer + slot(*reader_.capacity, pop_from));
+    std::invoke(callback, at(reader_.ring_buffer, *reader_.capacity, pop_from));
 
     reader_.index.store(next(pop_from), std::memory_order::release);
     return true;
@@ -253,7 +276,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     while (!stop_token.stop_requested()) {
       if (!full(*writer_.capacity, push_to, writer_.cache)) {
         std::invoke(callback,
-                    writer_.ring_buffer + slot(*writer_.capacity, push_to));
+                    at(writer_.ring_buffer, *writer_.capacity, push_to));
 
         writer_.index.store(next(push_to), std::memory_order::release);
         return true;
@@ -276,7 +299,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     while (!stop_token.stop_requested()) {
       if (!empty(reader_.cache, pop_from)) {
         std::invoke(callback,
-                    reader_.ring_buffer + slot(*reader_.capacity, pop_from));
+                    at(reader_.ring_buffer, *reader_.capacity, pop_from));
 
         reader_.index.store(next(pop_from), std::memory_order::release);
         return true;

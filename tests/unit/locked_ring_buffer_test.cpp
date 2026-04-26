@@ -38,6 +38,11 @@ TEST_T(locked_ring_buffer, blocking_smoke, flow::locked_ring_buffer<int>);
 
 TEST_T(locked_ring_buffer, mixed_smoke, flow::locked_ring_buffer<int>);
 
+using alignment_queue_t = flow::locked_ring_buffer<
+    int, std::size_t, swiss::kDynamicExtent<std::size_t>, alignof(int) * 2,
+    swiss::leak_detector_allocator<int, true>>;
+TEST_T(locked_ring_buffer, mixed_smoke, alignment_queue_t);
+
 TEST_T(locked_ring_buffer, blocking_push, flow::locked_ring_buffer<int>);
 
 TEST_T(locked_ring_buffer, blocking_pop, flow::locked_ring_buffer<int>);
@@ -66,7 +71,7 @@ TEST_T(locked_ring_buffer, non_default_constructible_item_type,
 
 using allocator_queue_t =
     flow::locked_ring_buffer<int, std::size_t,
-                             swiss::kDynamicExtent<std::size_t>,
+                             swiss::kDynamicExtent<std::size_t>, alignof(int),
                              swiss::leak_detector_allocator<int, true>>;
 TEST_T(locked_ring_buffer, allocator, allocator_queue_t);
 

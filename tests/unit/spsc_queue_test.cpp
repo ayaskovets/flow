@@ -35,6 +35,12 @@ TEST_T(spsc_queue, blocking_smoke, flow::spsc_queue<int>);
 
 TEST_T(spsc_queue, mixed_smoke, flow::spsc_queue<int>);
 
+using alignment_queue_t =
+    flow::spsc_queue<int, std::size_t, swiss::kDynamicExtent<std::size_t>,
+                     alignof(int) * 2,
+                     swiss::leak_detector_allocator<int, true>>;
+TEST_T(spsc_queue, mixed_smoke, alignment_queue_t);
+
 TEST_T(spsc_queue, blocking_push, flow::spsc_queue<int>);
 
 TEST_T(spsc_queue, blocking_pop, flow::spsc_queue<int>);
@@ -59,7 +65,7 @@ TEST_T(spsc_queue, non_default_constructible_item_type,
 
 using allocator_queue_t =
     flow::spsc_queue<int, std::size_t, swiss::kDynamicExtent<std::size_t>,
-                     swiss::leak_detector_allocator<int, true>>;
+                     alignof(int), swiss::leak_detector_allocator<int, true>>;
 TEST_T(spsc_queue, allocator, allocator_queue_t);
 
 class spsc_queue_workload

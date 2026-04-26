@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <stop_token>
 
+#include <swiss/aligned.hpp>
 #include <swiss/conditionally_runtime.hpp>
 #include <swiss/dynamic_extent.hpp>
 #include <swiss/mixins.hpp>
@@ -20,14 +21,16 @@ namespace flow {
  */
 template <typename Value, std::unsigned_integral Index = std::size_t,
           Index Capacity     = swiss::kDynamicExtent<Index>,
+          Index Alignment    = alignof(Value),
           typename Allocator = std::allocator<Value>>
 // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
-class locked_ring_buffer final : public swiss::non_copyable,
-                                 public swiss::non_movable {
+class locked_ring_buffer : public swiss::non_copyable,
+                           public swiss::non_movable {
  public:
   using value_type     = Value;
   using index_type     = Index;
-  using allocator_type = Allocator;
+  using allocator_type = std::allocator_traits<
+      Allocator>::template rebind_alloc<swiss::aligned<Value, Alignment>>;
 
  public:
   constexpr explicit locked_ring_buffer(
@@ -77,7 +80,11 @@ class locked_ring_buffer final : public swiss::non_copyable,
     });
   }
 
-  constexpr auto try_push(value_type value) -> bool {
+  constexpr auto try_push(value_type const & value) -> bool {
+    return try_emplace(value);
+  }
+
+  constexpr auto try_push(value_type && value) -> bool {
     return try_emplace(std::move(value));
   }
 
@@ -97,7 +104,12 @@ class locked_ring_buffer final : public swiss::non_copyable,
     });
   }
 
-  constexpr auto push(std::stop_token const & stop_token, value_type value)
+  constexpr auto push(std::stop_token const & stop_token,
+                      value_type const & value) -> bool {
+    return emplace(stop_token, value);
+  }
+
+  constexpr auto push(std::stop_token const & stop_token, value_type && value)
       -> bool {
     return emplace(stop_token, std::move(value));
   }
@@ -116,7 +128,11 @@ class locked_ring_buffer final : public swiss::non_copyable,
     emplace(std::stop_token{}, std::forward<Args>(args)...);
   }
 
-  constexpr void push(value_type value) {
+  constexpr void push(value_type const & value) {
+    push(std::stop_token{}, value);
+  }
+
+  constexpr void push(value_type && value) {
     push(std::stop_token{}, std::move(value));
   }
 
@@ -148,7 +164,7 @@ class locked_ring_buffer final : public swiss::non_copyable,
   [[no_unique_address]] swiss::conditionally_runtime<
       index_type, Capacity == swiss::kDynamicExtent<index_type>, Capacity> const
       capacity_;
-  value_type * const ring_buffer_;
+  swiss::aligned<value_type, Alignment> * const ring_buffer_;
   // NOLINTEND(cppcoreguidelines-avoid-const-or-ref-data-members)
 
  private:
@@ -176,6 +192,12 @@ class locked_ring_buffer final : public swiss::non_copyable,
     return index & static_cast<index_type>(*capacity_ - 1);
   }
 
+  [[nodiscard]] constexpr auto at(
+      swiss::aligned<value_type, Alignment> * ring_buffer,
+      index_type index) const noexcept -> value_type * {
+    return &**(ring_buffer + slot(index));
+  }
+
  private:
   template <std::invocable<value_type *> Callback>
   constexpr auto try_push(Callback const & callback) -> bool {
@@ -184,7 +206,7 @@ class locked_ring_buffer final : public swiss::non_copyable,
       return false;
     }
 
-    std::invoke(callback, ring_buffer_ + slot(push_to_));
+    std::invoke(callback, at(ring_buffer_, push_to_));
 
     push_to_ = next(push_to_);
     pop_available_cv_.notify_one();
@@ -198,7 +220,7 @@ class locked_ring_buffer final : public swiss::non_copyable,
       return false;
     }
 
-    std::invoke(callback, ring_buffer_ + slot(pop_from_));
+    std::invoke(callback, at(ring_buffer_, pop_from_));
 
     pop_from_ = next(pop_from_);
     push_available_cv_.notify_one();
@@ -215,7 +237,7 @@ class locked_ring_buffer final : public swiss::non_copyable,
       return false;
     }
 
-    std::invoke(callback, ring_buffer_ + slot(push_to_));
+    std::invoke(callback, at(ring_buffer_, push_to_));
 
     push_to_ = next(push_to_);
     pop_available_cv_.notify_one();
@@ -231,7 +253,7 @@ class locked_ring_buffer final : public swiss::non_copyable,
       return false;
     }
 
-    std::invoke(callback, ring_buffer_ + slot(pop_from_));
+    std::invoke(callback, at(ring_buffer_, pop_from_));
 
     pop_from_ = next(pop_from_);
     push_available_cv_.notify_one();

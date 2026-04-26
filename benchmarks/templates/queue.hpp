@@ -4,7 +4,6 @@
 
 #include <cstddef>
 #include <optional>
-#include <thread>
 
 #include <benchmark/benchmark.h>
 
@@ -37,11 +36,13 @@ constexpr void nonblocking_throughput(benchmark::State & state) {
     for (auto const _ : state) {
       if (queue->try_emplace()) {
         items += 1;
-      } else {
-        std::this_thread::yield();
       }
     }
 
+    /**
+     * @note Division by producers is necessary because percentages get summed
+     * up for all threads
+     */
     state.counters["push%"] =
         benchmark::Counter(100.0 * static_cast<double>(items) /
                            static_cast<double>(state.iterations()) /
@@ -53,11 +54,13 @@ constexpr void nonblocking_throughput(benchmark::State & state) {
       if (queue->try_pop(value)) {
         benchmark::DoNotOptimize(value);
         items += 1;
-      } else {
-        std::this_thread::yield();
       }
     }
 
+    /**
+     * @note Division by producers is necessary because percentages get summed
+     * up for all threads
+     */
     state.counters["pop%"] =
         benchmark::Counter(100.0 * static_cast<double>(items) /
                            static_cast<double>(state.iterations()) /

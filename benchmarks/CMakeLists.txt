@@ -32,6 +32,7 @@ set(SOURCES
     locked_ring_buffer_bench.cpp
     main.cpp
     mpmc_queue_bench.cpp
+    mpsc_msgbuf_bench.cpp
     mpsc_queue_bench.cpp
     spmc_queue_bench.cpp
     spsc_msgbuf_bench.cpp

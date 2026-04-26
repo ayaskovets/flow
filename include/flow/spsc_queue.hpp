@@ -65,7 +65,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
    * @warning Destructor is not thread safe and assumes that there is only one
    * thread operating on the queue during the destruction
    */
-  constexpr ~spsc_queue() {
+  constexpr ~spsc_queue() noexcept {
     while (try_pop([this](value_type * front) {
       std::allocator_traits<allocator_type>::destroy(allocator_, front);
     })) {
@@ -168,9 +168,8 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     index_type const push_to  = writer_.index.load(std::memory_order::relaxed);
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
 
-    return push_to >= pop_from
-               ? std::min(*reader_.capacity, size(push_to, pop_from))
-               : 0;
+    auto const _size = size(push_to, pop_from);
+    return _size > *writer_.capacity ? 0 : _size;
   }
 
   constexpr auto get_allocator() const noexcept -> allocator_type {

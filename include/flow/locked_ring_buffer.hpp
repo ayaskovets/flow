@@ -60,7 +60,7 @@ class locked_ring_buffer : public swiss::non_copyable,
   /**
    * @warning Destructor requires exlusive access to the queue
    */
-  constexpr ~locked_ring_buffer() {
+  constexpr ~locked_ring_buffer() noexcept {
     while (!empty()) {
       std::allocator_traits<allocator_type>::destroy(
           allocator_, ring_buffer_ + slot(pop_from_));

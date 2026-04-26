@@ -254,9 +254,8 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
     index_type const push_to  = writer_.index.load(std::memory_order::relaxed);
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
 
-    return push_to >= pop_from
-               ? std::min(*reader_.capacity, size(push_to, pop_from))
-               : 0;
+    auto const _size = size(push_to, pop_from);
+    return _size > *writer_.capacity ? 0 : _size;
   }
 
   constexpr auto get_allocator() const noexcept -> allocator_type {

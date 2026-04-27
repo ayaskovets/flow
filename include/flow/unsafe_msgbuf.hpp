@@ -60,8 +60,7 @@ class unsafe_msgbuf : public swiss::non_copyable, public swiss::non_movable {
 
  public:
   template <std::invocable<std::span<std::byte>> Callback>
-  constexpr auto
-  try_push(index_type msg_size, Callback const & callback) noexcept(
+  constexpr auto try_push(index_type msg_size, Callback && callback) noexcept(
       std::is_nothrow_invocable_v<Callback, std::span<std::byte>>) -> bool {
     if (msg_size == 0) {
       return false;
@@ -95,14 +94,15 @@ class unsafe_msgbuf : public swiss::non_copyable, public swiss::non_movable {
     write_header(_push_to, msg_size);
     _push_to = next(_push_to, kHeaderSize);
 
-    std::invoke(callback, std::span(ring_buffer_ + _push_to, msg_size));
+    std::invoke(std::forward<Callback>(callback),
+                std::span(ring_buffer_ + _push_to, msg_size));
 
     size_ += padding + required;
     return true;
   }
 
   template <std::invocable<std::span<std::byte>> Callback>
-  constexpr auto try_pop(Callback const & callback) noexcept(
+  constexpr auto try_pop(Callback && callback) noexcept(
       std::is_nothrow_invocable_v<Callback, std::span<std::byte>>)
       -> index_type {
     if (size_ == 0) {
@@ -126,7 +126,8 @@ class unsafe_msgbuf : public swiss::non_copyable, public swiss::non_movable {
 
     _pop_from = next(_pop_from, kHeaderSize);
 
-    std::invoke(callback, std::span(ring_buffer_ + _pop_from, msg_size));
+    std::invoke(std::forward<Callback>(callback),
+                std::span(ring_buffer_ + _pop_from, msg_size));
 
     pop_from_ = next(_pop_from, msg_size);
     size_ -= padding + kHeaderSize + msg_size;
@@ -135,15 +136,15 @@ class unsafe_msgbuf : public swiss::non_copyable, public swiss::non_movable {
 
  public:
   template <std::invocable<std::span<std::byte>> Callback>
-  constexpr void push(index_type msg_size, Callback const & callback) {
-    if (!try_push(msg_size, callback)) {
+  constexpr void push(index_type msg_size, Callback && callback) {
+    if (!try_push(msg_size, std::forward<Callback>(callback))) {
       throw std::runtime_error("unsafe_msgbuf::push(): full");
     }
   }
 
   template <std::invocable<std::span<std::byte>> Callback>
-  constexpr auto pop(Callback const & callback) -> index_type {
-    index_type const msg_size = try_pop(callback);
+  constexpr auto pop(Callback && callback) -> index_type {
+    index_type const msg_size = try_pop(std::forward<Callback>(callback));
     if (msg_size == 0) {
       throw std::runtime_error("unsafe_msgbuf::pop(): empty");
     }
@@ -208,8 +209,8 @@ class unsafe_msgbuf : public swiss::non_copyable, public swiss::non_movable {
   [[nodiscard]] constexpr auto next(index_type index,
                                     index_type bytes) const noexcept
       -> index_type {
-    index += bytes;
-    return index >= *capacity_ ? index - *capacity_ : index;
+    return (*capacity_ - index > bytes) ? (index + bytes)
+                                        : (bytes - (*capacity_ - index));
   }
 
   [[nodiscard]] constexpr auto free() const noexcept -> index_type {

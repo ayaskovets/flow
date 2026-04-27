@@ -15,9 +15,9 @@ BENCHMARK_T(mpsc_msgbuf, nonblocking_throughput, msgbuf_t)
     /* stream_capacity, producers, consumers, msg_size */
     ->Args({64, 1, 1, 4})
     ->Args({128, 1, 1, 8})
-    ->Args({128, 2, 1, 16})
-    ->Args({512, 2, 1, 54})
-    ->Args({1024, 4, 1, 128})
+    ->Args({128, 1, 1, 16})
+    ->Args({512, 1, 1, 54})
+    ->Args({1024, 1, 1, 128})
     ->UseRealTime()
     ->Threads(2);
 
@@ -25,9 +25,9 @@ BENCHMARK_T(mpsc_msgbuf, blocking_throughput, msgbuf_t)
     /* stream_capacity, producers, consumers, msg_size */
     ->Args({64, 1, 1, 4})
     ->Args({128, 1, 1, 8})
-    ->Args({128, 2, 1, 16})
-    ->Args({512, 2, 1, 54})
-    ->Args({1024, 4, 1, 128})
+    ->Args({128, 1, 1, 16})
+    ->Args({512, 1, 1, 54})
+    ->Args({1024, 1, 1, 128})
     ->UseRealTime()
     ->Threads(2);
 

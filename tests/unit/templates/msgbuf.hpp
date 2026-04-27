@@ -33,7 +33,8 @@ constexpr void size_capacity() {
 
   EXPECT_EQ(msgbuf.size(), 0);
   EXPECT_EQ(msgbuf.capacity(), kCapacity);
-  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) { GTEST_FAIL(); }), 0);
+  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept { GTEST_FAIL(); }),
+            0);
 
   msgbuf.push(std::vector(8, std::byte(0)));
   EXPECT_EQ(msgbuf.size(), 16);
@@ -57,7 +58,8 @@ constexpr void nonblocking_smoke() {
   std::vector<std::byte> msg(4);
   Msgbuf msgbuf(kCapacity);
 
-  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) { GTEST_FAIL(); }), 0);
+  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept { GTEST_FAIL(); }),
+            0);
 
   EXPECT_TRUE(msgbuf.try_push(std::vector(2, std::byte(0))));
   EXPECT_TRUE(msgbuf.try_push(std::vector(4, std::byte(1))));
@@ -79,7 +81,8 @@ constexpr void nonblocking_smoke() {
   EXPECT_EQ(msg, (std::vector{std::byte(4), std::byte(2), std::byte(1),
                               std::byte(1)}));
 
-  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) { GTEST_FAIL(); }), 0);
+  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept { GTEST_FAIL(); }),
+            0);
 }
 
 template <flow::concepts::blocking_msgbuf Msgbuf>

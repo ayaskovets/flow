@@ -25,6 +25,7 @@ constexpr void minimal_capacity(std::size_t capacity) {
 }
 
 template <flow::concepts::blocking_msgbuf Msgbuf>
+  requires(Msgbuf::header_size() == sizeof(std::size_t))
 constexpr void size_capacity() {
   constexpr std::size_t kCapacity = 32;
 
@@ -52,6 +53,7 @@ constexpr void size_capacity() {
 }
 
 template <flow::concepts::nonblocking_msgbuf Msgbuf>
+  requires(Msgbuf::header_size() == sizeof(std::size_t))
 constexpr void nonblocking_smoke() {
   constexpr std::size_t kCapacity = 32;
 
@@ -86,6 +88,7 @@ constexpr void nonblocking_smoke() {
 }
 
 template <flow::concepts::blocking_msgbuf Msgbuf>
+  requires(Msgbuf::header_size() == sizeof(std::size_t))
 constexpr void blocking_smoke() {
   constexpr std::size_t kCapacity = 32;
 
@@ -113,7 +116,8 @@ constexpr void blocking_smoke() {
 
 template <typename Msgbuf>
   requires(flow::concepts::blocking_msgbuf<Msgbuf> &&
-           flow::concepts::nonblocking_msgbuf<Msgbuf>)
+           flow::concepts::nonblocking_msgbuf<Msgbuf> &&
+           Msgbuf::header_size() == sizeof(std::size_t))
 constexpr void mixed_smoke() {
   constexpr std::size_t kCapacity = 32;
 
@@ -153,6 +157,7 @@ constexpr void mixed_smoke() {
 }
 
 template <flow::concepts::blocking_msgbuf Msgbuf>
+  requires(Msgbuf::header_size() == sizeof(std::size_t))
 constexpr void blocking_push() {
   constexpr std::size_t kCapacity = 16;
 
@@ -176,7 +181,8 @@ constexpr void blocking_push() {
 
 template <typename Msgbuf>
   requires(flow::concepts::blocking_msgbuf<Msgbuf> &&
-           flow::concepts::nonblocking_msgbuf<Msgbuf>)
+           flow::concepts::nonblocking_msgbuf<Msgbuf> &&
+           Msgbuf::header_size() == sizeof(std::size_t))
 constexpr void blocking_pop() {
   constexpr std::size_t kCapacity = 16;
 
@@ -191,6 +197,7 @@ constexpr void blocking_pop() {
 }
 
 template <flow::concepts::cancellable_blocking_msgbuf Msgbuf>
+  requires(Msgbuf::header_size() == sizeof(std::size_t))
 constexpr void stop_token_noop() {
   constexpr std::size_t kCapacity = 32;
 
@@ -213,6 +220,7 @@ constexpr void stop_token_noop() {
 }
 
 template <flow::concepts::cancellable_blocking_msgbuf Msgbuf>
+  requires(Msgbuf::header_size() == sizeof(std::size_t))
 constexpr void blocking_push_stop_token() {
   constexpr std::size_t kCapacity = 16;
 
@@ -226,6 +234,7 @@ constexpr void blocking_push_stop_token() {
 }
 
 template <flow::concepts::cancellable_blocking_msgbuf Msgbuf>
+  requires(Msgbuf::header_size() == sizeof(std::size_t))
 constexpr void blocking_pop_stop_token() {
   constexpr std::size_t kCapacity = 16;
 
@@ -241,6 +250,7 @@ constexpr void blocking_pop_stop_token() {
 }
 
 template <flow::concepts::blocking_msgbuf Msgbuf>
+  requires(Msgbuf::header_size() == sizeof(std::size_t))
 constexpr void allocator() {
   constexpr std::size_t kCapacity = 2;
 
@@ -258,6 +268,7 @@ constexpr void allocator() {
 }
 
 template <flow::concepts::nonblocking_msgbuf Msgbuf>
+  requires(Msgbuf::header_size() == sizeof(std::size_t))
 constexpr void nonblocking(auto const & param) {
   auto const & [msg_count, msgbuf_capacity, producers, consumers] = param;
 
@@ -319,6 +330,7 @@ constexpr void nonblocking(auto const & param) {
 }
 
 template <flow::concepts::blocking_msgbuf Msgbuf>
+  requires(Msgbuf::header_size() == sizeof(std::size_t))
 constexpr void blocking(auto const & param) {
   auto const & [msg_count, msgbuf_capacity, producers, consumers] = param;
 
@@ -378,6 +390,7 @@ constexpr void blocking(auto const & param) {
 }
 
 template <flow::concepts::nonblocking_msgbuf Msgbuf>
+  requires(std::is_same_v<typename Msgbuf::index_type, std::uint8_t>)
 constexpr void rollover() {
   constexpr std::size_t kCapacity = 32;
   constexpr std::size_t kRepeats  = 3;
@@ -397,6 +410,7 @@ constexpr void rollover() {
 }
 
 template <flow::concepts::nonblocking_msgbuf Msgbuf>
+  requires(Msgbuf::header_size() == sizeof(std::size_t))
 constexpr void nonblocking_callback() {
   constexpr std::size_t kCapacity = 32;
 
@@ -435,6 +449,7 @@ constexpr void nonblocking_callback() {
 }
 
 template <flow::concepts::blocking_msgbuf Msgbuf>
+  requires(Msgbuf::header_size() == sizeof(std::size_t))
 constexpr void blocking_callback() {
   constexpr std::size_t kCapacity = 32;
 
@@ -473,6 +488,7 @@ constexpr void blocking_callback() {
 }
 
 template <flow::concepts::nonblocking_msgbuf Msgbuf>
+  requires(Msgbuf::header_size() == sizeof(std::size_t))
 constexpr void padding() {
   constexpr std::size_t kCapacity = 64;
 
@@ -525,7 +541,8 @@ constexpr void padding() {
 
 template <typename Msgbuf>
   requires(flow::concepts::blocking_msgbuf<Msgbuf> &&
-           flow::concepts::nonblocking_msgbuf<Msgbuf>)
+           flow::concepts::nonblocking_msgbuf<Msgbuf> &&
+           Msgbuf::header_size() == sizeof(std::size_t))
 constexpr void exception_callback() {
   constexpr std::size_t kCapacity = 32;
 

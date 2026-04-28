@@ -261,6 +261,10 @@ class spsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
   }
 
  public:
+  [[nodiscard]] static constexpr auto header_size() noexcept -> index_type {
+    return kHeaderSize;
+  }
+
   [[nodiscard]] constexpr auto capacity() const noexcept -> index_type {
     return *reader_.capacity;
   }

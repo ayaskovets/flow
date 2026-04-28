@@ -11,6 +11,7 @@ namespace flow::concepts {
  */
 template <typename T>
 concept msgbuf = requires(T msgbuf) {
+  { T::header_size() } -> std::same_as<typename T::index_type>;
   { msgbuf.capacity() } -> std::same_as<typename T::index_type>;
   { msgbuf.size() } -> std::same_as<typename T::index_type>;
   { msgbuf.get_allocator() } -> std::same_as<typename T::allocator_type>;

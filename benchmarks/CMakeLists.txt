@@ -28,7 +28,6 @@ set(SOURCES
     templates/queue.hpp
     templates/stream.hpp
     templates/templates.hpp
-    cas128_mpmc_queue_bench.cpp
     locked_ring_buffer_bench.cpp
     main.cpp
     mpmc_queue_bench.cpp
@@ -37,7 +36,8 @@ set(SOURCES
     spmc_queue_bench.cpp
     spsc_msgbuf_bench.cpp
     spsc_queue_bench.cpp
-    spsc_stream_bench.cpp)
+    spsc_stream_bench.cpp
+)
 
 # ------------------------------------------------------------------------------
 # target

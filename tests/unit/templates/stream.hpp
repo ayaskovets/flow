@@ -404,73 +404,73 @@ constexpr void nonblocking_callback() {
 
   Stream stream(kCapacity);
 
-  EXPECT_EQ(
-      stream.try_push(
-          [](std::span<std::byte> chunk) { EXPECT_EQ(chunk.size(), 3); }, 3),
-      3);
+  EXPECT_EQ(stream.try_push(
+                [](std::span<std::byte> postfix, std::span<std::byte> prefix) {
+                  EXPECT_EQ(postfix.size(), 3);
+                  EXPECT_EQ(prefix.size(), 0);
+                },
+                3),
+            3);
   EXPECT_EQ(stream.size(), 3);
 
-  EXPECT_EQ(
-      stream.try_push(
-          [](std::span<std::byte> chunk) { EXPECT_EQ(chunk.size(), 2); }, 2),
-      2);
+  EXPECT_EQ(stream.try_push(
+                [](std::span<std::byte> postfix, std::span<std::byte> prefix) {
+                  EXPECT_EQ(postfix.size(), 2);
+                  EXPECT_EQ(prefix.size(), 0);
+                },
+                2),
+            2);
   EXPECT_EQ(stream.size(), 5);
 
-  EXPECT_EQ(
-      stream.try_pop(
-          [](std::span<std::byte> chunk) { EXPECT_EQ(chunk.size(), 3); }, 3),
-      3);
+  EXPECT_EQ(stream.try_pop(
+                [](std::span<std::byte> postfix, std::span<std::byte> prefix) {
+                  EXPECT_EQ(postfix.size(), 3);
+                  EXPECT_EQ(prefix.size(), 0);
+                },
+                3),
+            3);
   EXPECT_EQ(stream.size(), 2);
 
   EXPECT_EQ(stream.try_push(
-                [](std::span<std::byte> chunk) { EXPECT_EQ(chunk.size(), 3); }),
+                [](std::span<std::byte> postfix, std::span<std::byte> prefix) {
+                  EXPECT_EQ(postfix.size(), 3);
+                  EXPECT_EQ(prefix.size(), 3);
+                  return 3;
+                }),
             3);
   EXPECT_EQ(stream.size(), 5);
 }
 
-template <flow::concepts::nonblocking_stream Stream>
-constexpr void nonblocking_callback_limit() {
+template <flow::concepts::blocking_stream Stream>
+constexpr void blocking_callback() {
   constexpr std::size_t kCapacity = 8;
 
   Stream stream(kCapacity);
 
-  EXPECT_EQ(stream.try_push(
-                [](std::span<std::byte> chunk) -> std::size_t {
-                  EXPECT_EQ(chunk.size(), 3);
-                  return 2;
-                },
-                3),
-            2);
+  stream.push(3, [](std::span<std::byte> postfix, std::span<std::byte> prefix) {
+    EXPECT_EQ(postfix.size(), 3);
+    EXPECT_EQ(prefix.size(), 0);
+  });
 
-  EXPECT_EQ(stream.try_push([](std::span<std::byte> chunk) -> std::size_t {
-    EXPECT_EQ(chunk.size(), 6);
-    return 2;
-  }),
-            2);
+  EXPECT_EQ(stream.size(), 3);
 
-  EXPECT_EQ(stream.try_pop([](std::span<std::byte> chunk) -> std::size_t {
-    EXPECT_EQ(chunk.size(), 4);
-    return 1;
-  }),
-            1);
+  stream.push(2, [](std::span<std::byte> postfix, std::span<std::byte> prefix) {
+    EXPECT_EQ(postfix.size(), 2);
+    EXPECT_EQ(prefix.size(), 0);
+  });
+  EXPECT_EQ(stream.size(), 5);
 
-  EXPECT_EQ(stream.try_pop([](std::span<std::byte> chunk) -> std::size_t {
-    EXPECT_EQ(chunk.size(), 3);
-    return 100;
-  }),
-            3);
+  stream.pop(3, [](std::span<std::byte> postfix, std::span<std::byte> prefix) {
+    EXPECT_EQ(postfix.size(), 3);
+    EXPECT_EQ(prefix.size(), 0);
+  });
+  EXPECT_EQ(stream.size(), 2);
 
-  EXPECT_EQ(stream.try_push([](std::span<std::byte> chunk) -> std::size_t {
-    EXPECT_EQ(chunk.size(), 4);
-    return 100;
-  }),
-            4);
-
-  EXPECT_EQ(stream.try_pop([](std::span<std::byte> chunk) -> std::size_t {
-    EXPECT_EQ(chunk.size(), 4);
-    return 2;
-  }),
-            2);
+  stream.push(3, [](std::span<std::byte> postfix, std::span<std::byte> prefix) {
+    EXPECT_EQ(postfix.size(), 3);
+    EXPECT_EQ(prefix.size(), 0);
+  });
+  EXPECT_EQ(stream.size(), 5);
 }
 
 template <flow::concepts::nonblocking_stream Stream>
@@ -479,18 +479,26 @@ constexpr void exception_callback() {
 
   Stream stream(kCapacity);
 
-  EXPECT_ANY_THROW(stream.try_push(
-      [](std::span<std::byte>) { throw std::runtime_error(""); }));
+  EXPECT_ANY_THROW(
+      stream.try_push([](std::span<std::byte>, std::span<std::byte>) {
+        throw std::runtime_error("");
+      }));
 
   EXPECT_TRUE(stream.try_push(std::vector(4, std::byte(0))));
-  EXPECT_EQ(stream.try_pop([](std::span<std::byte>) noexcept {}), 4);
+  EXPECT_EQ(stream.try_pop(
+                [](std::span<std::byte>, std::span<std::byte>) noexcept {}),
+            4);
 
   EXPECT_TRUE(stream.try_push(std::vector(1, std::byte(0))));
 
-  EXPECT_ANY_THROW(stream.try_pop(
-      [](std::span<std::byte>) { throw std::runtime_error(""); }));
+  EXPECT_ANY_THROW(
+      stream.try_pop([](std::span<std::byte>, std::span<std::byte>) {
+        throw std::runtime_error("");
+      }));
 
-  EXPECT_EQ(stream.try_pop([](std::span<std::byte>) noexcept {}), 1);
+  EXPECT_EQ(stream.try_pop(
+                [](std::span<std::byte>, std::span<std::byte>) noexcept {}),
+            1);
 }
 
 // NOLINTEND(cppcoreguidelines-avoid-magic-numbers)

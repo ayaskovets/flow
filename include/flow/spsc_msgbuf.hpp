@@ -69,8 +69,7 @@ class spsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
 
  public:
   template <std::invocable<std::span<std::byte>> Callback>
-  constexpr auto
-  try_push(index_type msg_size, Callback const & callback) noexcept(
+  constexpr auto try_push(index_type msg_size, Callback && callback) noexcept(
       std::is_nothrow_invocable_v<Callback, std::span<std::byte>>) -> bool {
     if (msg_size == 0) {
       return false;
@@ -112,16 +111,17 @@ class spsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
     write_header(writer_.ring_buffer, *writer_.capacity, push_to, msg_size);
     push_to = next(push_to, kHeaderSize);
 
-    std::invoke(callback, std::span(writer_.ring_buffer +
-                                        slot(*writer_.capacity, push_to),
-                                    msg_size));
+    std::invoke(
+        std::forward<Callback>(callback),
+        std::span(writer_.ring_buffer + slot(*writer_.capacity, push_to),
+                  msg_size));
 
     writer_.index.store(next(push_to, msg_size), std::memory_order::release);
     return true;
   }
 
   template <std::invocable<std::span<std::byte>> Callback>
-  constexpr auto try_pop(Callback const & callback) noexcept(
+  constexpr auto try_pop(Callback && callback) noexcept(
       std::is_nothrow_invocable_v<Callback, std::span<std::byte>>)
       -> index_type {
     index_type pop_from = reader_.index.load(std::memory_order::relaxed);
@@ -147,9 +147,10 @@ class spsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
 
     pop_from = next(pop_from, kHeaderSize);
 
-    std::invoke(callback, std::span(reader_.ring_buffer +
-                                        slot(*reader_.capacity, pop_from),
-                                    msg_size));
+    std::invoke(
+        std::forward<Callback>(callback),
+        std::span(reader_.ring_buffer + slot(*reader_.capacity, pop_from),
+                  msg_size));
 
     reader_.index.store(next(pop_from, msg_size), std::memory_order::release);
     return msg_size;
@@ -159,7 +160,7 @@ class spsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
   template <std::invocable<std::span<std::byte>> Callback>
   constexpr auto push(
       std::stop_token const & stop_token, index_type msg_size,
-      Callback const &
+      Callback &&
           callback) noexcept(std::is_nothrow_invocable_v<Callback,
                                                          std::span<std::byte>>)
       -> bool {
@@ -169,7 +170,7 @@ class spsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
     }
 
     while (!stop_token.stop_requested()) {
-      if (try_push(msg_size, callback)) {
+      if (try_push(msg_size, std::forward<Callback>(callback))) {
         return true;
       }
 
@@ -181,10 +182,10 @@ class spsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
 
   template <std::invocable<std::span<std::byte>> Callback>
   constexpr auto
-  pop(std::stop_token const & stop_token, Callback const & callback) noexcept(
+  pop(std::stop_token const & stop_token, Callback && callback) noexcept(
       std::is_nothrow_invocable_v<Callback, std::span<std::byte>>) -> bool {
     while (!stop_token.stop_requested()) {
-      if (try_pop(callback) != 0) {
+      if (try_pop(std::forward<Callback>(callback)) != 0) {
         return true;
       }
 
@@ -196,19 +197,19 @@ class spsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
 
  public:
   template <std::invocable<std::span<std::byte>> Callback>
-  constexpr void push(index_type msg_size, Callback const & callback) noexcept(
+  constexpr void push(index_type msg_size, Callback && callback) noexcept(
       std::is_nothrow_invocable_v<Callback, std::span<std::byte>>) {
-    push(std::stop_token{}, msg_size, callback);
+    push(std::stop_token{}, msg_size, std::forward<Callback>(callback));
   }
 
   template <std::invocable<std::span<std::byte>> Callback>
-  constexpr auto pop(Callback const & callback) noexcept(
+  constexpr auto pop(Callback && callback) noexcept(
       std::is_nothrow_invocable_v<Callback, std::span<std::byte>>)
       -> index_type {
     index_type msg_size{};
     pop(std::stop_token{}, [&](std::span<std::byte> chunk) {
       msg_size = chunk.size();
-      std::invoke(callback, chunk);
+      std::invoke(std::forward<Callback>(callback), chunk);
     });
     return msg_size;
   }

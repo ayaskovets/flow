@@ -5,6 +5,7 @@
 #include <memory>
 #include <span>
 #include <stdexcept>
+#include <type_traits>
 
 #include <swiss/conditionally_runtime.hpp>
 #include <swiss/dynamic_extent.hpp>
@@ -59,60 +60,15 @@ class unsafe_stream : public swiss::non_copyable, public swiss::non_movable {
   }
 
  public:
-  template <std::invocable<std::span<std::byte>> Callback>
+  template <std::invocable<std::span<std::byte>, std::span<std::byte>> Callback>
   constexpr auto try_push(
-      Callback const & callback,
+      Callback && callback,
       index_type max_size = std::numeric_limits<index_type>::
           max()) noexcept(std::is_nothrow_invocable_v<Callback,
+                                                      std::span<std::byte>,
                                                       std::span<std::byte>>)
       -> index_type {
-    if (full()) {
-      return 0;
-    }
-
-    index_type const _push_to = push_to();
-    index_type const postfix  = *capacity_ - _push_to;
-    index_type chunk          = std::min(max_size, std::min(postfix, free()));
-
-    index_type callback_chunk = chunk;
-    swiss::assign_invoke_result_if_not_void(
-        callback_chunk, callback, std::span(ring_buffer_ + _push_to, chunk));
-    chunk = std::min(chunk, callback_chunk);
-
-    size_ += chunk;
-    return chunk;
-  }
-
-  template <std::invocable<std::span<std::byte>> Callback>
-  constexpr auto try_pop(
-      Callback const & callback,
-      index_type max_size = std::numeric_limits<index_type>::
-          max()) noexcept(std::is_nothrow_invocable_v<Callback,
-                                                      std::span<std::byte>>)
-      -> index_type {
-    if (empty()) {
-      return 0;
-    }
-
-    index_type const postfix = *capacity_ - pop_from_;
-    index_type chunk         = std::min(max_size, std::min(postfix, size()));
-
-    index_type callback_chunk = chunk;
-    swiss::assign_invoke_result_if_not_void(
-        callback_chunk, callback, std::span(ring_buffer_ + pop_from_, chunk));
-    chunk = std::min(chunk, callback_chunk);
-
-    pop_from_ = next(pop_from_, chunk);
-    size_ -= chunk;
-    return chunk;
-  }
-
- public:
-  [[nodiscard]] constexpr auto try_push(
-      std::span<std::byte const> bytes) noexcept -> index_type {
-    index_type const max_size =
-        std::min(static_cast<index_type>(bytes.size()), free());
-
+    max_size = std::min(max_size, free());
     if (max_size == 0) {
       return 0;
     }
@@ -122,18 +78,26 @@ class unsafe_stream : public swiss::non_copyable, public swiss::non_movable {
     index_type const chunk     = std::min(max_size, postfix);
     index_type const remainder = max_size - chunk;
 
-    std::copy_n(bytes.data(), chunk, ring_buffer_ + _push_to);
-    std::copy_n(bytes.subspan(chunk).data(), remainder, ring_buffer_);
+    index_type callback_size = max_size;
+    swiss::assign_invoke_result_if_not_void(
+        callback_size, std::forward<Callback>(callback),
+        std::span(ring_buffer_ + _push_to, chunk),
+        std::span(ring_buffer_, remainder));
+    max_size = std::min(max_size, callback_size);
 
     size_ += max_size;
     return max_size;
   }
 
-  [[nodiscard]] constexpr auto try_pop(std::span<std::byte> bytes) noexcept
+  template <std::invocable<std::span<std::byte>, std::span<std::byte>> Callback>
+  constexpr auto try_pop(
+      Callback && callback,
+      index_type max_size = std::numeric_limits<index_type>::
+          max()) noexcept(std::is_nothrow_invocable_v<Callback,
+                                                      std::span<std::byte>,
+                                                      std::span<std::byte>>)
       -> index_type {
-    index_type const max_size =
-        std::min(static_cast<index_type>(bytes.size()), size());
-
+    max_size = std::min(max_size, size());
     if (max_size == 0) {
       return 0;
     }
@@ -142,8 +106,12 @@ class unsafe_stream : public swiss::non_copyable, public swiss::non_movable {
     index_type const chunk     = std::min(max_size, postfix);
     index_type const remainder = max_size - chunk;
 
-    std::copy_n(ring_buffer_ + pop_from_, chunk, bytes.data());
-    std::copy_n(ring_buffer_, remainder, bytes.subspan(chunk).data());
+    index_type callback_size = max_size;
+    swiss::assign_invoke_result_if_not_void(
+        callback_size, std::forward<Callback>(callback),
+        std::span(ring_buffer_ + pop_from_, chunk),
+        std::span(ring_buffer_, remainder));
+    max_size = std::min(max_size, callback_size);
 
     size_ -= max_size;
     pop_from_ = next(pop_from_, max_size);
@@ -151,18 +119,70 @@ class unsafe_stream : public swiss::non_copyable, public swiss::non_movable {
   }
 
  public:
-  constexpr void push(std::span<std::byte const> bytes) {
-    if (free() < static_cast<index_type>(bytes.size())) {
+  template <std::invocable<std::span<std::byte>, std::span<std::byte>> Callback>
+  constexpr void push(index_type size, Callback && callback)
+    requires(std::is_same_v<std::invoke_result_t<Callback, std::span<std::byte>,
+                                                 std::span<std::byte>>,
+                            void>)
+  {
+    if (free() < size) {
       throw std::runtime_error("unsafe_stream::push(): not enough space");
     }
-    std::ignore = try_push(bytes);
+    std::ignore = try_push(std::forward<Callback>(callback), size);
+  }
+
+  template <std::invocable<std::span<std::byte>, std::span<std::byte>> Callback>
+  constexpr void pop(index_type _size, Callback && callback)
+    requires(std::is_same_v<std::invoke_result_t<Callback, std::span<std::byte>,
+                                                 std::span<std::byte>>,
+                            void>)
+  {
+    if (size() < _size) {
+      throw std::runtime_error("unsafe_stream::pop(): not enough data");
+    }
+    std::ignore = try_pop(std::forward<Callback>(callback), _size);
+  }
+
+ public:
+  [[nodiscard]] constexpr auto try_push(
+      std::span<std::byte const> bytes) noexcept -> index_type {
+    return try_push(
+        [&](std::span<std::byte> postfix, std::span<std::byte> prefix) {
+          std::copy_n(bytes.data(), postfix.size(), postfix.data());
+          std::copy_n(bytes.subspan(postfix.size()).data(), prefix.size(),
+                      prefix.data());
+        },
+        static_cast<index_type>(bytes.size()));
+  }
+
+  [[nodiscard]] constexpr auto try_pop(std::span<std::byte> bytes) noexcept
+      -> index_type {
+    return try_pop(
+        [&](std::span<std::byte> postfix, std::span<std::byte> prefix) {
+          std::copy_n(postfix.data(), postfix.size(), bytes.data());
+          std::copy_n(prefix.data(), prefix.size(),
+                      bytes.subspan(postfix.size()).data());
+        },
+        static_cast<index_type>(bytes.size()));
+  }
+
+ public:
+  constexpr void push(std::span<std::byte const> bytes) {
+    push(static_cast<index_type>(bytes.size()),
+         [&](std::span<std::byte> postfix, std::span<std::byte> prefix) {
+           std::copy_n(bytes.data(), postfix.size(), postfix.data());
+           std::copy_n(bytes.subspan(postfix.size()).data(), prefix.size(),
+                       prefix.data());
+         });
   }
 
   constexpr void pop(std::span<std::byte> bytes) {
-    if (size() < static_cast<index_type>(bytes.size())) {
-      throw std::runtime_error("unsafe_stream::pop(): not enough data");
-    }
-    std::ignore = try_pop(bytes);
+    pop(static_cast<index_type>(bytes.size()),
+        [&](std::span<std::byte> postfix, std::span<std::byte> prefix) {
+          std::copy_n(postfix.data(), postfix.size(), bytes.data());
+          std::copy_n(prefix.data(), prefix.size(),
+                      bytes.subspan(postfix.size()).data());
+        });
   }
 
  public:
@@ -193,8 +213,8 @@ class unsafe_stream : public swiss::non_copyable, public swiss::non_movable {
   [[nodiscard]] constexpr auto next(index_type index,
                                     index_type bytes) const noexcept
       -> index_type {
-    index += bytes;
-    return index >= *capacity_ ? index - *capacity_ : index;
+    return (*capacity_ - index > bytes) ? (index + bytes)
+                                        : (bytes - (*capacity_ - index));
   }
 
   [[nodiscard]] constexpr auto full() const noexcept -> bool {

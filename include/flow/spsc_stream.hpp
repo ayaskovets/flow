@@ -66,174 +66,216 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
   }
 
  public:
-  template <std::invocable<std::span<std::byte>> Callback>
+  template <std::invocable<std::span<std::byte>, std::span<std::byte>> Callback>
   constexpr auto try_push(
-      Callback const & callback,
+      Callback && callback,
       index_type max_size = std::numeric_limits<index_type>::
           max()) noexcept(std::is_nothrow_invocable_v<Callback,
+                                                      std::span<std::byte>,
                                                       std::span<std::byte>>)
       -> index_type {
     index_type const push_to = writer_.index.load(std::memory_order::relaxed);
     index_type _free         = free(*writer_.capacity, push_to, writer_.cache);
 
-    if (_free == 0) {
+    if (max_size > _free) {
       writer_.cache = reader_.index.load(std::memory_order::acquire);
       _free         = free(*writer_.capacity, push_to, writer_.cache);
     }
 
-    index_type const _slot   = slot(*writer_.capacity, push_to);
-    index_type const postfix = *writer_.capacity - _slot;
-    index_type total         = std::min(max_size, std::min(postfix, _free));
+    index_type total = std::min(max_size, _free);
 
     if (total == 0) {
       return 0;
     }
 
-    index_type callback_total = total;
+    index_type const _slot     = slot(*writer_.capacity, push_to);
+    index_type const postfix   = *writer_.capacity - _slot;
+    index_type const chunk     = std::min(total, postfix);
+    index_type const remainder = total - chunk;
+
+    index_type callback_size = total;
     swiss::assign_invoke_result_if_not_void(
-        callback_total, callback,
-        std::span(writer_.ring_buffer + _slot, total));
-    total = std::min(total, callback_total);
+        callback_size, std::forward<Callback>(callback),
+        std::span(writer_.ring_buffer + _slot, chunk),
+        std::span(writer_.ring_buffer, remainder));
+    total = std::min(total, callback_size);
 
     writer_.index.store(next(push_to, total), std::memory_order::release);
     return total;
   }
 
-  template <std::invocable<std::span<std::byte>> Callback>
+  template <std::invocable<std::span<std::byte>, std::span<std::byte>> Callback>
   constexpr auto try_pop(
-      Callback const & callback,
+      Callback && callback,
       index_type max_size = std::numeric_limits<index_type>::
           max()) noexcept(std::is_nothrow_invocable_v<Callback,
+                                                      std::span<std::byte>,
                                                       std::span<std::byte>>)
       -> index_type {
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
     index_type _size          = size(reader_.cache, pop_from);
 
-    if (_size == 0) {
+    if (max_size > _size) {
       reader_.cache = writer_.index.load(std::memory_order::acquire);
       _size         = size(reader_.cache, pop_from);
     }
 
-    index_type const _slot   = slot(*reader_.capacity, pop_from);
-    index_type const postfix = *reader_.capacity - _slot;
-    index_type total         = std::min(max_size, std::min(postfix, _size));
+    index_type total = std::min(max_size, _size);
 
     if (total == 0) {
       return 0;
     }
 
-    index_type callback_total = total;
+    index_type const _slot     = slot(*reader_.capacity, pop_from);
+    index_type const postfix   = *reader_.capacity - _slot;
+    index_type const chunk     = std::min(total, postfix);
+    index_type const remainder = total - chunk;
+
+    index_type callback_size = total;
     swiss::assign_invoke_result_if_not_void(
-        callback_total, callback,
-        std::span(reader_.ring_buffer + _slot, total));
-    total = std::min(total, callback_total);
+        callback_size, std::forward<Callback>(callback),
+        std::span(reader_.ring_buffer + _slot, chunk),
+        std::span(reader_.ring_buffer, remainder));
+    total = std::min(total, callback_size);
 
     reader_.index.store(next(pop_from, total), std::memory_order::release);
     return total;
+  }
+
+ public:
+  template <std::invocable<std::span<std::byte>, std::span<std::byte>> Callback>
+  constexpr auto push(
+      std::stop_token const & stop_token, index_type size,
+      Callback &&
+          callback) noexcept(std::is_nothrow_invocable_v<Callback,
+                                                         std::span<std::byte>,
+                                                         std::span<std::byte>>)
+      -> bool
+    requires(std::is_same_v<std::invoke_result_t<Callback, std::span<std::byte>,
+                                                 std::span<std::byte>>,
+                            void>)
+  {
+    if (size > *writer_.capacity) {
+      return false;
+    }
+
+    index_type const push_to = writer_.index.load(std::memory_order::relaxed);
+
+    while (!stop_token.stop_requested()) {
+      if (size <= free(*writer_.capacity, push_to, writer_.cache)) {
+        std::ignore = try_push(std::forward<Callback>(callback), size);
+
+        writer_.index.store(next(push_to, size), std::memory_order::release);
+        return true;
+      }
+
+      std::this_thread::yield();
+
+      writer_.cache = reader_.index.load(std::memory_order::acquire);
+    }
+
+    return false;
+  }
+
+  template <std::invocable<std::span<std::byte>, std::span<std::byte>> Callback>
+  constexpr auto pop(
+      std::stop_token const & stop_token, index_type _size,
+      Callback &&
+          callback) noexcept(std::is_nothrow_invocable_v<Callback,
+                                                         std::span<std::byte>,
+                                                         std::span<std::byte>>)
+      -> bool
+    requires(std::is_same_v<std::invoke_result_t<Callback, std::span<std::byte>,
+                                                 std::span<std::byte>>,
+                            void>)
+  {
+    if (_size > *reader_.capacity) {
+      return false;
+    }
+
+    index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
+
+    while (!stop_token.stop_requested()) {
+      if (_size <= size(reader_.cache, pop_from)) {
+        std::ignore = try_pop(std::forward<Callback>(callback), _size);
+
+        reader_.index.store(next(pop_from, _size), std::memory_order::release);
+        return true;
+      }
+
+      std::this_thread::yield();
+
+      reader_.cache = writer_.index.load(std::memory_order::acquire);
+    }
+
+    return false;
+  }
+
+ public:
+  template <std::invocable<std::span<std::byte>, std::span<std::byte>> Callback>
+  constexpr void push(index_type size, Callback && callback) noexcept(
+      std::is_nothrow_invocable_v<Callback, std::span<std::byte>,
+                                  std::span<std::byte>>)
+    requires(std::is_same_v<std::invoke_result_t<Callback, std::span<std::byte>,
+                                                 std::span<std::byte>>,
+                            void>)
+  {
+    push(std::stop_token{}, size, std::forward<Callback>(callback));
+  }
+
+  template <std::invocable<std::span<std::byte>, std::span<std::byte>> Callback>
+  constexpr void pop(index_type _size, Callback && callback) noexcept(
+      std::is_nothrow_invocable_v<Callback, std::span<std::byte>,
+                                  std::span<std::byte>>)
+    requires(std::is_same_v<std::invoke_result_t<Callback, std::span<std::byte>,
+                                                 std::span<std::byte>>,
+                            void>)
+  {
+    pop(std::stop_token{}, _size, std::forward<Callback>(callback));
   }
 
  public:
   [[nodiscard]] constexpr auto try_push(
       std::span<std::byte const> bytes) noexcept -> index_type {
-    auto const bytes_size    = static_cast<index_type>(bytes.size());
-    index_type const push_to = writer_.index.load(std::memory_order::relaxed);
-    index_type _free         = free(*writer_.capacity, push_to, writer_.cache);
-
-    if (bytes_size > _free) {
-      writer_.cache = reader_.index.load(std::memory_order::acquire);
-      _free         = free(*writer_.capacity, push_to, writer_.cache);
-    }
-
-    index_type const total = std::min(bytes_size, _free);
-
-    if (total == 0) {
-      return 0;
-    }
-
-    write_unchecked(*writer_.capacity, writer_.ring_buffer, push_to,
-                    bytes.subspan(0, total));
-
-    writer_.index.store(next(push_to, total), std::memory_order::release);
-    return total;
+    return try_push(
+        [&](std::span<std::byte> postfix, std::span<std::byte> prefix) {
+          std::copy_n(bytes.data(), postfix.size(), postfix.data());
+          std::copy_n(bytes.subspan(postfix.size()).data(), prefix.size(),
+                      prefix.data());
+        },
+        static_cast<index_type>(bytes.size()));
   }
 
   [[nodiscard]] constexpr auto try_pop(std::span<std::byte> bytes) noexcept
       -> index_type {
-    auto const bytes_size     = static_cast<index_type>(bytes.size());
-    index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
-    index_type _size          = size(reader_.cache, pop_from);
-
-    if (bytes_size > _size) {
-      reader_.cache = writer_.index.load(std::memory_order::acquire);
-      _size         = size(reader_.cache, pop_from);
-    }
-
-    index_type const total = std::min(bytes_size, _size);
-
-    if (total == 0) {
-      return 0;
-    }
-
-    read_unchecked(*reader_.capacity, reader_.ring_buffer, pop_from,
-                   bytes.subspan(0, total));
-
-    reader_.index.store(next(pop_from, total), std::memory_order::release);
-    return total;
+    return try_pop(
+        [&](std::span<std::byte> postfix, std::span<std::byte> prefix) {
+          std::copy_n(postfix.data(), postfix.size(), bytes.data());
+          std::copy_n(prefix.data(), prefix.size(),
+                      bytes.subspan(postfix.size()).data());
+        },
+        static_cast<index_type>(bytes.size()));
   }
 
  public:
   constexpr auto push(std::stop_token const & stop_token,
                       std::span<std::byte const> bytes) noexcept -> bool {
-    auto const bytes_size = static_cast<index_type>(bytes.size());
-
-    if (bytes_size > *writer_.capacity) {
-      return false;
-    }
-
-    index_type const push_to = writer_.index.load(std::memory_order::relaxed);
-
-    while (!stop_token.stop_requested()) {
-      if (bytes_size <= free(*writer_.capacity, push_to, writer_.cache)) {
-        write_unchecked(*writer_.capacity, writer_.ring_buffer, push_to, bytes);
-
-        writer_.index.store(next(push_to, bytes_size),
-                            std::memory_order::release);
-        return true;
-      }
-
-      std::this_thread::yield();
-
-      writer_.cache = reader_.index.load(std::memory_order::acquire);
-    }
-
-    return false;
+    return push(stop_token, static_cast<index_type>(bytes.size()),
+                [&](std::span<std::byte> postfix, std::span<std::byte> prefix) {
+                  std::copy_n(bytes.data(), postfix.size(), postfix.data());
+                  std::copy_n(bytes.subspan(postfix.size()).data(),
+                              prefix.size(), prefix.data());
+                });
   }
 
   constexpr auto pop(std::stop_token const & stop_token,
                      std::span<std::byte> bytes) noexcept -> bool {
-    auto const bytes_size = static_cast<index_type>(bytes.size());
-
-    if (bytes_size > *reader_.capacity) {
-      return false;
-    }
-
-    index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
-
-    while (!stop_token.stop_requested()) {
-      if (bytes_size <= size(reader_.cache, pop_from)) {
-        read_unchecked(*reader_.capacity, reader_.ring_buffer, pop_from, bytes);
-
-        reader_.index.store(next(pop_from, bytes_size),
-                            std::memory_order::release);
-        return true;
-      }
-
-      std::this_thread::yield();
-
-      reader_.cache = writer_.index.load(std::memory_order::acquire);
-    }
-
-    return false;
+    return pop(stop_token, static_cast<index_type>(bytes.size()),
+               [&](std::span<std::byte> postfix, std::span<std::byte> prefix) {
+                 std::copy_n(postfix.data(), postfix.size(), bytes.data());
+                 std::copy_n(prefix.data(), prefix.size(),
+                             bytes.subspan(postfix.size()).data());
+               });
   }
 
  public:
@@ -302,33 +344,6 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
                                     index_type index) const noexcept
       -> index_type {
     return index & static_cast<index_type>(capacity - 1);
-  }
-
-  constexpr void write_unchecked(
-      index_type capacity, std::byte * ring_buffer, index_type push_to,
-      std::span<std::byte const> bytes) const noexcept {
-    auto const bytes_size    = static_cast<index_type>(bytes.size());
-    index_type const _slot   = slot(capacity, push_to);
-    index_type const postfix = capacity - _slot;
-    index_type const chunk1  = std::min(bytes_size, postfix);
-    index_type const chunk2  = bytes_size - chunk1;
-
-    std::copy_n(bytes.data(), chunk1, ring_buffer + _slot);
-    std::copy_n(bytes.data() + chunk1, chunk2, ring_buffer);
-  }
-
-  constexpr void read_unchecked(index_type capacity,
-                                std::byte const * ring_buffer,
-                                index_type pop_from,
-                                std::span<std::byte> bytes) const noexcept {
-    auto const bytes_size    = static_cast<index_type>(bytes.size());
-    index_type const _slot   = slot(capacity, pop_from);
-    index_type const postfix = capacity - _slot;
-    index_type const chunk1  = std::min(bytes_size, postfix);
-    index_type const chunk2  = bytes_size - chunk1;
-
-    std::copy_n(ring_buffer + _slot, chunk1, bytes.data());
-    std::copy_n(ring_buffer, chunk2, bytes.data() + chunk1);
   }
 };
 

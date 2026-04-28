@@ -7,6 +7,7 @@
 #include <swiss/conditionally_runtime.hpp>
 #include <swiss/dynamic_extent.hpp>
 #include <swiss/mixins.hpp>
+#include <swiss/scope_exit.hpp>
 
 namespace flow {
 
@@ -84,8 +85,10 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
       std::is_nothrow_assignable_v<decltype(value), value_type> &&
       std::is_nothrow_destructible_v<value_type>) -> bool {
     return try_pop([&](value_type * front) {
+      swiss::scope_exit const scope_exit([&]() noexcept {
+        std::allocator_traits<allocator_type>::destroy(allocator_, front);
+      });
       value = std::move(*front);
-      std::allocator_traits<allocator_type>::destroy(allocator_, front);
     });
   }
 
@@ -104,8 +107,10 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
 
   constexpr void pop(auto & value) {
     pop([&](value_type * front) {
+      swiss::scope_exit const scope_exit([&]() noexcept {
+        std::allocator_traits<allocator_type>::destroy(allocator_, front);
+      });
       value = std::move(*front);
-      std::allocator_traits<allocator_type>::destroy(allocator_, front);
     });
   }
 
@@ -162,7 +167,6 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
     }
 
     std::invoke(std::forward<Callback>(callback), ring_buffer_ + push_to());
-
     size_ += 1;
     return true;
   }
@@ -174,10 +178,10 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
       return false;
     }
 
-    std::invoke(std::forward<Callback>(callback), ring_buffer_ + pop_from_);
-
-    pop_from_ = next(pop_from_, 1);
+    index_type const pop_from = pop_from_;
+    pop_from_                 = next(pop_from_, 1);
     size_ -= 1;
+    std::invoke(std::forward<Callback>(callback), ring_buffer_ + pop_from);
     return true;
   }
 

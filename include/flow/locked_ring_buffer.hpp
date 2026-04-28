@@ -199,13 +199,13 @@ class locked_ring_buffer : public swiss::non_copyable,
 
  private:
   template <std::invocable<value_type *> Callback>
-  constexpr auto try_push(Callback const & callback) -> bool {
+  constexpr auto try_push(Callback && callback) -> bool {
     std::lock_guard const lock(mutex_);
     if (full()) {
       return false;
     }
 
-    std::invoke(callback, at(ring_buffer_, push_to_));
+    std::invoke(std::forward<Callback>(callback), at(ring_buffer_, push_to_));
 
     push_to_ = next(push_to_);
     pop_available_cv_.notify_one();
@@ -213,13 +213,13 @@ class locked_ring_buffer : public swiss::non_copyable,
   }
 
   template <std::invocable<value_type *> Callback>
-  constexpr auto try_pop(Callback const & callback) -> bool {
+  constexpr auto try_pop(Callback && callback) -> bool {
     std::lock_guard const lock(mutex_);
     if (empty()) {
       return false;
     }
 
-    std::invoke(callback, at(ring_buffer_, pop_from_));
+    std::invoke(std::forward<Callback>(callback), at(ring_buffer_, pop_from_));
 
     pop_from_ = next(pop_from_);
     push_available_cv_.notify_one();
@@ -228,15 +228,15 @@ class locked_ring_buffer : public swiss::non_copyable,
 
  private:
   template <std::invocable<value_type *> Callback>
-  constexpr auto push(std::stop_token const & stop_token,
-                      Callback const & callback) -> bool {
+  constexpr auto push(std::stop_token const & stop_token, Callback && callback)
+      -> bool {
     std::unique_lock lock(mutex_);
     if (!push_available_cv_.wait(lock, stop_token,
                                  [this] { return !full(); })) {
       return false;
     }
 
-    std::invoke(callback, at(ring_buffer_, push_to_));
+    std::invoke(std::forward<Callback>(callback), at(ring_buffer_, push_to_));
 
     push_to_ = next(push_to_);
     pop_available_cv_.notify_one();
@@ -244,15 +244,15 @@ class locked_ring_buffer : public swiss::non_copyable,
   }
 
   template <std::invocable<value_type *> Callback>
-  constexpr auto pop(std::stop_token const & stop_token,
-                     Callback const & callback) -> bool {
+  constexpr auto pop(std::stop_token const & stop_token, Callback && callback)
+      -> bool {
     std::unique_lock lock(mutex_);
     if (!pop_available_cv_.wait(lock, stop_token,
                                 [this] { return !empty(); })) {
       return false;
     }
 
-    std::invoke(callback, at(ring_buffer_, pop_from_));
+    std::invoke(std::forward<Callback>(callback), at(ring_buffer_, pop_from_));
 
     pop_from_ = next(pop_from_);
     push_available_cv_.notify_one();

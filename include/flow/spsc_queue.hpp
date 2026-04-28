@@ -12,6 +12,7 @@
 #include <swiss/dynamic_extent.hpp>
 #include <swiss/mixins.hpp>
 #include <swiss/predicates.hpp>
+#include <swiss/scope_exit.hpp>
 
 namespace flow {
 
@@ -66,7 +67,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
    * thread operating on the queue during the destruction
    */
   constexpr ~spsc_queue() noexcept {
-    while (try_pop([this](value_type * front) {
+    while (try_pop([this](value_type * front) noexcept {
       std::allocator_traits<allocator_type>::destroy(allocator_, front);
     })) {
     }
@@ -95,12 +96,15 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     return try_emplace(std::move(value));
   }
 
-  constexpr auto try_pop(auto & value) noexcept(
-      std::is_nothrow_assignable_v<decltype(value), value_type> &&
-      std::is_nothrow_destructible_v<value_type>) -> bool {
-    return try_pop([&](value_type * front) {
+  constexpr auto try_pop(auto & value) noexcept -> bool
+    requires(std::is_nothrow_assignable_v<decltype(value), value_type> &&
+             std::is_nothrow_destructible_v<value_type>)
+  {
+    return try_pop([&](value_type * front) noexcept {
+      swiss::scope_exit const scope_exit([&]() noexcept {
+        std::allocator_traits<allocator_type>::destroy(allocator_, front);
+      });
       value = std::move(*front);
-      std::allocator_traits<allocator_type>::destroy(allocator_, front);
     });
   }
 
@@ -126,12 +130,16 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     return emplace(stop_token, std::move(value));
   }
 
-  constexpr auto pop(std::stop_token const & stop_token, auto & value) noexcept(
-      std::is_nothrow_assignable_v<decltype(value), value_type> &&
-      std::is_nothrow_destructible_v<value_type>) -> bool {
-    return pop(stop_token, [&](value_type * front) {
+  constexpr auto pop(std::stop_token const & stop_token, auto & value) noexcept
+      -> bool
+    requires(std::is_nothrow_assignable_v<decltype(value), value_type> &&
+             std::is_nothrow_destructible_v<value_type>)
+  {
+    return pop(stop_token, [&](value_type * front) noexcept {
+      swiss::scope_exit const scope_exit([&]() noexcept {
+        std::allocator_traits<allocator_type>::destroy(allocator_, front);
+      });
       value = std::move(*front);
-      std::allocator_traits<allocator_type>::destroy(allocator_, front);
     });
   }
 
@@ -152,9 +160,10 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     emplace(std::stop_token{}, std::move(value));
   }
 
-  constexpr void pop(auto & value) noexcept(
-      std::is_nothrow_assignable_v<decltype(value), value_type> &&
-      std::is_nothrow_destructible_v<value_type>) {
+  constexpr void pop(auto & value) noexcept
+    requires(std::is_nothrow_assignable_v<decltype(value), value_type> &&
+             std::is_nothrow_destructible_v<value_type>)
+  {
     pop(std::stop_token{}, value);
   }
 
@@ -229,7 +238,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
 
  private:
   template <std::invocable<value_type *> Callback>
-  constexpr auto try_push(Callback const & callback) noexcept(
+  constexpr auto try_push(Callback && callback) noexcept(
       std::is_nothrow_invocable_v<Callback, value_type *>) -> bool {
     index_type const push_to = writer_.index.load(std::memory_order::relaxed);
 
@@ -240,15 +249,16 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
       }
     }
 
-    std::invoke(callback, at(writer_.ring_buffer, *writer_.capacity, push_to));
-
+    std::invoke(std::forward<Callback>(callback),
+                at(writer_.ring_buffer, *writer_.capacity, push_to));
     writer_.index.store(next(push_to), std::memory_order::release);
     return true;
   }
 
   template <std::invocable<value_type *> Callback>
-  constexpr auto try_pop(Callback const & callback) noexcept(
-      std::is_nothrow_invocable_v<Callback, value_type *>) -> bool {
+  constexpr auto try_pop(Callback && callback) noexcept -> bool
+    requires(std::is_nothrow_invocable_v<Callback, value_type *>)
+  {
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
 
     if (empty(reader_.cache, pop_from)) {
@@ -258,7 +268,8 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
       }
     }
 
-    std::invoke(callback, at(reader_.ring_buffer, *reader_.capacity, pop_from));
+    std::invoke(std::forward<Callback>(callback),
+                at(reader_.ring_buffer, *reader_.capacity, pop_from));
 
     reader_.index.store(next(pop_from), std::memory_order::release);
     return true;
@@ -267,13 +278,13 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
  private:
   template <std::invocable<value_type *> Callback>
   constexpr auto
-  push(std::stop_token const & stop_token, Callback const & callback) noexcept(
+  push(std::stop_token const & stop_token, Callback && callback) noexcept(
       std::is_nothrow_invocable_v<Callback, value_type *>) -> bool {
     index_type const push_to = writer_.index.load(std::memory_order::relaxed);
 
     while (!stop_token.stop_requested()) {
       if (!full(*writer_.capacity, push_to, writer_.cache)) {
-        std::invoke(callback,
+        std::invoke(std::forward<Callback>(callback),
                     at(writer_.ring_buffer, *writer_.capacity, push_to));
 
         writer_.index.store(next(push_to), std::memory_order::release);
@@ -289,14 +300,15 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
   }
 
   template <std::invocable<value_type *> Callback>
-  constexpr auto
-  pop(std::stop_token const & stop_token, Callback const & callback) noexcept(
-      std::is_nothrow_invocable_v<Callback, value_type *>) -> bool {
+  constexpr auto pop(std::stop_token const & stop_token,
+                     Callback && callback) noexcept -> bool
+    requires(std::is_nothrow_invocable_v<Callback, value_type *>)
+  {
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
 
     while (!stop_token.stop_requested()) {
       if (!empty(reader_.cache, pop_from)) {
-        std::invoke(callback,
+        std::invoke(std::forward<Callback>(callback),
                     at(reader_.ring_buffer, *reader_.capacity, pop_from));
 
         reader_.index.store(next(pop_from), std::memory_order::release);

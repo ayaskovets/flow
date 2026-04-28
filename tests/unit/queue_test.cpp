@@ -1,4 +1,3 @@
-#include <flow/cas128_mpmc_queue.hpp>
 #include <flow/locked_ring_buffer.hpp>
 #include <flow/mpmc_queue.hpp>
 #include <flow/mpsc_queue.hpp>
@@ -10,18 +9,6 @@
 #include <gtest/gtest.h>
 
 namespace tests::unit {
-
-TEST(queue, cas128_mpmc_queue) {
-  using queue_t = flow::cas128_mpmc_queue<int>;
-
-  static_assert(flow::concepts::queue<queue_t>);
-  static_assert(flow::concepts::nonblocking_queue<queue_t>);
-  static_assert(flow::concepts::noexcept_nonblocking_queue<queue_t>);
-  static_assert(flow::concepts::blocking_queue<queue_t>);
-  static_assert(flow::concepts::noexcept_blocking_queue<queue_t>);
-  static_assert(flow::concepts::cancellable_blocking_queue<queue_t>);
-  static_assert(flow::concepts::noexcept_cancellable_blocking_queue<queue_t>);
-}
 
 TEST(queue, locked_ring_buffer) {
   using queue_t = flow::locked_ring_buffer<int>;

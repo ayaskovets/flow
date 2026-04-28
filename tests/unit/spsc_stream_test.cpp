@@ -70,7 +70,7 @@ TEST_T(spsc_stream, rollover, uint8_index_stream_t);
 
 TEST_T(spsc_stream, nonblocking_callback, flow::spsc_stream<>);
 
-TEST_T(spsc_stream, nonblocking_callback_limit, flow::spsc_stream<>);
+TEST_T(unsafe_stream, blocking_callback, flow::spsc_stream<>);
 
 TEST_T(spsc_stream, exception_callback, flow::spsc_stream<>);
 

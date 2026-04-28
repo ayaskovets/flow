@@ -28,7 +28,6 @@ constexpr void minimal_capacity(std::size_t capacity) {
 template <flow::concepts::blocking_queue Queue>
 constexpr void size_capacity() {
   constexpr std::size_t kCapacity = 8;
-  constexpr std::size_t kRepeats  = 128;
 
   typename Queue::value_type value{};
   Queue queue(kCapacity);
@@ -41,7 +40,7 @@ constexpr void size_capacity() {
   EXPECT_EQ(queue.size(), 2);
   EXPECT_EQ(queue.capacity(), kCapacity);
 
-  for (std::size_t repeat = 0; repeat < kRepeats; ++repeat) {
+  for (std::size_t i = 0; i < kCapacity * kCapacity * 2; ++i) {
     queue.emplace();
     EXPECT_EQ(queue.size(), 3);
     EXPECT_EQ(queue.capacity(), kCapacity);

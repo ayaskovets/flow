@@ -39,6 +39,11 @@ class spmc_queue : public swiss::non_copyable, public swiss::non_movable {
       Allocator>::template rebind_alloc<std::atomic<Index>>;
   using value_allocator_type = Allocator;
 
+ private:
+  template <typename T>
+  static constexpr bool is_nothrow_callback =
+      std::is_nothrow_invocable_v<T, value_type *>;
+
  public:
   constexpr explicit spmc_queue(allocator_type allocator = allocator_type())
     requires(Capacity != swiss::kDynamicExtent<index_type>)
@@ -201,19 +206,21 @@ class spmc_queue : public swiss::non_copyable, public swiss::non_movable {
   }
 
  public:
-  [[nodiscard]] constexpr auto capacity() const noexcept -> index_type {
+  [[nodiscard]] constexpr auto capacity() const noexcept -> std::size_t {
     return *writer_.capacity;
   }
 
-  [[nodiscard]] constexpr auto size() const noexcept -> index_type {
+  [[nodiscard]] constexpr auto size() const noexcept -> std::size_t {
     index_type const push_to  = writer_.index.load(std::memory_order::relaxed);
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
 
-    auto const _size = size(push_to, pop_from);
+    index_type const _size = size(push_to, pop_from);
     return _size > *writer_.capacity ? 0 : _size;
   }
 
-  constexpr auto get_allocator() const noexcept -> allocator_type {
+  [[nodiscard]] constexpr auto get_allocator() const
+      noexcept(std::is_nothrow_copy_constructible_v<allocator_type>)
+          -> allocator_type {
     return allocator_;
   }
 
@@ -287,10 +294,9 @@ class spmc_queue : public swiss::non_copyable, public swiss::non_movable {
   }
 
  private:
-  template <std::invocable<value_type *> Callback>
-  constexpr auto try_push(Callback && callback) noexcept -> bool
-    requires(std::is_nothrow_invocable_v<Callback, value_type *>)
-  {
+  template <typename Callback>
+    requires(is_nothrow_callback<Callback>)
+  constexpr auto try_push(Callback && callback) noexcept -> bool {
     index_type const push_to = writer_.index.load(std::memory_order::relaxed);
     entry_type * entry = at(writer_.ring_buffer, *writer_.capacity, push_to);
 
@@ -305,10 +311,9 @@ class spmc_queue : public swiss::non_copyable, public swiss::non_movable {
     return true;
   }
 
-  template <std::invocable<value_type *> Callback>
-  constexpr auto try_pop(Callback && callback) noexcept -> bool
-    requires(std::is_nothrow_invocable_v<Callback, value_type *>)
-  {
+  template <typename Callback>
+    requires(is_nothrow_callback<Callback>)
+  constexpr auto try_pop(Callback && callback) noexcept -> bool {
     index_type pop_from = reader_.index.load(std::memory_order::relaxed);
 
     while (true) {
@@ -316,6 +321,7 @@ class spmc_queue : public swiss::non_copyable, public swiss::non_movable {
 
       if (occupied(pop_from, seqnum(entry)->load(std::memory_order::acquire))) {
         if (reader_.index.compare_exchange_weak(pop_from, next(pop_from),
+                                                std::memory_order::relaxed,
                                                 std::memory_order::relaxed)) {
           std::invoke(std::forward<Callback>(callback), value(entry));
 
@@ -334,11 +340,10 @@ class spmc_queue : public swiss::non_copyable, public swiss::non_movable {
   }
 
  private:
-  template <std::invocable<value_type *> Callback>
+  template <typename Callback>
+    requires(is_nothrow_callback<Callback>)
   constexpr auto push(std::stop_token const & stop_token,
-                      Callback && callback) noexcept -> bool
-    requires(std::is_nothrow_invocable_v<Callback, value_type *>)
-  {
+                      Callback && callback) noexcept -> bool {
     index_type const push_to = writer_.index.load(std::memory_order::relaxed);
 
     while (!stop_token.stop_requested()) {
@@ -359,11 +364,10 @@ class spmc_queue : public swiss::non_copyable, public swiss::non_movable {
     return false;
   }
 
-  template <std::invocable<value_type *> Callback>
+  template <typename Callback>
+    requires(is_nothrow_callback<Callback>)
   constexpr auto pop(std::stop_token const & stop_token,
-                     Callback && callback) noexcept -> bool
-    requires(std::is_nothrow_invocable_v<Callback, value_type *>)
-  {
+                     Callback && callback) noexcept -> bool {
     index_type pop_from = reader_.index.load(std::memory_order::relaxed);
 
     while (!stop_token.stop_requested()) {
@@ -371,9 +375,9 @@ class spmc_queue : public swiss::non_copyable, public swiss::non_movable {
 
       bool const _occupied =
           occupied(pop_from, seqnum(entry)->load(std::memory_order::acquire));
-      if (_occupied &&
-          reader_.index.compare_exchange_weak(pop_from, next(pop_from),
-                                              std::memory_order::relaxed)) {
+      if (_occupied && reader_.index.compare_exchange_weak(
+                           pop_from, next(pop_from), std::memory_order::relaxed,
+                           std::memory_order::relaxed)) {
         std::invoke(std::forward<Callback>(callback), value(entry));
 
         seqnum(entry)->store(pop_from + *reader_.capacity,

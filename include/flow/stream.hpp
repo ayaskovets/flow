@@ -11,8 +11,8 @@ namespace flow::concepts {
  */
 template <typename T>
 concept stream = requires(T stream) {
-  { stream.capacity() } -> std::same_as<typename T::index_type>;
-  { stream.size() } -> std::same_as<typename T::index_type>;
+  { stream.capacity() } -> std::same_as<std::size_t>;
+  { stream.size() } -> std::same_as<std::size_t>;
   { stream.get_allocator() } -> std::same_as<typename T::allocator_type>;
 };
 
@@ -30,15 +30,11 @@ concept nonblocking_stream =
     requires(T stream, std::span<std::byte> bytes,
              decltype([](std::span<std::byte>, std::span<std::byte>) noexcept {
              }) callback,
-             typename T::index_type max_size) {
-      {
-        stream.try_push(callback, max_size)
-      } -> std::same_as<typename T::index_type>;
-      {
-        stream.try_pop(callback, max_size)
-      } -> std::same_as<typename T::index_type>;
-      { stream.try_push(bytes) } -> std::same_as<typename T::index_type>;
-      { stream.try_pop(bytes) } -> std::same_as<typename T::index_type>;
+             std::size_t max_size) {
+      { stream.try_push(callback, max_size) } -> std::same_as<std::size_t>;
+      { stream.try_pop(callback, max_size) } -> std::same_as<std::size_t>;
+      { stream.try_push(bytes) } -> std::same_as<std::size_t>;
+      { stream.try_pop(bytes) } -> std::same_as<std::size_t>;
     };
 
 /**
@@ -50,7 +46,7 @@ concept noexcept_nonblocking_stream =
     requires(T stream, std::span<std::byte> bytes,
              decltype([](std::span<std::byte>, std::span<std::byte>) noexcept {
              }) callback,
-             typename T::index_type max_size) {
+             std::size_t max_size) {
       requires noexcept(stream.try_push(callback, max_size));
       requires noexcept(stream.try_pop(callback, max_size));
       requires noexcept(stream.try_push(bytes));
@@ -61,7 +57,7 @@ concept noexcept_nonblocking_stream =
  * @brief Generic byte stream that supports blocking operations
  * @note Blocking methods wait until the whole input buffer is inserted into
  * the stream (for writes) / input buffer is full with the data from the stream
- * (for reads)
+ * (for reads) or return immediately if input size in invalid
  */
 template <typename T>
 concept blocking_stream =
@@ -69,9 +65,9 @@ concept blocking_stream =
     requires(T stream, std::span<std::byte> bytes,
              decltype([](std::span<std::byte>, std::span<std::byte>) noexcept {
              }) callback,
-             typename T::index_type size) {
-      { stream.push(size, callback) } -> std::same_as<void>;
-      { stream.pop(size, callback) } -> std::same_as<void>;
+             std::size_t exact_size) {
+      { stream.push(exact_size, callback) } -> std::same_as<void>;
+      { stream.pop(exact_size, callback) } -> std::same_as<void>;
       { stream.push(bytes) } -> std::same_as<void>;
       { stream.pop(bytes) } -> std::same_as<void>;
     };
@@ -85,9 +81,9 @@ concept noexcept_blocking_stream =
     requires(T stream, std::span<std::byte> bytes,
              decltype([](std::span<std::byte>, std::span<std::byte>) noexcept {
              }) callback,
-             typename T::index_type size) {
-      requires noexcept(stream.push(size, callback));
-      requires noexcept(stream.pop(size, callback));
+             std::size_t exact_size) {
+      requires noexcept(stream.push(exact_size, callback));
+      requires noexcept(stream.pop(exact_size, callback));
       requires noexcept(stream.push(bytes));
       requires noexcept(stream.pop(bytes));
     };
@@ -103,9 +99,9 @@ concept cancellable_blocking_stream =
     requires(T stream, std::span<std::byte> bytes, std::stop_token stop_token,
              decltype([](std::span<std::byte>, std::span<std::byte>) noexcept {
              }) callback,
-             typename T::index_type size) {
-      { stream.push(stop_token, size, callback) } -> std::same_as<bool>;
-      { stream.pop(stop_token, size, callback) } -> std::same_as<bool>;
+             std::size_t exact_size) {
+      { stream.push(stop_token, exact_size, callback) } -> std::same_as<bool>;
+      { stream.pop(stop_token, exact_size, callback) } -> std::same_as<bool>;
       { stream.push(stop_token, bytes) } -> std::same_as<bool>;
       { stream.pop(stop_token, bytes) } -> std::same_as<bool>;
     };
@@ -120,9 +116,9 @@ concept noexcept_cancellable_blocking_stream =
     requires(T stream, std::span<std::byte> bytes, std::stop_token stop_token,
              decltype([](std::span<std::byte>, std::span<std::byte>) noexcept {
              }) callback,
-             typename T::index_type size) {
-      requires noexcept(stream.push(stop_token, size, callback));
-      requires noexcept(stream.pop(stop_token, size, callback));
+             std::size_t exact_size) {
+      requires noexcept(stream.push(stop_token, exact_size, callback));
+      requires noexcept(stream.pop(stop_token, exact_size, callback));
       requires noexcept(stream.push(stop_token, bytes));
       requires noexcept(stream.pop(stop_token, bytes));
     };

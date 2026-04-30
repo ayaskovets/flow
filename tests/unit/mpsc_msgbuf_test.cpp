@@ -24,29 +24,29 @@ TEST(mpsc_msgbuf, capacity) {
   EXPECT_EQ(flow::mpsc_msgbuf<>(64).capacity(), 64);
 }
 
-TEST_T(mpsc_msgbuf, minimal_capacity, flow::mpsc_msgbuf<>, 1);
+TEST_T(mpsc_msgbuf, minimal_capacity, flow::mpsc_msgbuf<>, 16);
 
-TEST_T(mpsc_msgbuf, size_capacity, flow::mpsc_msgbuf<>);
+TEST_T(mpsc_msgbuf, size_capacity, flow::mpsc_msgbuf<std::uint32_t>);
 
-TEST_T(mpsc_msgbuf, nonblocking_smoke, flow::mpsc_msgbuf<>);
+TEST_T(mpsc_msgbuf, nonblocking_smoke, flow::mpsc_msgbuf<std::uint32_t>);
 
-TEST_T(mpsc_msgbuf, blocking_smoke, flow::mpsc_msgbuf<>);
+TEST_T(mpsc_msgbuf, blocking_smoke, flow::mpsc_msgbuf<std::uint32_t>);
 
-TEST_T(mpsc_msgbuf, mixed_smoke, flow::mpsc_msgbuf<>);
+TEST_T(mpsc_msgbuf, mixed_smoke, flow::mpsc_msgbuf<std::uint32_t>);
 
-TEST_T(mpsc_msgbuf, blocking_push, flow::mpsc_msgbuf<>);
+TEST_T(mpsc_msgbuf, blocking_push, flow::mpsc_msgbuf<std::uint32_t>);
 
-TEST_T(mpsc_msgbuf, blocking_pop, flow::mpsc_msgbuf<>);
+TEST_T(mpsc_msgbuf, blocking_pop, flow::mpsc_msgbuf<std::uint32_t>);
 
-TEST_T(mpsc_msgbuf, stop_token_noop, flow::mpsc_msgbuf<>);
+TEST_T(mpsc_msgbuf, stop_token_noop, flow::mpsc_msgbuf<std::uint32_t>);
 
-TEST_T(mpsc_msgbuf, blocking_push_stop_token, flow::mpsc_msgbuf<>);
+TEST_T(mpsc_msgbuf, blocking_push_stop_token, flow::mpsc_msgbuf<std::uint32_t>);
 
-TEST_T(mpsc_msgbuf, blocking_pop_stop_token, flow::mpsc_msgbuf<>);
+TEST_T(mpsc_msgbuf, blocking_pop_stop_token, flow::mpsc_msgbuf<std::uint32_t>);
 
 using allocator_msgbuf_t =
-    flow::mpsc_msgbuf<std::size_t, swiss::kDynamicExtent<std::size_t>,
-                      swiss::leak_detector_allocator<std::byte, true>>;
+    flow::mpsc_msgbuf<std::uint32_t, swiss::kDynamicExtent<std::uint32_t>,
+                      swiss::leak_detector_allocator<std::uint32_t, true>>;
 TEST_T(mpsc_msgbuf, allocator, allocator_msgbuf_t);
 
 class mpsc_msgbuf_workload
@@ -54,9 +54,9 @@ class mpsc_msgbuf_workload
           std::size_t /* msg_count */, std::size_t /* msgbuf_capacity */,
           std::size_t /* producers */, std::size_t /* consumers */>> {};
 
-TEST_P_T(mpsc_msgbuf_workload, nonblocking, flow::mpsc_msgbuf<>);
+TEST_P_T(mpsc_msgbuf_workload, nonblocking, flow::mpsc_msgbuf<std::uint32_t>);
 
-TEST_P_T(mpsc_msgbuf_workload, blocking, flow::mpsc_msgbuf<>);
+TEST_P_T(mpsc_msgbuf_workload, blocking, flow::mpsc_msgbuf<std::uint32_t>);
 
 INSTANTIATE_TEST_SUITE_P(mpsc_msgbuf_workload, mpsc_msgbuf_workload,
                          ::testing::Values(std::make_tuple(1000, 16, 1, 1),
@@ -67,12 +67,14 @@ INSTANTIATE_TEST_SUITE_P(mpsc_msgbuf_workload, mpsc_msgbuf_workload,
 using uint8_index_msgbuf_t = flow::mpsc_msgbuf<std::uint8_t>;
 TEST_T(mpsc_msgbuf, rollover, uint8_index_msgbuf_t);
 
-TEST_T(mpsc_msgbuf, nonblocking_callback, flow::mpsc_msgbuf<>);
+TEST_T(mpsc_msgbuf, nonblocking_callback, flow::mpsc_msgbuf<std::uint32_t>);
 
-TEST_T(mpsc_msgbuf, blocking_callback, flow::mpsc_msgbuf<>);
+TEST_T(mpsc_msgbuf, blocking_callback, flow::mpsc_msgbuf<std::uint32_t>);
 
-TEST_T(mpsc_msgbuf, padding, flow::mpsc_msgbuf<>);
+TEST_T(mpsc_msgbuf, padding, flow::mpsc_msgbuf<std::uint32_t>);
 
 TEST(mpsc_msgbuf, exception_callback) { GTEST_SKIP(); }
+
+TEST_T(mpsc_msgbuf, input_validation, flow::mpsc_msgbuf<>);
 
 }  // namespace tests::unit

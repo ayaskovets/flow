@@ -26,6 +26,14 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
   using index_type     = Index;
   using allocator_type = Allocator;
 
+ private:
+  template <typename T>
+  static constexpr bool is_callback = std::invocable<T, value_type *>;
+
+  template <typename T>
+  static constexpr bool is_nothrow_callback =
+      std::is_nothrow_invocable_v<T, value_type *>;
+
  public:
   constexpr explicit unsafe_queue(allocator_type allocator = allocator_type())
     requires(Capacity != swiss::kDynamicExtent<index_type>)
@@ -115,15 +123,17 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
   }
 
  public:
-  [[nodiscard]] constexpr auto capacity() const noexcept -> index_type {
+  [[nodiscard]] constexpr auto capacity() const noexcept -> std::size_t {
     return *capacity_;
   }
 
-  [[nodiscard]] constexpr auto size() const noexcept -> index_type {
+  [[nodiscard]] constexpr auto size() const noexcept -> std::size_t {
     return size_;
   }
 
-  constexpr auto get_allocator() const noexcept -> allocator_type {
+  [[nodiscard]] constexpr auto get_allocator() const
+      noexcept(std::is_nothrow_copy_constructible_v<allocator_type>)
+          -> allocator_type {
     return allocator_;
   }
 
@@ -154,14 +164,15 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
   [[nodiscard]] constexpr auto next(index_type index,
                                     index_type distance) const noexcept
       -> index_type {
-    return (*capacity_ - index > distance) ? (index + distance)
-                                           : (distance - (*capacity_ - index));
+    index_type const postfix = *capacity_ - index;
+    return (postfix > distance) ? (index + distance) : (distance - postfix);
   }
 
  private:
-  template <std::invocable<value_type *> Callback>
+  template <typename Callback>
+    requires(is_callback<Callback>)
   constexpr auto try_push(Callback && callback) noexcept(
-      std::is_nothrow_invocable_v<Callback, value_type *>) -> bool {
+      is_nothrow_callback<Callback>) -> bool {
     if (full()) {
       return false;
     }
@@ -171,9 +182,10 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
     return true;
   }
 
-  template <std::invocable<value_type *> Callback>
+  template <typename Callback>
+    requires(is_callback<Callback>)
   constexpr auto try_pop(Callback && callback) noexcept(
-      std::is_nothrow_invocable_v<Callback, value_type *>) -> bool {
+      is_nothrow_callback<Callback>) -> bool {
     if (empty()) {
       return false;
     }
@@ -186,14 +198,16 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
   }
 
  private:
-  template <std::invocable<value_type *> Callback>
+  template <typename Callback>
+    requires(is_callback<Callback>)
   constexpr void push(Callback && callback) {
     if (!try_push(std::forward<Callback>(callback))) {
       throw std::runtime_error("unsafe_queue::push(): full");
     }
   }
 
-  template <std::invocable<value_type *> Callback>
+  template <typename Callback>
+    requires(is_callback<Callback>)
   constexpr void pop(Callback && callback) {
     if (!try_pop(std::forward<Callback>(callback))) {
       throw std::runtime_error("unsafe_queue::pop(): empty");

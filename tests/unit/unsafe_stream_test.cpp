@@ -62,4 +62,6 @@ TEST_T(unsafe_stream, blocking_callback, flow::unsafe_stream<>);
 
 TEST_T(unsafe_stream, exception_callback, flow::unsafe_stream<>);
 
+TEST(unsafe_stream, input_validation) { GTEST_SKIP(); }
+
 }  // namespace tests::unit

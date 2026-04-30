@@ -399,7 +399,7 @@ template <flow::concepts::nonblocking_queue Queue>
 constexpr void nonblocking(auto const & param) {
   auto const & [items_size, queue_capacity, producers, consumers] = param;
 
-  Queue queue(queue_capacity);
+  Queue queue(static_cast<typename Queue::index_type>(queue_capacity));
   std::latch latch(static_cast<std::ptrdiff_t>(producers + consumers));
 
   std::vector<int> const pushed_items =
@@ -451,7 +451,7 @@ template <flow::concepts::blocking_queue Queue>
 constexpr void blocking(auto const & param) {
   auto const & [items_size, queue_capacity, producers, consumers] = param;
 
-  Queue queue(queue_capacity);
+  Queue queue(static_cast<typename Queue::index_type>(queue_capacity));
   std::latch latch(static_cast<std::ptrdiff_t>(producers + consumers));
 
   std::vector<int> const pushed_items =

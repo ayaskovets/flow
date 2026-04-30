@@ -11,9 +11,9 @@ namespace flow::concepts {
  */
 template <typename T>
 concept msgbuf = requires(T msgbuf) {
-  { T::header_size() } -> std::same_as<typename T::index_type>;
-  { msgbuf.capacity() } -> std::same_as<typename T::index_type>;
-  { msgbuf.size() } -> std::same_as<typename T::index_type>;
+  { T::header_size() } -> std::same_as<std::size_t>;
+  { msgbuf.capacity() } -> std::same_as<std::size_t>;
+  { msgbuf.size() } -> std::same_as<std::size_t>;
   { msgbuf.get_allocator() } -> std::same_as<typename T::allocator_type>;
 };
 
@@ -30,13 +30,12 @@ concept msgbuf = requires(T msgbuf) {
 template <typename T>
 concept nonblocking_msgbuf =
     msgbuf<T> &&
-    requires(T msgbuf, std::span<std::byte> msg,
-             typename T::index_type msg_size,
+    requires(T msgbuf, std::span<std::byte> msg, std::size_t msg_size,
              decltype([](std::span<std::byte>) noexcept {}) callback) {
       { msgbuf.try_push(msg_size, callback) } -> std::same_as<bool>;
-      { msgbuf.try_pop(callback) } -> std::same_as<typename T::index_type>;
+      { msgbuf.try_pop(callback) } -> std::same_as<std::size_t>;
       { msgbuf.try_push(msg) } -> std::same_as<bool>;
-      { msgbuf.try_pop(msg) } -> std::same_as<typename T::index_type>;
+      { msgbuf.try_pop(msg) } -> std::same_as<std::size_t>;
     };
 
 /**
@@ -45,8 +44,7 @@ concept nonblocking_msgbuf =
 template <typename T>
 concept noexcept_nonblocking_msgbuf =
     nonblocking_msgbuf<T> &&
-    requires(T msgbuf, std::span<std::byte> msg,
-             typename T::index_type msg_size,
+    requires(T msgbuf, std::span<std::byte> msg, std::size_t msg_size,
              decltype([](std::span<std::byte>) noexcept {}) callback) {
       requires noexcept(msgbuf.try_push(msg_size, callback));
       requires noexcept(msgbuf.try_pop(callback));
@@ -56,7 +54,8 @@ concept noexcept_nonblocking_msgbuf =
 
 /**
  * @brief Generic message buffer that supports blocking operations
- * @note Blocking methods wait until the operation is completed
+ * @note Blocking methods wait until the operation is completed or return
+ * immediately if input size in invalid
  * @note Blocking pop methods return the size of the popped message
  * @warning In non-callback-based pop the message gets truncated if is larger
  * than the provider buffer
@@ -64,13 +63,12 @@ concept noexcept_nonblocking_msgbuf =
 template <typename T>
 concept blocking_msgbuf =
     msgbuf<T> &&
-    requires(T msgbuf, std::span<std::byte> msg,
-             typename T::index_type msg_size,
+    requires(T msgbuf, std::span<std::byte> msg, std::size_t msg_size,
              decltype([](std::span<std::byte>) noexcept {}) callback) {
       { msgbuf.push(msg_size, callback) } -> std::same_as<void>;
-      { msgbuf.pop(callback) } -> std::same_as<typename T::index_type>;
+      { msgbuf.pop(callback) } -> std::same_as<std::size_t>;
       { msgbuf.push(msg) } -> std::same_as<void>;
-      { msgbuf.pop(msg) } -> std::same_as<typename T::index_type>;
+      { msgbuf.pop(msg) } -> std::same_as<std::size_t>;
     };
 
 /**
@@ -79,8 +77,7 @@ concept blocking_msgbuf =
 template <typename T>
 concept noexcept_blocking_msgbuf =
     blocking_msgbuf<T> &&
-    requires(T msgbuf, std::span<std::byte> msg,
-             typename T::index_type msg_size,
+    requires(T msgbuf, std::span<std::byte> msg, std::size_t msg_size,
              decltype([](std::span<std::byte>) noexcept {}) callback) {
       requires noexcept(msgbuf.push(msg_size, callback));
       requires noexcept(msgbuf.pop(callback));
@@ -97,7 +94,7 @@ template <typename T>
 concept cancellable_blocking_msgbuf =
     blocking_msgbuf<T> &&
     requires(T msgbuf, std::span<std::byte> msg, std::stop_token stop_token,
-             typename T::index_type msg_size,
+             std::size_t msg_size,
              decltype([](std::span<std::byte>) noexcept {}) callback) {
       { msgbuf.push(stop_token, msg_size, callback) } -> std::same_as<bool>;
       { msgbuf.pop(stop_token, callback) } -> std::same_as<bool>;
@@ -113,7 +110,7 @@ template <typename T>
 concept noexcept_cancellable_blocking_msgbuf =
     cancellable_blocking_msgbuf<T> &&
     requires(T msgbuf, std::span<std::byte> msg, std::stop_token stop_token,
-             typename T::index_type msg_size,
+             std::size_t msg_size,
              decltype([](std::span<std::byte>) noexcept {}) callback) {
       requires noexcept(msgbuf.push(stop_token, msg_size, callback));
       requires noexcept(msgbuf.pop(stop_token, callback));

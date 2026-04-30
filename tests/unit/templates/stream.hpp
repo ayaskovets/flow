@@ -251,7 +251,7 @@ constexpr void nonblocking(auto const & param) {
   std::size_t const consumer_bytes =
       std::max<std::size_t>(1, stream_capacity / 7);
 
-  Stream stream(stream_capacity);
+  Stream stream(static_cast<typename Stream::index_type>(stream_capacity));
   std::latch latch(static_cast<std::ptrdiff_t>(producers + consumers));
 
   std::vector<std::atomic<std::size_t>> pushed_byte_counts(
@@ -322,7 +322,7 @@ constexpr void blocking(auto const & param) {
   std::size_t const consumer_bytes =
       std::max<std::size_t>(1, stream_capacity / 7);
 
-  Stream stream(stream_capacity);
+  Stream stream(static_cast<typename Stream::index_type>(stream_capacity));
   std::latch latch(static_cast<std::ptrdiff_t>(producers + consumers));
 
   std::vector<std::atomic<std::size_t>> pushed_byte_counts(
@@ -405,7 +405,8 @@ constexpr void nonblocking_callback() {
   Stream stream(kCapacity);
 
   EXPECT_EQ(stream.try_push(
-                [](std::span<std::byte> postfix, std::span<std::byte> prefix) {
+                [](std::span<std::byte> postfix,
+                   std::span<std::byte> prefix) noexcept {
                   EXPECT_EQ(postfix.size(), 3);
                   EXPECT_EQ(prefix.size(), 0);
                 },
@@ -414,7 +415,8 @@ constexpr void nonblocking_callback() {
   EXPECT_EQ(stream.size(), 3);
 
   EXPECT_EQ(stream.try_push(
-                [](std::span<std::byte> postfix, std::span<std::byte> prefix) {
+                [](std::span<std::byte> postfix,
+                   std::span<std::byte> prefix) noexcept {
                   EXPECT_EQ(postfix.size(), 2);
                   EXPECT_EQ(prefix.size(), 0);
                 },
@@ -423,7 +425,8 @@ constexpr void nonblocking_callback() {
   EXPECT_EQ(stream.size(), 5);
 
   EXPECT_EQ(stream.try_pop(
-                [](std::span<std::byte> postfix, std::span<std::byte> prefix) {
+                [](std::span<std::byte> postfix,
+                   std::span<std::byte> prefix) noexcept {
                   EXPECT_EQ(postfix.size(), 3);
                   EXPECT_EQ(prefix.size(), 0);
                 },
@@ -431,12 +434,12 @@ constexpr void nonblocking_callback() {
             3);
   EXPECT_EQ(stream.size(), 2);
 
-  EXPECT_EQ(stream.try_push(
-                [](std::span<std::byte> postfix, std::span<std::byte> prefix) {
-                  EXPECT_EQ(postfix.size(), 3);
-                  EXPECT_EQ(prefix.size(), 3);
-                  return 3;
-                }),
+  EXPECT_EQ(stream.try_push([](std::span<std::byte> postfix,
+                               std::span<std::byte> prefix) noexcept {
+    EXPECT_EQ(postfix.size(), 3);
+    EXPECT_EQ(prefix.size(), 3);
+    return 3;
+  }),
             3);
   EXPECT_EQ(stream.size(), 5);
 }
@@ -447,26 +450,30 @@ constexpr void blocking_callback() {
 
   Stream stream(kCapacity);
 
-  stream.push(3, [](std::span<std::byte> postfix, std::span<std::byte> prefix) {
+  stream.push(3, [](std::span<std::byte> postfix,
+                    std::span<std::byte> prefix) noexcept {
     EXPECT_EQ(postfix.size(), 3);
     EXPECT_EQ(prefix.size(), 0);
   });
 
   EXPECT_EQ(stream.size(), 3);
 
-  stream.push(2, [](std::span<std::byte> postfix, std::span<std::byte> prefix) {
+  stream.push(2, [](std::span<std::byte> postfix,
+                    std::span<std::byte> prefix) noexcept {
     EXPECT_EQ(postfix.size(), 2);
     EXPECT_EQ(prefix.size(), 0);
   });
   EXPECT_EQ(stream.size(), 5);
 
-  stream.pop(3, [](std::span<std::byte> postfix, std::span<std::byte> prefix) {
+  stream.pop(3, [](std::span<std::byte> postfix,
+                   std::span<std::byte> prefix) noexcept {
     EXPECT_EQ(postfix.size(), 3);
     EXPECT_EQ(prefix.size(), 0);
   });
   EXPECT_EQ(stream.size(), 2);
 
-  stream.push(3, [](std::span<std::byte> postfix, std::span<std::byte> prefix) {
+  stream.push(3, [](std::span<std::byte> postfix,
+                    std::span<std::byte> prefix) noexcept {
     EXPECT_EQ(postfix.size(), 3);
     EXPECT_EQ(prefix.size(), 0);
   });
@@ -483,22 +490,90 @@ constexpr void exception_callback() {
       stream.try_push([](std::span<std::byte>, std::span<std::byte>) {
         throw std::runtime_error("");
       }));
+  EXPECT_EQ(stream.size(), 0);
+  EXPECT_EQ(stream.try_pop([](std::span<std::byte>,
+                              std::span<std::byte>) noexcept { GTEST_FAIL(); }),
+            0);
 
   EXPECT_TRUE(stream.try_push(std::vector(4, std::byte(0))));
+  EXPECT_EQ(stream.size(), 4);
   EXPECT_EQ(stream.try_pop(
                 [](std::span<std::byte>, std::span<std::byte>) noexcept {}),
             4);
+  EXPECT_EQ(stream.size(), 0);
 
   EXPECT_TRUE(stream.try_push(std::vector(1, std::byte(0))));
-
-  EXPECT_ANY_THROW(
-      stream.try_pop([](std::span<std::byte>, std::span<std::byte>) {
-        throw std::runtime_error("");
-      }));
+  EXPECT_EQ(stream.size(), 1);
 
   EXPECT_EQ(stream.try_pop(
                 [](std::span<std::byte>, std::span<std::byte>) noexcept {}),
             1);
+  EXPECT_EQ(stream.size(), 0);
+}
+
+template <typename Stream>
+constexpr void input_validation() {
+  constexpr std::size_t kCapacity = 8;
+
+  std::array<std::byte, 0> empty_bytes{};
+  std::array<std::byte, kCapacity + 1> overflow_bytes{};
+  Stream stream(kCapacity);
+
+  if constexpr (flow::concepts::nonblocking_stream<Stream>) {
+    EXPECT_EQ(stream.try_push(overflow_bytes), kCapacity);
+    EXPECT_EQ(stream.try_pop(overflow_bytes), kCapacity);
+
+    EXPECT_EQ(stream.try_push(empty_bytes), 0);
+    EXPECT_EQ(stream.try_pop(empty_bytes), 0);
+  }
+
+  if constexpr (flow::concepts::blocking_stream<Stream>) {
+    stream.push(overflow_bytes.size(),
+                [](std::span<std::byte>, std::span<std::byte>) noexcept {
+                  GTEST_FAIL();
+                });
+    stream.pop(overflow_bytes.size(),
+               [](std::span<std::byte>, std::span<std::byte>) noexcept {
+                 GTEST_FAIL();
+               });
+
+    stream.push(empty_bytes.size(),
+                [](std::span<std::byte>, std::span<std::byte>) noexcept {
+                  GTEST_FAIL();
+                });
+    stream.pop(empty_bytes.size(),
+               [](std::span<std::byte>, std::span<std::byte>) noexcept {
+                 GTEST_FAIL();
+               });
+  }
+
+  if constexpr (flow::concepts::cancellable_blocking_stream<Stream>) {
+    EXPECT_FALSE(stream.push(std::stop_token{}, overflow_bytes));
+    EXPECT_FALSE(stream.pop(std::stop_token{}, overflow_bytes));
+    EXPECT_FALSE(
+        stream.push(std::stop_token{}, overflow_bytes.size(),
+                    [](std::span<std::byte>, std::span<std::byte>) noexcept {
+                      GTEST_FAIL();
+                    }));
+    EXPECT_FALSE(
+        stream.pop(std::stop_token{}, overflow_bytes.size(),
+                   [](std::span<std::byte>, std::span<std::byte>) noexcept {
+                     GTEST_FAIL();
+                   }));
+
+    EXPECT_FALSE(stream.push(std::stop_token{}, empty_bytes));
+    EXPECT_FALSE(stream.pop(std::stop_token{}, empty_bytes));
+    EXPECT_FALSE(
+        stream.push(std::stop_token{}, empty_bytes.size(),
+                    [](std::span<std::byte>, std::span<std::byte>) noexcept {
+                      GTEST_FAIL();
+                    }));
+    EXPECT_FALSE(
+        stream.pop(std::stop_token{}, empty_bytes.size(),
+                   [](std::span<std::byte>, std::span<std::byte>) noexcept {
+                     GTEST_FAIL();
+                   }));
+  }
 }
 
 // NOLINTEND(cppcoreguidelines-avoid-magic-numbers)

@@ -74,4 +74,6 @@ TEST_T(unsafe_stream, blocking_callback, flow::spsc_stream<>);
 
 TEST_T(spsc_stream, exception_callback, flow::spsc_stream<>);
 
+TEST_T(spsc_stream, input_validation, flow::spsc_stream<>);
+
 }  // namespace tests::unit

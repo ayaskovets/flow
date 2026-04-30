@@ -25,11 +25,11 @@ constexpr void minimal_capacity(std::size_t capacity) {
 }
 
 template <flow::concepts::blocking_msgbuf Msgbuf>
-  requires(Msgbuf::header_size() == sizeof(std::size_t))
+  requires(Msgbuf::header_size() == 8)
 constexpr void size_capacity() {
   constexpr std::size_t kCapacity = 32;
 
-  std::vector<std::byte> msg(4);
+  std::vector<std::byte> msg(8);
   Msgbuf msgbuf(kCapacity);
 
   EXPECT_EQ(msgbuf.size(), 0);
@@ -53,111 +53,115 @@ constexpr void size_capacity() {
 }
 
 template <flow::concepts::nonblocking_msgbuf Msgbuf>
-  requires(Msgbuf::header_size() == sizeof(std::size_t))
+  requires(Msgbuf::header_size() == 8)
 constexpr void nonblocking_smoke() {
-  constexpr std::size_t kCapacity = 32;
+  constexpr std::size_t kCapacity = 64;
 
-  std::vector<std::byte> msg(4);
+  std::vector<std::byte> msg(16);
   Msgbuf msgbuf(kCapacity);
 
-  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept { GTEST_FAIL(); }),
-            0);
+  EXPECT_EQ(msgbuf.try_pop(msg), 0);
 
-  EXPECT_TRUE(msgbuf.try_push(std::vector(2, std::byte(0))));
-  EXPECT_TRUE(msgbuf.try_push(std::vector(4, std::byte(1))));
-  EXPECT_TRUE(msgbuf.try_push(std::vector(2, std::byte(2))));
-
+  EXPECT_TRUE(msgbuf.try_push(std::vector(8, std::byte(0))));
+  EXPECT_TRUE(msgbuf.try_push(std::vector(16, std::byte(1))));
+  EXPECT_TRUE(msgbuf.try_push(std::vector(8, std::byte(2))));
   EXPECT_FALSE(msgbuf.try_push(std::vector(1, std::byte(3))));
 
-  EXPECT_EQ(msgbuf.try_pop(msg), 2);
-  EXPECT_EQ(msg, std::vector(4, std::byte(0)));
-  EXPECT_EQ(msgbuf.try_pop(msg), 4);
-  EXPECT_EQ(msg, std::vector(4, std::byte(1)));
-  EXPECT_EQ(msgbuf.try_pop(msg), 2);
-  EXPECT_EQ(msg, (std::vector{std::byte(2), std::byte(2), std::byte(1),
-                              std::byte(1)}));
+  EXPECT_EQ(msgbuf.try_pop(msg), 8);
+  msg.resize(8);
+  EXPECT_EQ(msg, std::vector(8, std::byte(0)));
+
+  msg.resize(16);
+  EXPECT_EQ(msgbuf.try_pop(msg), 16);
+  EXPECT_EQ(msg, std::vector(16, std::byte(1)));
+
+  EXPECT_EQ(msgbuf.try_pop(msg), 8);
+  msg.resize(8);
+  EXPECT_EQ(msg, std::vector(8, std::byte(2)));
 
   EXPECT_TRUE(msgbuf.try_push(std::vector(1, std::byte(4))));
   EXPECT_EQ(msgbuf.try_pop(std::span<std::byte>(msg.data(), 1)), 1);
+  msg.resize(1);
+  EXPECT_EQ(msg, std::vector(1, std::byte(4)));
 
-  EXPECT_EQ(msg, (std::vector{std::byte(4), std::byte(2), std::byte(1),
-                              std::byte(1)}));
-
-  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept { GTEST_FAIL(); }),
-            0);
+  EXPECT_EQ(msgbuf.try_pop(msg), 0);
 }
 
 template <flow::concepts::blocking_msgbuf Msgbuf>
-  requires(Msgbuf::header_size() == sizeof(std::size_t))
+  requires(Msgbuf::header_size() == 8)
 constexpr void blocking_smoke() {
-  constexpr std::size_t kCapacity = 32;
+  constexpr std::size_t kCapacity = 64;
 
-  std::vector<std::byte> msg(4);
+  std::vector<std::byte> msg(16);
   Msgbuf msgbuf(kCapacity);
 
-  msgbuf.push(std::vector(2, std::byte(0)));
-  msgbuf.push(std::vector(4, std::byte(1)));
-  msgbuf.push(std::vector(2, std::byte(2)));
+  msgbuf.push(std::vector(8, std::byte(0)));
+  msgbuf.push(std::vector(16, std::byte(1)));
+  msgbuf.push(std::vector(8, std::byte(2)));
 
-  EXPECT_EQ(msgbuf.pop(msg), 2);
-  EXPECT_EQ(msg, std::vector(4, std::byte(0)));
-  EXPECT_EQ(msgbuf.pop(msg), 4);
-  EXPECT_EQ(msg, std::vector(4, std::byte(1)));
-  EXPECT_EQ(msgbuf.pop(msg), 2);
-  EXPECT_EQ(msg, (std::vector{std::byte(2), std::byte(2), std::byte(1),
-                              std::byte(1)}));
+  EXPECT_EQ(msgbuf.pop(msg), 8);
+  msg.resize(8);
+  EXPECT_EQ(msg, std::vector(8, std::byte(0)));
+
+  msg.resize(16);
+  EXPECT_EQ(msgbuf.pop(msg), 16);
+  EXPECT_EQ(msg, std::vector(16, std::byte(1)));
+
+  EXPECT_EQ(msgbuf.pop(msg), 8);
+  msg.resize(8);
+  EXPECT_EQ(msg, std::vector(8, std::byte(2)));
 
   msgbuf.push(std::vector(1, std::byte(4)));
   EXPECT_EQ(msgbuf.pop(std::span<std::byte>(msg.data(), 1)), 1);
-
-  EXPECT_EQ(msg, (std::vector{std::byte(4), std::byte(2), std::byte(1),
-                              std::byte(1)}));
+  msg.resize(1);
+  EXPECT_EQ(msg, std::vector(1, std::byte(4)));
 }
 
 template <typename Msgbuf>
   requires(flow::concepts::blocking_msgbuf<Msgbuf> &&
            flow::concepts::nonblocking_msgbuf<Msgbuf> &&
-           Msgbuf::header_size() == sizeof(std::size_t))
+           Msgbuf::header_size() == 8)
 constexpr void mixed_smoke() {
-  constexpr std::size_t kCapacity = 32;
+  constexpr std::size_t kCapacity = 64;
 
-  std::array<std::byte, 3> msg{};
+  std::vector<std::byte> msg(8);
   Msgbuf msgbuf(kCapacity);
 
   EXPECT_EQ(msgbuf.size(), 0);
   EXPECT_EQ(msgbuf.try_pop(msg), 0);
   EXPECT_EQ(msgbuf.size(), 0);
 
-  msgbuf.push(std::array{std::byte(0), std::byte(1)});
-  EXPECT_EQ(msgbuf.size(), 10);
+  msgbuf.push(std::vector(8, std::byte(0)));
+  EXPECT_EQ(msgbuf.size(), 16);
 
-  msgbuf.push(std::array{std::byte(2), std::byte(3)});
-  EXPECT_EQ(msgbuf.size(), 20);
-
-  EXPECT_TRUE(msgbuf.try_push(std::array{std::byte(4), std::byte(0)}));
-  EXPECT_EQ(msgbuf.size(), 30);
-
-  EXPECT_EQ(msgbuf.pop(msg), 2);
-  EXPECT_EQ(msg, (std::array{std::byte(0), std::byte(1), std::byte(0)}));
-  EXPECT_EQ(msgbuf.size(), 20);
-
-  EXPECT_TRUE(msgbuf.try_push(std::array{std::byte(5), std::byte(6)}));
+  msgbuf.push(std::vector(8, std::byte(1)));
   EXPECT_EQ(msgbuf.size(), 32);
 
-  EXPECT_EQ(msgbuf.pop(msg), 2);
-  EXPECT_EQ(msg, (std::array{std::byte(2), std::byte(3), std::byte(0)}));
-  EXPECT_EQ(msgbuf.size(), 22);
+  EXPECT_TRUE(msgbuf.try_push(std::vector(8, std::byte(2))));
+  EXPECT_EQ(msgbuf.size(), 48);
 
-  EXPECT_EQ(msgbuf.pop(msg), 2);
-  EXPECT_EQ(msg, (std::array{std::byte(4), std::byte(0), std::byte(0)}));
-  EXPECT_EQ(msgbuf.size(), 12);
+  EXPECT_EQ(msgbuf.pop(msg), 8);
+  EXPECT_EQ(msg, std::vector(8, std::byte(0)));
+  EXPECT_EQ(msgbuf.size(), 32);
 
-  EXPECT_EQ(msgbuf.try_pop(msg), 2);
-  EXPECT_EQ(msg, (std::array{std::byte(5), std::byte(6), std::byte(0)}));
+  EXPECT_TRUE(msgbuf.try_push(std::vector(8, std::byte(3))));
+  EXPECT_EQ(msgbuf.size(), 48);
+
+  EXPECT_EQ(msgbuf.pop(msg), 8);
+  EXPECT_EQ(msg, std::vector(8, std::byte(1)));
+  EXPECT_EQ(msgbuf.size(), 32);
+
+  EXPECT_EQ(msgbuf.pop(msg), 8);
+  EXPECT_EQ(msg, std::vector(8, std::byte(2)));
+  EXPECT_EQ(msgbuf.size(), 16);
+
+  EXPECT_EQ(msgbuf.try_pop(msg), 8);
+  EXPECT_EQ(msg, std::vector(8, std::byte(3)));
+  EXPECT_EQ(msgbuf.size(), 0);
 }
 
 template <flow::concepts::blocking_msgbuf Msgbuf>
-  requires(Msgbuf::header_size() == sizeof(std::size_t))
+  requires(Msgbuf::header_size() == 8)
 constexpr void blocking_push() {
   constexpr std::size_t kCapacity = 16;
 
@@ -182,7 +186,7 @@ constexpr void blocking_push() {
 template <typename Msgbuf>
   requires(flow::concepts::blocking_msgbuf<Msgbuf> &&
            flow::concepts::nonblocking_msgbuf<Msgbuf> &&
-           Msgbuf::header_size() == sizeof(std::size_t))
+           Msgbuf::header_size() == 8)
 constexpr void blocking_pop() {
   constexpr std::size_t kCapacity = 16;
 
@@ -197,7 +201,7 @@ constexpr void blocking_pop() {
 }
 
 template <flow::concepts::cancellable_blocking_msgbuf Msgbuf>
-  requires(Msgbuf::header_size() == sizeof(std::size_t))
+  requires(Msgbuf::header_size() == 8)
 constexpr void stop_token_noop() {
   constexpr std::size_t kCapacity = 32;
 
@@ -220,7 +224,7 @@ constexpr void stop_token_noop() {
 }
 
 template <flow::concepts::cancellable_blocking_msgbuf Msgbuf>
-  requires(Msgbuf::header_size() == sizeof(std::size_t))
+  requires(Msgbuf::header_size() == 8)
 constexpr void blocking_push_stop_token() {
   constexpr std::size_t kCapacity = 16;
 
@@ -234,7 +238,7 @@ constexpr void blocking_push_stop_token() {
 }
 
 template <flow::concepts::cancellable_blocking_msgbuf Msgbuf>
-  requires(Msgbuf::header_size() == sizeof(std::size_t))
+  requires(Msgbuf::header_size() == 8)
 constexpr void blocking_pop_stop_token() {
   constexpr std::size_t kCapacity = 16;
 
@@ -250,9 +254,9 @@ constexpr void blocking_pop_stop_token() {
 }
 
 template <flow::concepts::blocking_msgbuf Msgbuf>
-  requires(Msgbuf::header_size() == sizeof(std::size_t))
+  requires(Msgbuf::header_size() == 8)
 constexpr void allocator() {
-  constexpr std::size_t kCapacity = 2;
+  constexpr std::size_t kCapacity = 16;
 
   swiss::leak_detector_allocator<typename Msgbuf::allocator_type::value_type,
                                  true>
@@ -268,13 +272,13 @@ constexpr void allocator() {
 }
 
 template <flow::concepts::nonblocking_msgbuf Msgbuf>
-  requires(Msgbuf::header_size() == sizeof(std::size_t))
+  requires(Msgbuf::header_size() == 8)
 constexpr void nonblocking(auto const & param) {
   auto const & [msg_count, msgbuf_capacity, producers, consumers] = param;
 
   std::size_t const msg_size = std::max<std::size_t>(1, msgbuf_capacity / 7);
 
-  Msgbuf msgbuf(msgbuf_capacity);
+  Msgbuf msgbuf(static_cast<typename Msgbuf::index_type>(msgbuf_capacity));
   std::latch latch(static_cast<std::ptrdiff_t>(producers + consumers));
 
   std::vector<std::atomic<std::size_t>> pushed_byte_counts(
@@ -330,13 +334,13 @@ constexpr void nonblocking(auto const & param) {
 }
 
 template <flow::concepts::blocking_msgbuf Msgbuf>
-  requires(Msgbuf::header_size() == sizeof(std::size_t))
+  requires(Msgbuf::header_size() == 8)
 constexpr void blocking(auto const & param) {
   auto const & [msg_count, msgbuf_capacity, producers, consumers] = param;
 
   std::size_t const msg_size = std::max<std::size_t>(1, msgbuf_capacity / 7);
 
-  Msgbuf msgbuf(msgbuf_capacity);
+  Msgbuf msgbuf(static_cast<typename Msgbuf::index_type>(msgbuf_capacity));
   std::latch latch(static_cast<std::ptrdiff_t>(producers + consumers));
 
   std::vector<std::atomic<std::size_t>> pushed_byte_counts(
@@ -395,100 +399,99 @@ constexpr void rollover() {
   constexpr std::size_t kCapacity = 32;
   constexpr std::size_t kRepeats  = 3;
 
-  std::array<std::byte, 3> msg{};
+  std::vector<std::byte> msg(8);
   Msgbuf msgbuf(kCapacity);
 
   for (std::size_t repeat = 0; repeat < kRepeats; ++repeat) {
     for (std::size_t i = 0;
          i < std::numeric_limits<typename Msgbuf::index_type>::max(); ++i) {
-      EXPECT_TRUE(msgbuf.try_push(
-          std::array{std::byte(0), std::byte(1), std::byte(2)}));
-      EXPECT_EQ(msgbuf.try_pop(msg), 3);
-      EXPECT_EQ(msg, (std::array{std::byte(0), std::byte(1), std::byte(2)}));
+      EXPECT_TRUE(msgbuf.try_push(std::vector(8, std::byte(1))));
+      EXPECT_EQ(msgbuf.try_pop(msg), 8);
+      EXPECT_EQ(msg, std::vector(8, std::byte(1)));
     }
   }
 }
 
 template <flow::concepts::nonblocking_msgbuf Msgbuf>
-  requires(Msgbuf::header_size() == sizeof(std::size_t))
+  requires(Msgbuf::header_size() == 8)
 constexpr void nonblocking_callback() {
   constexpr std::size_t kCapacity = 32;
 
   Msgbuf msgbuf(kCapacity);
 
-  EXPECT_TRUE(msgbuf.try_push(3, [](std::span<std::byte> chunk) noexcept {
-    EXPECT_EQ(chunk.size(), 3);
+  EXPECT_TRUE(msgbuf.try_push(8, [](std::span<std::byte> chunk) noexcept {
+    EXPECT_EQ(chunk.size(), 8);
   }));
-  EXPECT_EQ(msgbuf.size(), 11);
+  EXPECT_EQ(msgbuf.size(), 16);
 
-  EXPECT_TRUE(msgbuf.try_push(5, [](std::span<std::byte> chunk) noexcept {
-    EXPECT_EQ(chunk.size(), 5);
+  EXPECT_TRUE(msgbuf.try_push(8, [](std::span<std::byte> chunk) noexcept {
+    EXPECT_EQ(chunk.size(), 8);
   }));
-  EXPECT_EQ(msgbuf.size(), 24);
+  EXPECT_EQ(msgbuf.size(), 32);
 
   EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte> chunk) noexcept {
-    EXPECT_EQ(chunk.size(), 3);
+    EXPECT_EQ(chunk.size(), 8);
   }),
-            3);
-  EXPECT_EQ(msgbuf.size(), 13);
+            8);
+  EXPECT_EQ(msgbuf.size(), 16);
 
-  EXPECT_TRUE(msgbuf.try_push(std::vector(3, std::byte(0))));
-  EXPECT_EQ(msgbuf.size(), 24);
-
-  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte> chunk) noexcept {
-    EXPECT_EQ(chunk.size(), 5);
-  }),
-            5);
-  EXPECT_EQ(msgbuf.size(), 11);
+  EXPECT_TRUE(msgbuf.try_push(std::vector(8, std::byte(0))));
+  EXPECT_EQ(msgbuf.size(), 32);
 
   EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte> chunk) noexcept {
-    EXPECT_EQ(chunk.size(), 3);
+    EXPECT_EQ(chunk.size(), 8);
   }),
-            3);
+            8);
+  EXPECT_EQ(msgbuf.size(), 16);
+
+  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte> chunk) noexcept {
+    EXPECT_EQ(chunk.size(), 8);
+  }),
+            8);
   EXPECT_EQ(msgbuf.size(), 0);
 }
 
 template <flow::concepts::blocking_msgbuf Msgbuf>
-  requires(Msgbuf::header_size() == sizeof(std::size_t))
+  requires(Msgbuf::header_size() == 8)
 constexpr void blocking_callback() {
   constexpr std::size_t kCapacity = 32;
 
   Msgbuf msgbuf(kCapacity);
 
-  msgbuf.push(3, [](std::span<std::byte> chunk) noexcept {
-    EXPECT_EQ(chunk.size(), 3);
+  msgbuf.push(8, [](std::span<std::byte> chunk) noexcept {
+    EXPECT_EQ(chunk.size(), 8);
   });
-  EXPECT_EQ(msgbuf.size(), 11);
+  EXPECT_EQ(msgbuf.size(), 16);
 
-  msgbuf.push(5, [](std::span<std::byte> chunk) noexcept {
-    EXPECT_EQ(chunk.size(), 5);
+  msgbuf.push(8, [](std::span<std::byte> chunk) noexcept {
+    EXPECT_EQ(chunk.size(), 8);
   });
-  EXPECT_EQ(msgbuf.size(), 24);
+  EXPECT_EQ(msgbuf.size(), 32);
 
   EXPECT_EQ(msgbuf.pop([](std::span<std::byte> chunk) noexcept {
-    EXPECT_EQ(chunk.size(), 3);
+    EXPECT_EQ(chunk.size(), 8);
   }),
-            3);
-  EXPECT_EQ(msgbuf.size(), 13);
+            8);
+  EXPECT_EQ(msgbuf.size(), 16);
 
-  EXPECT_TRUE(msgbuf.try_push(std::vector(3, std::byte(0))));
-  EXPECT_EQ(msgbuf.size(), 24);
-
-  EXPECT_EQ(msgbuf.pop([](std::span<std::byte> chunk) noexcept {
-    EXPECT_EQ(chunk.size(), 5);
-  }),
-            5);
-  EXPECT_EQ(msgbuf.size(), 11);
+  EXPECT_TRUE(msgbuf.try_push(std::vector(8, std::byte(0))));
+  EXPECT_EQ(msgbuf.size(), 32);
 
   EXPECT_EQ(msgbuf.pop([](std::span<std::byte> chunk) noexcept {
-    EXPECT_EQ(chunk.size(), 3);
+    EXPECT_EQ(chunk.size(), 8);
   }),
-            3);
+            8);
+  EXPECT_EQ(msgbuf.size(), 16);
+
+  EXPECT_EQ(msgbuf.pop([](std::span<std::byte> chunk) noexcept {
+    EXPECT_EQ(chunk.size(), 8);
+  }),
+            8);
   EXPECT_EQ(msgbuf.size(), 0);
 }
 
 template <flow::concepts::nonblocking_msgbuf Msgbuf>
-  requires(Msgbuf::header_size() == sizeof(std::size_t))
+  requires(Msgbuf::header_size() == 8)
 constexpr void padding() {
   constexpr std::size_t kCapacity = 64;
 
@@ -516,14 +519,14 @@ constexpr void padding() {
 
   EXPECT_FALSE(msgbuf.try_push(std::vector(33, std::byte(0))));
 
-  EXPECT_TRUE(msgbuf.try_push(std::vector(25, std::byte(0))));
-  EXPECT_EQ(msgbuf.size(), 33);
+  EXPECT_TRUE(msgbuf.try_push(std::vector(24, std::byte(0))));
+  EXPECT_EQ(msgbuf.size(), 32);
 
   EXPECT_TRUE(msgbuf.try_push(std::vector(8, std::byte(0))));
-  EXPECT_EQ(msgbuf.size(), 56);
+  EXPECT_EQ(msgbuf.size(), 48);
 
-  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept {}), 25);
-  EXPECT_EQ(msgbuf.size(), 23);
+  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept {}), 24);
+  EXPECT_EQ(msgbuf.size(), 16);
 
   EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept {}), 8);
   EXPECT_EQ(msgbuf.size(), 0);
@@ -532,17 +535,17 @@ constexpr void padding() {
   EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept {}), 16);
   EXPECT_EQ(msgbuf.size(), 0);
 
-  EXPECT_TRUE(msgbuf.try_push(std::vector(30, std::byte(0))));
-  EXPECT_EQ(msgbuf.size(), 62);
+  EXPECT_TRUE(msgbuf.try_push(std::vector(24, std::byte(0))));
+  EXPECT_EQ(msgbuf.size(), 32);
 
-  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept {}), 30);
+  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept {}), 24);
   EXPECT_EQ(msgbuf.size(), 0);
 }
 
 template <typename Msgbuf>
   requires(flow::concepts::blocking_msgbuf<Msgbuf> &&
            flow::concepts::nonblocking_msgbuf<Msgbuf> &&
-           Msgbuf::header_size() == sizeof(std::size_t))
+           Msgbuf::header_size() == 8)
 constexpr void exception_callback() {
   constexpr std::size_t kCapacity = 32;
 
@@ -550,20 +553,63 @@ constexpr void exception_callback() {
 
   EXPECT_ANY_THROW(msgbuf.try_push(
       4, [](std::span<std::byte>) { throw std::runtime_error(""); }));
+  EXPECT_EQ(msgbuf.size(), 0);
+
+  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept { GTEST_FAIL(); }),
+            0);
+  EXPECT_EQ(msgbuf.size(), 0);
+
   EXPECT_ANY_THROW(msgbuf.push(
       4, [](std::span<std::byte>) { throw std::runtime_error(""); }));
+  EXPECT_EQ(msgbuf.size(), 0);
 
-  EXPECT_TRUE(msgbuf.try_push(std::vector(4, std::byte(0))));
-  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept {}), 4);
+  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept { GTEST_FAIL(); }),
+            0);
+  EXPECT_EQ(msgbuf.size(), 0);
 
-  EXPECT_TRUE(msgbuf.try_push(std::vector(1, std::byte(0))));
+  EXPECT_TRUE(msgbuf.try_push(std::vector(8, std::byte(0))));
+  EXPECT_EQ(msgbuf.size(), 16);
+  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept {}), 8);
+  EXPECT_EQ(msgbuf.size(), 0);
+}
 
-  EXPECT_ANY_THROW(msgbuf.try_pop(
-      [](std::span<std::byte>) { throw std::runtime_error(""); }));
-  EXPECT_ANY_THROW(
-      msgbuf.pop([](std::span<std::byte>) { throw std::runtime_error(""); }));
+template <typename Msgbuf>
+constexpr void input_validation() {
+  constexpr std::size_t kCapacity = 16;
 
-  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept {}), 1);
+  std::array<std::byte, 0> empty_bytes{};
+  std::array<std::byte, kCapacity + 1> overflow_bytes{};
+  Msgbuf msgbuf(kCapacity);
+
+  if constexpr (flow::concepts::nonblocking_msgbuf<Msgbuf>) {
+    EXPECT_FALSE(msgbuf.try_push(overflow_bytes));
+    EXPECT_FALSE(msgbuf.try_pop(overflow_bytes));
+
+    EXPECT_EQ(msgbuf.try_push(empty_bytes), 0);
+    EXPECT_EQ(msgbuf.try_pop(empty_bytes), 0);
+  }
+
+  if constexpr (flow::concepts::blocking_msgbuf<Msgbuf>) {
+    msgbuf.push(overflow_bytes.size(),
+                [](std::span<std::byte>) noexcept { GTEST_FAIL(); });
+
+    msgbuf.push(empty_bytes.size(),
+                [](std::span<std::byte>) noexcept { GTEST_FAIL(); });
+  }
+
+  if constexpr (flow::concepts::cancellable_blocking_msgbuf<Msgbuf>) {
+    EXPECT_FALSE(msgbuf.push(std::stop_token{}, overflow_bytes));
+    EXPECT_FALSE(
+        msgbuf.push(std::stop_token{}, overflow_bytes.size(),
+                    [](std::span<std::byte>) noexcept { GTEST_FAIL(); }));
+
+    EXPECT_FALSE(msgbuf.push(std::stop_token{}, empty_bytes));
+    EXPECT_FALSE(msgbuf.pop(std::stop_token{}, empty_bytes));
+
+    EXPECT_FALSE(
+        msgbuf.push(std::stop_token{}, empty_bytes.size(),
+                    [](std::span<std::byte>) noexcept { GTEST_FAIL(); }));
+  }
 }
 
 // NOLINTEND(cppcoreguidelines-avoid-magic-numbers)

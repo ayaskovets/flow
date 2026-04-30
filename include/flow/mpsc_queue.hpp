@@ -39,6 +39,11 @@ class mpsc_queue : public swiss::non_copyable, public swiss::non_movable {
       Allocator>::template rebind_alloc<std::atomic<Index>>;
   using value_allocator_type = Allocator;
 
+ private:
+  template <typename T>
+  static constexpr bool is_nothrow_callback =
+      std::is_nothrow_invocable_v<T, value_type *>;
+
  public:
   constexpr explicit mpsc_queue(allocator_type allocator = allocator_type())
     requires(Capacity != swiss::kDynamicExtent<index_type>)
@@ -202,19 +207,21 @@ class mpsc_queue : public swiss::non_copyable, public swiss::non_movable {
   }
 
  public:
-  [[nodiscard]] constexpr auto capacity() const noexcept -> index_type {
+  [[nodiscard]] constexpr auto capacity() const noexcept -> std::size_t {
     return *writer_.capacity;
   }
 
-  [[nodiscard]] constexpr auto size() const noexcept -> index_type {
+  [[nodiscard]] constexpr auto size() const noexcept -> std::size_t {
     index_type const push_to  = writer_.index.load(std::memory_order::relaxed);
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
 
-    auto const _size = size(push_to, pop_from);
+    index_type const _size = size(push_to, pop_from);
     return _size > *writer_.capacity ? 0 : _size;
   }
 
-  constexpr auto get_allocator() const noexcept -> allocator_type {
+  [[nodiscard]] constexpr auto get_allocator() const
+      noexcept(std::is_nothrow_copy_constructible_v<allocator_type>)
+          -> allocator_type {
     return allocator_;
   }
 
@@ -288,10 +295,9 @@ class mpsc_queue : public swiss::non_copyable, public swiss::non_movable {
   }
 
  private:
-  template <std::invocable<value_type *> Callback>
-  constexpr auto try_push(Callback && callback) noexcept -> bool
-    requires(std::is_nothrow_invocable_v<Callback, value_type *>)
-  {
+  template <typename Callback>
+    requires(is_nothrow_callback<Callback>)
+  constexpr auto try_push(Callback && callback) noexcept -> bool {
     index_type push_to = writer_.index.load(std::memory_order::relaxed);
 
     while (true) {
@@ -299,6 +305,7 @@ class mpsc_queue : public swiss::non_copyable, public swiss::non_movable {
 
       if (vacant(push_to, seqnum(entry)->load(std::memory_order::acquire))) {
         if (writer_.index.compare_exchange_weak(push_to, next(push_to),
+                                                std::memory_order::relaxed,
                                                 std::memory_order::relaxed)) {
           std::invoke(std::forward<Callback>(callback), value(entry));
 
@@ -315,10 +322,9 @@ class mpsc_queue : public swiss::non_copyable, public swiss::non_movable {
     }
   }
 
-  template <std::invocable<value_type *> Callback>
-  constexpr auto try_pop(Callback && callback) noexcept -> bool
-    requires(std::is_nothrow_invocable_v<Callback, value_type *>)
-  {
+  template <typename Callback>
+    requires(is_nothrow_callback<Callback>)
+  constexpr auto try_pop(Callback && callback) noexcept -> bool {
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
     entry_type * entry = at(reader_.ring_buffer, *reader_.capacity, pop_from);
 
@@ -335,11 +341,10 @@ class mpsc_queue : public swiss::non_copyable, public swiss::non_movable {
   }
 
  private:
-  template <std::invocable<value_type *> Callback>
+  template <typename Callback>
+    requires(is_nothrow_callback<Callback>)
   constexpr auto push(std::stop_token const & stop_token,
-                      Callback && callback) noexcept -> bool
-    requires(std::is_nothrow_invocable_v<Callback, value_type *>)
-  {
+                      Callback && callback) noexcept -> bool {
     index_type push_to = writer_.index.load(std::memory_order::relaxed);
 
     while (!stop_token.stop_requested()) {
@@ -348,7 +353,8 @@ class mpsc_queue : public swiss::non_copyable, public swiss::non_movable {
       bool const _vacant =
           vacant(push_to, seqnum(entry)->load(std::memory_order::acquire));
       if (_vacant && writer_.index.compare_exchange_weak(
-                         push_to, next(push_to), std::memory_order::relaxed)) {
+                         push_to, next(push_to), std::memory_order::relaxed,
+                         std::memory_order::relaxed)) {
         std::invoke(std::forward<Callback>(callback), value(entry));
 
         seqnum(entry)->store(push_to + 1, std::memory_order::release);
@@ -365,11 +371,10 @@ class mpsc_queue : public swiss::non_copyable, public swiss::non_movable {
     return false;
   }
 
-  template <std::invocable<value_type *> Callback>
+  template <typename Callback>
+    requires(is_nothrow_callback<Callback>)
   constexpr auto pop(std::stop_token const & stop_token,
-                     Callback && callback) noexcept -> bool
-    requires(std::is_nothrow_invocable_v<Callback, value_type *>)
-  {
+                     Callback && callback) noexcept -> bool {
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
 
     while (!stop_token.stop_requested()) {

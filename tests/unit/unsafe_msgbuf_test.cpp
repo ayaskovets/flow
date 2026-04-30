@@ -24,7 +24,7 @@ TEST(unsafe_msgbuf, capacity) {
   EXPECT_EQ(flow::unsafe_msgbuf<>(64).capacity(), 64);
 }
 
-TEST_T(unsafe_msgbuf, minimal_capacity, flow::unsafe_msgbuf<>, 1);
+TEST_T(unsafe_msgbuf, minimal_capacity, flow::unsafe_msgbuf<>, 8);
 
 TEST_T(unsafe_msgbuf, size_capacity, flow::unsafe_msgbuf<>);
 
@@ -63,5 +63,7 @@ TEST_T(unsafe_msgbuf, blocking_callback, flow::unsafe_msgbuf<>);
 TEST_T(unsafe_msgbuf, padding, flow::unsafe_msgbuf<>);
 
 TEST_T(unsafe_msgbuf, exception_callback, flow::unsafe_msgbuf<>);
+
+TEST(unsafe_msgbuf, input_validation) { GTEST_SKIP(); }
 
 }  // namespace tests::unit

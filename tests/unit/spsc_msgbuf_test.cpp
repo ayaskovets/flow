@@ -24,7 +24,7 @@ TEST(spsc_msgbuf, capacity) {
   EXPECT_EQ(flow::spsc_msgbuf<>(64).capacity(), 64);
 }
 
-TEST_T(spsc_msgbuf, minimal_capacity, flow::spsc_msgbuf<>, 1);
+TEST_T(spsc_msgbuf, minimal_capacity, flow::spsc_msgbuf<>, 8);
 
 TEST_T(spsc_msgbuf, size_capacity, flow::spsc_msgbuf<>);
 
@@ -74,5 +74,7 @@ TEST_T(spsc_msgbuf, blocking_callback, flow::spsc_msgbuf<>);
 TEST_T(spsc_msgbuf, padding, flow::spsc_msgbuf<>);
 
 TEST_T(spsc_msgbuf, exception_callback, flow::spsc_msgbuf<>);
+
+TEST_T(spsc_msgbuf, input_validation, flow::spsc_msgbuf<>);
 
 }  // namespace tests::unit

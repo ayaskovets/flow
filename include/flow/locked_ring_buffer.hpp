@@ -11,6 +11,7 @@
 #include <swiss/dynamic_extent.hpp>
 #include <swiss/mixins.hpp>
 #include <swiss/predicates.hpp>
+#include <swiss/scope_exit.hpp>
 
 namespace flow {
 
@@ -32,6 +33,10 @@ class locked_ring_buffer : public swiss::non_copyable,
   using allocator_type = std::allocator_traits<
       Allocator>::template rebind_alloc<swiss::aligned<Value, Alignment>>;
 
+ private:
+  template <typename T>
+  static constexpr bool is_callback = std::invocable<T, value_type *>;
+
  public:
   constexpr explicit locked_ring_buffer(
       allocator_type allocator = allocator_type())
@@ -39,8 +44,9 @@ class locked_ring_buffer : public swiss::non_copyable,
       : allocator_(std::move(allocator)),
         ring_buffer_(std::allocator_traits<allocator_type>::allocate(
             allocator_, Capacity)) {
-    static_assert(swiss::is_power_of_two(Capacity),
-                  "mpmc_queue::mpmc_queue(): invalid capacity != 2^n");
+    static_assert(
+        swiss::is_power_of_two(Capacity),
+        "locked_ring_buffer::locked_ring_buffer(): invalid capacity != 2^n");
   }
 
   constexpr explicit locked_ring_buffer(
@@ -51,7 +57,8 @@ class locked_ring_buffer : public swiss::non_copyable,
         ring_buffer_([&] {
           if (!swiss::is_power_of_two(capacity)) {
             throw std::invalid_argument(
-                "mpmc_queue::mpmc_queue(): invalid capacity != 2^n");
+                "locked_ring_buffer::locked_ring_buffer(): invalid capacity != "
+                "2^n");
           }
           return std::allocator_traits<allocator_type>::allocate(allocator_,
                                                                  capacity);
@@ -90,8 +97,10 @@ class locked_ring_buffer : public swiss::non_copyable,
 
   constexpr auto try_pop(auto & value) -> bool {
     return try_pop([&](value_type * front) {
+      swiss::scope_exit const scope_exit([&]() noexcept {
+        std::allocator_traits<allocator_type>::destroy(allocator_, front);
+      });
       value = std::move(*front);
-      std::allocator_traits<allocator_type>::destroy(allocator_, front);
     });
   }
 
@@ -116,8 +125,10 @@ class locked_ring_buffer : public swiss::non_copyable,
 
   constexpr auto pop(std::stop_token const & stop_token, auto & value) -> bool {
     return pop(stop_token, [&](value_type * front) {
+      swiss::scope_exit const scope_exit([&]() noexcept {
+        std::allocator_traits<allocator_type>::destroy(allocator_, front);
+      });
       value = std::move(*front);
-      std::allocator_traits<allocator_type>::destroy(allocator_, front);
     });
   }
 
@@ -138,17 +149,19 @@ class locked_ring_buffer : public swiss::non_copyable,
   constexpr void pop(auto & value) { pop(std::stop_token{}, value); }
 
  public:
-  [[nodiscard]] constexpr auto capacity() const noexcept -> index_type {
+  [[nodiscard]] constexpr auto capacity() const noexcept -> std::size_t {
     return *capacity_;
   }
 
-  [[nodiscard]] constexpr auto size() const -> index_type {
+  [[nodiscard]] constexpr auto size() const -> std::size_t {
     std::lock_guard const lock(mutex_);
 
     return size(push_to_, pop_from_);
   }
 
-  constexpr auto get_allocator() const noexcept -> allocator_type {
+  [[nodiscard]] constexpr auto get_allocator() const
+      noexcept(std::is_nothrow_copy_constructible_v<allocator_type>)
+          -> allocator_type {
     return allocator_;
   }
 
@@ -198,7 +211,8 @@ class locked_ring_buffer : public swiss::non_copyable,
   }
 
  private:
-  template <std::invocable<value_type *> Callback>
+  template <typename Callback>
+    requires(is_callback<Callback>)
   constexpr auto try_push(Callback && callback) -> bool {
     std::lock_guard const lock(mutex_);
     if (full()) {
@@ -212,7 +226,8 @@ class locked_ring_buffer : public swiss::non_copyable,
     return true;
   }
 
-  template <std::invocable<value_type *> Callback>
+  template <typename Callback>
+    requires(is_callback<Callback>)
   constexpr auto try_pop(Callback && callback) -> bool {
     std::lock_guard const lock(mutex_);
     if (empty()) {
@@ -227,7 +242,8 @@ class locked_ring_buffer : public swiss::non_copyable,
   }
 
  private:
-  template <std::invocable<value_type *> Callback>
+  template <typename Callback>
+    requires(is_callback<Callback>)
   constexpr auto push(std::stop_token const & stop_token, Callback && callback)
       -> bool {
     std::unique_lock lock(mutex_);
@@ -243,7 +259,8 @@ class locked_ring_buffer : public swiss::non_copyable,
     return true;
   }
 
-  template <std::invocable<value_type *> Callback>
+  template <typename Callback>
+    requires(is_callback<Callback>)
   constexpr auto pop(std::stop_token const & stop_token, Callback && callback)
       -> bool {
     std::unique_lock lock(mutex_);

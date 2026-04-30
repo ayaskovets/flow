@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <optional>
+#include <thread>
 
 #include <benchmark/benchmark.h>
 
@@ -40,6 +41,8 @@ constexpr void nonblocking_throughput(benchmark::State & state) {
       if (auto const pushed = stream->try_push(buffer); pushed > 0) {
         bytes += pushed;
         successful += 1;
+      } else {
+        std::this_thread::yield();
       }
     }
 
@@ -54,6 +57,8 @@ constexpr void nonblocking_throughput(benchmark::State & state) {
       if (auto const popped = stream->try_pop(buffer); popped > 0) {
         bytes += popped;
         successful += 1;
+      } else {
+        std::this_thread::yield();
       }
     }
 

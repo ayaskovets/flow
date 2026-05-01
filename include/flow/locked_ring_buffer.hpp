@@ -19,6 +19,9 @@ namespace flow {
  * @brief Locked ring buffer for many producers and many consumers
  * @note Implemented as a ring buffer
  * @note Serves as a naive baseline implementation of an MPMC queue
+ * @warning Uses standard locking privitives (i.e. std::mutex and
+ * std::condition_variable) and thus not safe to use in any coroutine
+ * environment
  */
 template <typename Value, std::unsigned_integral Index = std::size_t,
           Index Capacity     = swiss::kDynamicExtent<Index>,

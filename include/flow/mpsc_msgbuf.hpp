@@ -358,6 +358,13 @@ class mpsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
     return _size > *writer_.capacity ? 0 : _size;
   }
 
+  [[nodiscard]] constexpr auto empty() const noexcept -> bool {
+    index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
+    index_type const push_to  = writer_.index.load(std::memory_order::relaxed);
+
+    return empty(push_to, pop_from);
+  }
+
   [[nodiscard]] constexpr auto get_allocator() const
       noexcept(std::is_nothrow_copy_constructible_v<allocator_type>)
           -> allocator_type {

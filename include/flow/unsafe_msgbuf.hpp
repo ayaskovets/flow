@@ -74,27 +74,27 @@ class unsafe_msgbuf : public swiss::non_copyable, public swiss::non_movable {
       return false;
     }
 
-    index_type const msg_size           = bound_to_index_type(_msg_size);
-    auto const [fits, padding, push_to] = [&]() {
-      index_type const _push_to = get_push_to();
-      index_type const _free    = free();
-      index_type const postfix  = *capacity_ - _push_to;
-      index_type const prefix   = pop_from_;
-      index_type const chunk    = std::min(postfix, _free);
+    index_type const msg_size            = bound_to_index_type(_msg_size);
+    auto const [fits, padding, _push_to] = [&]() {
+      index_type const _pushto = push_to();
+      index_type const _free   = free();
+      index_type const postfix = *capacity_ - _pushto;
+      index_type const prefix  = pop_from_;
+      index_type const chunk   = std::min(postfix, _free);
 
       bool const can_insert_whole = (chunk >= header_size() + msg_size);
       bool const can_split_header =
           (_free >= header_size() + msg_size && postfix == header_size() &&
            prefix >= msg_size);
       if (can_insert_whole || can_split_header) {
-        return std::tuple{true, static_cast<index_type>(0), _push_to};
+        return std::tuple{true, static_cast<index_type>(0), _pushto};
       }
 
       bool const can_insert_with_padding =
           (chunk == postfix && prefix >= header_size() + msg_size);
       if (can_insert_with_padding) {
         if (postfix >= header_size()) {
-          write_header(_push_to, padding_header());
+          write_header(_pushto, padding_header());
         }
         return std::tuple{true, postfix, static_cast<index_type>(0)};
       }
@@ -107,11 +107,11 @@ class unsafe_msgbuf : public swiss::non_copyable, public swiss::non_movable {
       return false;
     }
 
-    std::span<std::byte> const msg(ring_buffer_ + next(push_to, header_size()),
+    std::span<std::byte> const msg(ring_buffer_ + next(_push_to, header_size()),
                                    msg_size);
     std::invoke(std::forward<Callback>(callback), msg);
 
-    write_header(push_to, msg_size);
+    write_header(_push_to, msg_size);
     size_ += padding + header_size() + msg_size;
     return true;
   }
@@ -214,6 +214,10 @@ class unsafe_msgbuf : public swiss::non_copyable, public swiss::non_movable {
     return size_;
   }
 
+  [[nodiscard]] constexpr auto empty() const noexcept -> bool {
+    return size_ == 0;
+  }
+
   [[nodiscard]] constexpr auto get_allocator() const
       noexcept(std::is_nothrow_copy_constructible_v<allocator_type>)
           -> allocator_type {
@@ -258,11 +262,7 @@ class unsafe_msgbuf : public swiss::non_copyable, public swiss::non_movable {
     return *capacity_ - size_;
   }
 
-  [[nodiscard]] constexpr auto empty() const noexcept -> bool {
-    return size_ == 0;
-  }
-
-  [[nodiscard]] constexpr auto get_push_to() const noexcept -> index_type {
+  [[nodiscard]] constexpr auto push_to() const noexcept -> index_type {
     return next(pop_from_, size_);
   }
 

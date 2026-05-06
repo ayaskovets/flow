@@ -71,7 +71,7 @@ class locked_ring_buffer : public swiss::non_copyable,
    * @warning Destructor requires exlusive access to the queue
    */
   constexpr ~locked_ring_buffer() noexcept {
-    while (!empty()) {
+    while (!empty(push_to_, pop_from_)) {
       std::allocator_traits<allocator_type>::destroy(
           allocator_, ring_buffer_ + slot(pop_from_));
       pop_from_ = next(pop_from_);
@@ -162,6 +162,12 @@ class locked_ring_buffer : public swiss::non_copyable,
     return size(push_to_, pop_from_);
   }
 
+  [[nodiscard]] constexpr auto empty() const noexcept -> bool {
+    std::lock_guard const lock(mutex_);
+
+    return empty(push_to_, pop_from_);
+  }
+
   [[nodiscard]] constexpr auto get_allocator() const
       noexcept(std::is_nothrow_copy_constructible_v<allocator_type>)
           -> allocator_type {
@@ -193,8 +199,10 @@ class locked_ring_buffer : public swiss::non_copyable,
     return *capacity_ == size(push_to_, pop_from_);
   }
 
-  [[nodiscard]] constexpr auto empty() const noexcept -> bool {
-    return push_to_ == pop_from_;
+  [[nodiscard]] constexpr auto empty(index_type push_to,
+                                     index_type pop_from) const noexcept
+      -> bool {
+    return push_to == pop_from;
   }
 
   [[nodiscard]] constexpr auto next(index_type index) const noexcept
@@ -233,7 +241,7 @@ class locked_ring_buffer : public swiss::non_copyable,
     requires(is_callback<Callback>)
   constexpr auto try_pop(Callback && callback) -> bool {
     std::lock_guard const lock(mutex_);
-    if (empty()) {
+    if (empty(push_to_, pop_from_)) {
       return false;
     }
 
@@ -267,8 +275,8 @@ class locked_ring_buffer : public swiss::non_copyable,
   constexpr auto pop(std::stop_token const & stop_token, Callback && callback)
       -> bool {
     std::unique_lock lock(mutex_);
-    if (!pop_available_cv_.wait(lock, stop_token,
-                                [this] { return !empty(); })) {
+    if (!pop_available_cv_.wait(
+            lock, stop_token, [this] { return !empty(push_to_, pop_from_); })) {
       return false;
     }
 

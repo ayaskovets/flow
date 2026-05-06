@@ -14,6 +14,7 @@ concept msgbuf = requires(T msgbuf) {
   { T::header_size() } -> std::same_as<std::size_t>;
   { msgbuf.capacity() } -> std::same_as<std::size_t>;
   { msgbuf.size() } -> std::same_as<std::size_t>;
+  { msgbuf.empty() } -> std::same_as<bool>;
   { msgbuf.get_allocator() } -> std::same_as<typename T::allocator_type>;
 };
 
@@ -24,7 +25,7 @@ concept msgbuf = requires(T msgbuf) {
  * @note Nonblocking pop methods return the size of the popped message
  * @note Callback-based methods reserve a contiguous chunk of memory (which may
  * require padding) and pass it to the callback
- * @warning In non-callback-based pop the message gets truncated if is larger
+ * @warning In non-callback-based pop the message gets truncated if it is larger
  * than the provider buffer
  */
 template <typename T>
@@ -57,7 +58,7 @@ concept noexcept_nonblocking_msgbuf =
  * @note Blocking methods wait until the operation is completed or return
  * immediately if input size in invalid
  * @note Blocking pop methods return the size of the popped message
- * @warning In non-callback-based pop the message gets truncated if is larger
+ * @warning In non-callback-based pop the message gets truncated if it is larger
  * than the provider buffer
  */
 template <typename T>

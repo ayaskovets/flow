@@ -131,6 +131,10 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
     return size_;
   }
 
+  [[nodiscard]] constexpr auto empty() const noexcept -> bool {
+    return size_ == 0;
+  }
+
   [[nodiscard]] constexpr auto get_allocator() const
       noexcept(std::is_nothrow_copy_constructible_v<allocator_type>)
           -> allocator_type {
@@ -151,10 +155,6 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
  private:
   [[nodiscard]] constexpr auto full() const noexcept -> bool {
     return size_ == *capacity_;
-  }
-
-  [[nodiscard]] constexpr auto empty() const noexcept -> bool {
-    return size_ == 0;
   }
 
   [[nodiscard]] constexpr auto push_to() const noexcept -> index_type {

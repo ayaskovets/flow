@@ -85,6 +85,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
 
  public:
   template <typename... Args>
+    requires(std::constructible_from<value_type, Args...>)
   constexpr auto try_emplace(Args &&... args) noexcept(
       std::is_nothrow_constructible_v<value_type, Args...>) -> bool {
     return try_push([&](value_type * front) {
@@ -117,7 +118,9 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
 
  public:
   template <typename... Args>
-  constexpr auto emplace(std::stop_token stop_token, Args &&... args) noexcept(
+    requires(std::constructible_from<value_type, Args...>)
+  constexpr auto
+  emplace(std::stop_token const & stop_token, Args &&... args) noexcept(
       std::is_nothrow_constructible_v<value_type, Args...>) -> bool {
     return push(stop_token, [&](value_type * front) {
       std::allocator_traits<allocator_type>::construct(
@@ -152,6 +155,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
 
  public:
   template <typename... Args>
+    requires(std::constructible_from<value_type, Args...>)
   constexpr void emplace(Args &&... args) noexcept(
       std::is_nothrow_constructible_v<value_type, Args...>) {
     emplace(std::stop_token{}, std::forward<Args>(args)...);

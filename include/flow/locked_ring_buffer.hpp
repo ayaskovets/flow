@@ -83,6 +83,7 @@ class locked_ring_buffer : public swiss::non_copyable,
 
  public:
   template <typename... Args>
+    requires(std::constructible_from<value_type, Args...>)
   constexpr auto try_emplace(Args &&... args) -> bool {
     return try_push([&](value_type * front) {
       std::allocator_traits<allocator_type>::construct(
@@ -91,11 +92,11 @@ class locked_ring_buffer : public swiss::non_copyable,
   }
 
   constexpr auto try_push(value_type const & value) -> bool {
-    return try_emplace(value);
+    return try_emplace<value_type const &>(value);
   }
 
   constexpr auto try_push(value_type && value) -> bool {
-    return try_emplace(std::move(value));
+    return try_emplace<value_type &&>(std::move(value));
   }
 
   constexpr auto try_pop(auto & value) -> bool {
@@ -109,7 +110,9 @@ class locked_ring_buffer : public swiss::non_copyable,
 
  public:
   template <typename... Args>
-  constexpr auto emplace(std::stop_token stop_token, Args &&... args) -> bool {
+    requires(std::constructible_from<value_type, Args...>)
+  constexpr auto emplace(std::stop_token const & stop_token, Args &&... args)
+      -> bool {
     return push(stop_token, [&](value_type * front) {
       std::allocator_traits<allocator_type>::construct(
           allocator_, front, std::forward<Args>(args)...);
@@ -137,6 +140,7 @@ class locked_ring_buffer : public swiss::non_copyable,
 
  public:
   template <typename... Args>
+    requires(std::constructible_from<value_type, Args...>)
   constexpr void emplace(Args &&... args) {
     emplace(std::stop_token{}, std::forward<Args>(args)...);
   }

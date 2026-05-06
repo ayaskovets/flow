@@ -71,6 +71,7 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
 
  public:
   template <typename... Args>
+    requires(std::constructible_from<value_type, Args...>)
   constexpr auto try_emplace(Args &&... args) noexcept(
       std::is_nothrow_constructible_v<value_type, Args...>) -> bool {
     return try_push([&](value_type * front) {
@@ -102,6 +103,7 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
 
  public:
   template <typename... Args>
+    requires(std::constructible_from<value_type, Args...>)
   constexpr void emplace(Args &&... args) {
     push([&](value_type * front) {
       std::allocator_traits<allocator_type>::construct(

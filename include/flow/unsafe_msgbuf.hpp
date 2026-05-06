@@ -35,7 +35,7 @@ class unsafe_msgbuf : public swiss::non_copyable, public swiss::non_movable {
       std::is_nothrow_invocable_v<T, std::span<std::byte>>;
 
  public:
-  constexpr explicit unsafe_msgbuf(allocator_type allocator = allocator_type())
+  explicit constexpr unsafe_msgbuf(allocator_type allocator = allocator_type())
     requires(Capacity != swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
         ring_buffer_(std::allocator_traits<allocator_type>::allocate(
@@ -45,7 +45,7 @@ class unsafe_msgbuf : public swiss::non_copyable, public swiss::non_movable {
         "unsafe_msgbuf::unsafe_msgbuf(): invalid capacity < header_size()");
   }
 
-  constexpr explicit unsafe_msgbuf(index_type capacity,
+  explicit constexpr unsafe_msgbuf(index_type capacity,
                                    allocator_type allocator = allocator_type())
     requires(Capacity == swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),

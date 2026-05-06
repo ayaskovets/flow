@@ -45,7 +45,7 @@ class mpsc_queue : public swiss::non_copyable, public swiss::non_movable {
       std::is_nothrow_invocable_v<T, value_type *>;
 
  public:
-  constexpr explicit mpsc_queue(allocator_type allocator = allocator_type())
+  explicit constexpr mpsc_queue(allocator_type allocator = allocator_type())
     requires(Capacity != swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
         writer_{.ring_buffer = std::allocator_traits<allocator_type>::allocate(
@@ -60,7 +60,7 @@ class mpsc_queue : public swiss::non_copyable, public swiss::non_movable {
     }
   }
 
-  constexpr explicit mpsc_queue(index_type capacity,
+  explicit constexpr mpsc_queue(index_type capacity,
                                 allocator_type allocator = allocator_type())
     requires(Capacity == swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
@@ -87,20 +87,19 @@ class mpsc_queue : public swiss::non_copyable, public swiss::non_movable {
   }
 
   /**
-   * @warning Destructor is not thread safe and assumes that there is only one
-   * thread operating on the queue during the destruction
+   * @warning Destructor requires exlusive access to the queue
    */
   constexpr ~mpsc_queue() noexcept {
-    for (index_type index = 0; index < *writer_.capacity; ++index) {
-      std::allocator_traits<index_allocator_type>::destroy(
-          index_allocator_,
-          seqnum(at(writer_.ring_buffer, *writer_.capacity, index)));
-    }
-
     while (try_pop([&](value_type * front) noexcept {
       std::allocator_traits<value_allocator_type>::destroy(value_allocator_,
                                                            front);
     })) {
+    }
+
+    for (index_type index = 0; index < *writer_.capacity; ++index) {
+      std::allocator_traits<index_allocator_type>::destroy(
+          index_allocator_,
+          seqnum(at(writer_.ring_buffer, *writer_.capacity, index)));
     }
 
     std::allocator_traits<allocator_type>::deallocate(
@@ -212,8 +211,8 @@ class mpsc_queue : public swiss::non_copyable, public swiss::non_movable {
   }
 
   [[nodiscard]] constexpr auto size() const noexcept -> std::size_t {
-    index_type const push_to  = writer_.index.load(std::memory_order::relaxed);
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
+    index_type const push_to  = writer_.index.load(std::memory_order::relaxed);
 
     index_type const _size = size(push_to, pop_from);
     return _size > *writer_.capacity ? 0 : _size;
@@ -313,11 +312,12 @@ class mpsc_queue : public swiss::non_copyable, public swiss::non_movable {
           return true;
         }
       } else {
-        if (push_to ==
-            std::exchange(push_to,
-                          writer_.index.load(std::memory_order::relaxed))) {
+        index_type const actual_push_to =
+            writer_.index.load(std::memory_order::relaxed);
+        if (push_to == actual_push_to) {
           return false;
         }
+        push_to = actual_push_to;
       }
     }
   }
@@ -350,20 +350,17 @@ class mpsc_queue : public swiss::non_copyable, public swiss::non_movable {
     while (!stop_token.stop_requested()) {
       entry_type * entry = at(writer_.ring_buffer, *writer_.capacity, push_to);
 
-      bool const _vacant =
-          vacant(push_to, seqnum(entry)->load(std::memory_order::acquire));
-      if (_vacant && writer_.index.compare_exchange_weak(
-                         push_to, next(push_to), std::memory_order::relaxed,
-                         std::memory_order::relaxed)) {
-        std::invoke(std::forward<Callback>(callback), value(entry));
+      if (vacant(push_to, seqnum(entry)->load(std::memory_order::acquire))) {
+        if (writer_.index.compare_exchange_weak(push_to, next(push_to),
+                                                std::memory_order::relaxed,
+                                                std::memory_order::relaxed)) {
+          std::invoke(std::forward<Callback>(callback), value(entry));
 
-        seqnum(entry)->store(push_to + 1, std::memory_order::release);
-        return true;
-      }
-
-      std::this_thread::yield();
-
-      if (!_vacant) {
+          seqnum(entry)->store(push_to + 1, std::memory_order::release);
+          return true;
+        }
+      } else {
+        std::this_thread::yield();
         push_to = writer_.index.load(std::memory_order::relaxed);
       }
     }

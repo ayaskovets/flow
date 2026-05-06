@@ -35,7 +35,7 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
       std::is_nothrow_invocable_v<T, value_type *>;
 
  public:
-  constexpr explicit unsafe_queue(allocator_type allocator = allocator_type())
+  explicit constexpr unsafe_queue(allocator_type allocator = allocator_type())
     requires(Capacity != swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
         ring_buffer_(std::allocator_traits<allocator_type>::allocate(allocator_,
@@ -45,7 +45,7 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
                   "unsafe_queue::unsafe_queue(): invalid capacity < 1");
   }
 
-  constexpr explicit unsafe_queue(index_type capacity,
+  explicit constexpr unsafe_queue(index_type capacity,
                                   allocator_type allocator = allocator_type())
     requires(Capacity == swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),

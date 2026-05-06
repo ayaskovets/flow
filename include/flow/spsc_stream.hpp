@@ -50,7 +50,7 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
                                   std::span<std::byte>>;
 
  public:
-  constexpr explicit spsc_stream(allocator_type allocator = allocator_type())
+  explicit constexpr spsc_stream(allocator_type allocator = allocator_type())
     requires(Capacity != swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
         writer_{.ring_buffer = std::allocator_traits<allocator_type>::allocate(
@@ -60,7 +60,7 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
                   "spsc_stream::spsc_stream(): invalid capacity != 2^n");
   }
 
-  constexpr explicit spsc_stream(index_type capacity,
+  explicit constexpr spsc_stream(index_type capacity,
                                  allocator_type allocator = allocator_type())
     requires(Capacity == swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
@@ -308,8 +308,8 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
   }
 
   [[nodiscard]] constexpr auto size() const noexcept -> std::size_t {
-    index_type const push_to  = writer_.index.load(std::memory_order::relaxed);
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
+    index_type const push_to  = writer_.index.load(std::memory_order::relaxed);
 
     index_type const _size = size(push_to, pop_from);
     return _size > *writer_.capacity ? 0 : _size;

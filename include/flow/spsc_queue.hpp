@@ -41,7 +41,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
       std::is_nothrow_invocable_v<T, value_type *>;
 
  public:
-  constexpr explicit spsc_queue(allocator_type allocator = allocator_type())
+  explicit constexpr spsc_queue(allocator_type allocator = allocator_type())
     requires(Capacity != swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
         writer_{.ring_buffer = std::allocator_traits<allocator_type>::allocate(
@@ -51,7 +51,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
                   "spsc_queue::spsc_queue(): invalid capacity != 2^n");
   }
 
-  constexpr explicit spsc_queue(index_type capacity,
+  explicit constexpr spsc_queue(index_type capacity,
                                 allocator_type allocator = allocator_type())
     requires(Capacity == swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
@@ -71,8 +71,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
                 .ring_buffer = writer_.ring_buffer} {}
 
   /**
-   * @warning Destructor is not thread safe and assumes that there is only one
-   * thread operating on the queue during the destruction
+   * @warning Destructor requires exlusive access to the queue
    */
   constexpr ~spsc_queue() noexcept {
     while (try_pop([this](value_type * front) noexcept {
@@ -181,8 +180,8 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
   }
 
   [[nodiscard]] constexpr auto size() const noexcept -> std::size_t {
-    index_type const push_to  = writer_.index.load(std::memory_order::relaxed);
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
+    index_type const push_to  = writer_.index.load(std::memory_order::relaxed);
 
     index_type const _size = size(push_to, pop_from);
     return _size > *writer_.capacity ? 0 : _size;

@@ -37,7 +37,7 @@ class mpsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
       std::is_nothrow_invocable_v<T, std::span<std::byte>>;
 
  public:
-  constexpr explicit mpsc_msgbuf(allocator_type allocator = allocator_type())
+  explicit constexpr mpsc_msgbuf(allocator_type allocator = allocator_type())
     requires(Capacity != swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
         writer_{.ring_buffer = std::allocator_traits<allocator_type>::allocate(
@@ -52,7 +52,7 @@ class mpsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
                               0);
   }
 
-  constexpr explicit mpsc_msgbuf(index_type capacity,
+  explicit constexpr mpsc_msgbuf(index_type capacity,
                                  allocator_type allocator = allocator_type())
     requires(Capacity == swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
@@ -351,8 +351,8 @@ class mpsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
   }
 
   [[nodiscard]] constexpr auto size() const noexcept -> std::size_t {
-    index_type const push_to  = writer_.index.load(std::memory_order::relaxed);
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
+    index_type const push_to  = writer_.index.load(std::memory_order::relaxed);
 
     index_type const _size = size(push_to, pop_from);
     return _size > *writer_.capacity ? 0 : _size;

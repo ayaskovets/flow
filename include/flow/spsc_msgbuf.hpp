@@ -38,7 +38,7 @@ class spsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
       std::is_nothrow_invocable_v<T, std::span<std::byte>>;
 
  public:
-  constexpr explicit spsc_msgbuf(allocator_type allocator = allocator_type())
+  explicit constexpr spsc_msgbuf(allocator_type allocator = allocator_type())
     requires(Capacity != swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
         writer_{.ring_buffer = std::allocator_traits<allocator_type>::allocate(
@@ -51,7 +51,7 @@ class spsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
         "spsc_msgbuf::spsc_msgbuf(): invalid capacity < header_size()");
   }
 
-  constexpr explicit spsc_msgbuf(index_type capacity,
+  explicit constexpr spsc_msgbuf(index_type capacity,
                                  allocator_type allocator = allocator_type())
     requires(Capacity == swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
@@ -303,8 +303,8 @@ class spsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
   }
 
   [[nodiscard]] constexpr auto size() const noexcept -> std::size_t {
-    index_type const push_to  = writer_.index.load(std::memory_order::relaxed);
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
+    index_type const push_to  = writer_.index.load(std::memory_order::relaxed);
 
     index_type const _size = size(push_to, pop_from);
     return _size > *writer_.capacity ? 0 : _size;

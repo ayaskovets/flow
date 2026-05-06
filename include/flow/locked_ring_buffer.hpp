@@ -41,7 +41,7 @@ class locked_ring_buffer : public swiss::non_copyable,
   static constexpr bool is_callback = std::invocable<T, value_type *>;
 
  public:
-  constexpr explicit locked_ring_buffer(
+  explicit constexpr locked_ring_buffer(
       allocator_type allocator = allocator_type())
     requires(Capacity != swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
@@ -52,7 +52,7 @@ class locked_ring_buffer : public swiss::non_copyable,
         "locked_ring_buffer::locked_ring_buffer(): invalid capacity != 2^n");
   }
 
-  constexpr explicit locked_ring_buffer(
+  explicit constexpr locked_ring_buffer(
       index_type capacity, allocator_type allocator = allocator_type())
     requires(Capacity == swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),

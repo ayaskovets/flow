@@ -60,9 +60,10 @@ class spmc_queue : public swiss::non_copyable, public swiss::non_movable {
           allocator_, writer_.ring_buffer, *writer_.capacity);
     });
 
+    index_allocator_type index_allocator(allocator_);
     for (index_type index = 0; index < *writer_.capacity; ++index) {
       std::allocator_traits<index_allocator_type>::construct(
-          index_allocator_,
+          index_allocator,
           seqnum(at(writer_.ring_buffer, *writer_.capacity, index)), index);
     }
   }
@@ -91,9 +92,10 @@ class spmc_queue : public swiss::non_copyable, public swiss::non_movable {
           allocator_, writer_.ring_buffer, *writer_.capacity);
     });
 
+    index_allocator_type index_allocator(allocator_);
     for (index_type index = 0; index < *writer_.capacity; ++index) {
       std::allocator_traits<index_allocator_type>::construct(
-          index_allocator_,
+          index_allocator,
           seqnum(at(writer_.ring_buffer, *writer_.capacity, index)), index);
     }
   }
@@ -108,9 +110,10 @@ class spmc_queue : public swiss::non_copyable, public swiss::non_movable {
     })) {
     }
 
+    index_allocator_type index_allocator(allocator_);
     for (index_type index = 0; index < *writer_.capacity; ++index) {
       std::allocator_traits<index_allocator_type>::destroy(
-          index_allocator_,
+          index_allocator,
           seqnum(at(writer_.ring_buffer, *writer_.capacity, index)));
     }
 
@@ -251,7 +254,6 @@ class spmc_queue : public swiss::non_copyable, public swiss::non_movable {
   };
 
   [[no_unique_address]] allocator_type allocator_;
-  [[no_unique_address]] index_allocator_type index_allocator_;
   [[no_unique_address]] value_allocator_type value_allocator_;
   CacheLine writer_;
   CacheLine reader_;

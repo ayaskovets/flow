@@ -12,6 +12,7 @@
 #include <swiss/dynamic_extent.hpp>
 #include <swiss/mixins.hpp>
 #include <swiss/predicates.hpp>
+#include <swiss/scope_fail.hpp>
 
 namespace flow {
 
@@ -53,6 +54,12 @@ class mpsc_queue : public swiss::non_copyable, public swiss::non_movable {
         reader_{.ring_buffer = writer_.ring_buffer} {
     static_assert(swiss::is_power_of_two(Capacity) && Capacity >= 2,
                   "mpsc_queue::mpsc_queue(): invalid capacity != 2^n or < 2");
+
+    swiss::scope_fail const scope_fail([&]() noexcept {
+      std::allocator_traits<allocator_type>::deallocate(
+          allocator_, writer_.ring_buffer, *writer_.capacity);
+    });
+
     for (index_type index = 0; index < *writer_.capacity; ++index) {
       std::allocator_traits<index_allocator_type>::construct(
           index_allocator_,
@@ -79,6 +86,11 @@ class mpsc_queue : public swiss::non_copyable, public swiss::non_movable {
         },
         reader_{.capacity    = writer_.capacity,
                 .ring_buffer = writer_.ring_buffer} {
+    swiss::scope_fail const scope_fail([&]() noexcept {
+      std::allocator_traits<allocator_type>::deallocate(
+          allocator_, writer_.ring_buffer, *writer_.capacity);
+    });
+
     for (index_type index = 0; index < *writer_.capacity; ++index) {
       std::allocator_traits<index_allocator_type>::construct(
           index_allocator_,
@@ -103,7 +115,7 @@ class mpsc_queue : public swiss::non_copyable, public swiss::non_movable {
     }
 
     std::allocator_traits<allocator_type>::deallocate(
-        allocator_, reader_.ring_buffer, *reader_.capacity);
+        allocator_, writer_.ring_buffer, *writer_.capacity);
   }
 
  public:

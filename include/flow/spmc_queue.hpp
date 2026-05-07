@@ -10,6 +10,7 @@
 #include <swiss/aligned.hpp>
 #include <swiss/conditionally_runtime.hpp>
 #include <swiss/dynamic_extent.hpp>
+#include <swiss/manual_lifetime.hpp>
 #include <swiss/mixins.hpp>
 #include <swiss/predicates.hpp>
 #include <swiss/scope_fail.hpp>
@@ -22,8 +23,9 @@ namespace flow {
  * @note Capacity for this queue must be a power of 2 for efficient division
  */
 template <typename Value, std::unsigned_integral Index = std::size_t,
-          Index Capacity     = swiss::kDynamicExtent<Index>,
-          Index Alignment    = alignof(std::pair<Value, std::atomic<Index>>),
+          Index Capacity  = swiss::kDynamicExtent<Index>,
+          Index Alignment = alignof(
+              std::pair<swiss::manual_lifetime<Value>, std::atomic<Index>>),
           typename Allocator = std::allocator<Value>>
 // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class spmc_queue : public swiss::non_copyable, public swiss::non_movable {
@@ -31,11 +33,13 @@ class spmc_queue : public swiss::non_copyable, public swiss::non_movable {
   using value_type = Value;
   using index_type = Index;
   using allocator_type =
-      std::allocator_traits<Allocator>::template rebind_alloc<
-          swiss::aligned<std::pair<Value, std::atomic<Index>>, Alignment>>;
+      std::allocator_traits<Allocator>::template rebind_alloc<swiss::aligned<
+          std::pair<swiss::manual_lifetime<Value>, std::atomic<Index>>,
+          Alignment>>;
 
  private:
-  using entry_type           = std::pair<Value, std::atomic<Index>>;
+  using entry_type =
+      std::pair<swiss::manual_lifetime<Value>, std::atomic<Index>>;
   using index_allocator_type = std::allocator_traits<
       Allocator>::template rebind_alloc<std::atomic<Index>>;
   using value_allocator_type = Allocator;
@@ -62,6 +66,9 @@ class spmc_queue : public swiss::non_copyable, public swiss::non_movable {
 
     index_allocator_type index_allocator(allocator_);
     for (index_type index = 0; index < *writer_.capacity; ++index) {
+      std::allocator_traits<allocator_type>::construct(
+          allocator_, writer_.ring_buffer + index);
+
       std::allocator_traits<index_allocator_type>::construct(
           index_allocator,
           seqnum(at(writer_.ring_buffer, *writer_.capacity, index)), index);
@@ -94,6 +101,9 @@ class spmc_queue : public swiss::non_copyable, public swiss::non_movable {
 
     index_allocator_type index_allocator(allocator_);
     for (index_type index = 0; index < *writer_.capacity; ++index) {
+      std::allocator_traits<allocator_type>::construct(
+          allocator_, writer_.ring_buffer + index);
+
       std::allocator_traits<index_allocator_type>::construct(
           index_allocator,
           seqnum(at(writer_.ring_buffer, *writer_.capacity, index)), index);
@@ -115,6 +125,9 @@ class spmc_queue : public swiss::non_copyable, public swiss::non_movable {
       std::allocator_traits<index_allocator_type>::destroy(
           index_allocator,
           seqnum(at(writer_.ring_buffer, *writer_.capacity, index)));
+
+      std::allocator_traits<allocator_type>::destroy(
+          allocator_, writer_.ring_buffer + index);
     }
 
     std::allocator_traits<allocator_type>::deallocate(
@@ -302,7 +315,7 @@ class spmc_queue : public swiss::non_copyable, public swiss::non_movable {
 
   [[nodiscard]] constexpr auto value(entry_type * entry) const noexcept
       -> value_type * {
-    return &entry->first;
+    return entry->first.data();
   }
 
   [[nodiscard]] constexpr auto seqnum(entry_type * entry) const noexcept

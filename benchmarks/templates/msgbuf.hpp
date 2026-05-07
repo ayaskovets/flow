@@ -4,7 +4,6 @@
 
 #include <cstddef>
 #include <optional>
-#include <thread>
 
 #include <benchmark/benchmark.h>
 
@@ -41,8 +40,6 @@ constexpr void nonblocking_throughput(benchmark::State & state) {
       if (msgbuf->try_push(msg)) {
         bytes += msg_size;
         successful += 1;
-      } else {
-        std::this_thread::yield();
       }
     }
 
@@ -57,8 +54,6 @@ constexpr void nonblocking_throughput(benchmark::State & state) {
       if (msgbuf->try_pop(msg)) {
         bytes += msg_size;
         successful += 1;
-      } else {
-        std::this_thread::yield();
       }
     }
 

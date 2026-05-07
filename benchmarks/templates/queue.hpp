@@ -4,7 +4,6 @@
 
 #include <cstddef>
 #include <optional>
-#include <thread>
 
 #include <benchmark/benchmark.h>
 
@@ -37,8 +36,6 @@ constexpr void nonblocking_throughput(benchmark::State & state) {
     for (auto const _ : state) {
       if (queue->try_emplace()) {
         items += 1;
-      } else {
-        std::this_thread::yield();
       }
     }
 
@@ -57,8 +54,6 @@ constexpr void nonblocking_throughput(benchmark::State & state) {
       if (queue->try_pop(value)) {
         benchmark::DoNotOptimize(value);
         items += 1;
-      } else {
-        std::this_thread::yield();
       }
     }
 

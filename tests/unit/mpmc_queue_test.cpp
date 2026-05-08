@@ -1,5 +1,7 @@
 #include <flow/mpmc_queue.hpp>
 
+#include <new>
+
 #include <gtest/gtest.h>
 #include <swiss/leak_detector_allocator.hpp>
 
@@ -10,10 +12,14 @@ namespace tests::unit {
 
 TEST(mpmc_queue, size) {
   // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
-  static_assert(sizeof(flow::mpmc_queue<int, std::size_t, 10>) == 128);
-  static_assert(alignof(flow::mpmc_queue<int, std::size_t, 10>) == 64);
-  static_assert(sizeof(flow::mpmc_queue<int, std::uint8_t>) == 128);
-  static_assert(alignof(flow::mpmc_queue<int, std::uint8_t>) == 64);
+  static_assert(sizeof(flow::mpmc_queue<int, std::size_t, 10>) ==
+                std::hardware_destructive_interference_size * 3);
+  static_assert(alignof(flow::mpmc_queue<int, std::size_t, 10>) ==
+                std::hardware_destructive_interference_size);
+  static_assert(sizeof(flow::mpmc_queue<int, std::uint8_t>) ==
+                std::hardware_destructive_interference_size * 3);
+  static_assert(alignof(flow::mpmc_queue<int, std::uint8_t>) ==
+                std::hardware_destructive_interference_size);
   // NOLINTEND(cppcoreguidelines-avoid-magic-numbers)
 }
 

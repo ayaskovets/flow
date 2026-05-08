@@ -1,11 +1,9 @@
 #pragma once
 
-#include <algorithm>
 #include <limits>
 #include <memory>
 #include <span>
 #include <stdexcept>
-#include <type_traits>
 
 #include <swiss/concepts.hpp>
 #include <swiss/conditionally_runtime.hpp>
@@ -20,6 +18,7 @@ namespace flow {
  * @note Implemented as a ring buffer
  * @note Callback may return a value of an integral type to restrict the number
  * of bytes that will be marked as read in the stream
+ * @note Minimal capacity is 1
  * @warning Not thread-safe
  */
 template <std::unsigned_integral Index = std::size_t,
@@ -27,10 +26,6 @@ template <std::unsigned_integral Index = std::size_t,
           typename Allocator           = std::allocator<std::byte>>
 // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class unsafe_stream : public swiss::non_copyable, public swiss::non_movable {
- public:
-  using index_type     = Index;
-  using allocator_type = Allocator;
-
  private:
   template <typename T>
   static constexpr bool is_callback =
@@ -46,13 +41,23 @@ class unsafe_stream : public swiss::non_copyable, public swiss::non_movable {
                                   std::span<std::byte>>;
 
  public:
+  using index_type     = Index;
+  using allocator_type = Allocator;
+
+ private:
+  [[nodiscard]] static constexpr auto valid(index_type capacity) noexcept
+      -> bool {
+    return capacity > 0;
+  }
+
+ public:
   explicit constexpr unsafe_stream(allocator_type allocator = allocator_type())
     requires(Capacity != swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
         ring_buffer_(std::allocator_traits<allocator_type>::allocate(
             allocator_, Capacity)) {
-    static_assert(Capacity > 0,
-                  "unsafe_stream::unsafe_stream(): invalid capacity < 1");
+    static_assert(valid(Capacity),
+                  "unsafe_stream::unsafe_stream(): invalid capacity");
   }
 
   explicit constexpr unsafe_stream(index_type capacity,
@@ -61,9 +66,9 @@ class unsafe_stream : public swiss::non_copyable, public swiss::non_movable {
       : allocator_(std::move(allocator)),
         capacity_(capacity),
         ring_buffer_([&] {
-          if (capacity < 1) {
+          if (!valid(capacity)) {
             throw std::invalid_argument(
-                "unsafe_stream::unsafe_stream(): invalid capacity < 1");
+                "unsafe_stream::unsafe_stream(): invalid capacity");
           }
           return std::allocator_traits<allocator_type>::allocate(allocator_,
                                                                  capacity);
@@ -82,8 +87,7 @@ class unsafe_stream : public swiss::non_copyable, public swiss::non_movable {
       std::size_t _max_size = std::numeric_limits<
           std::size_t>::max()) noexcept(is_nothrow_callback<Callback>)
       -> std::size_t {
-    index_type const max_size =
-        std::min(bound_to_index_type(_max_size), free());
+    index_type const max_size = std::min(bound(_max_size), free());
     if (max_size == 0) {
       return 0;
     }
@@ -101,8 +105,7 @@ class unsafe_stream : public swiss::non_copyable, public swiss::non_movable {
     swiss::assign_invoke_result_if_not_void(_callback_size,
                                             std::forward<Callback>(callback),
                                             postfix_span, prefix_span);
-    index_type const bytes_pushed =
-        std::min(max_size, bound_to_index_type(_callback_size));
+    index_type const bytes_pushed = std::min(max_size, bound(_callback_size));
 
     size_ += bytes_pushed;
     return bytes_pushed;
@@ -114,7 +117,7 @@ class unsafe_stream : public swiss::non_copyable, public swiss::non_movable {
       Callback && callback,
       std::size_t _max_size = std::numeric_limits<std::size_t>::max()) noexcept
       -> std::size_t {
-    index_type const max_size = std::min(bound_to_index_type(_max_size), size_);
+    index_type const max_size = std::min(bound(_max_size), size_);
     if (max_size == 0) {
       return 0;
     }
@@ -131,8 +134,7 @@ class unsafe_stream : public swiss::non_copyable, public swiss::non_movable {
     swiss::assign_invoke_result_if_not_void(_callback_size,
                                             std::forward<Callback>(callback),
                                             postfix_span, prefix_span);
-    index_type const bytes_popped =
-        std::min(max_size, bound_to_index_type(_callback_size));
+    index_type const bytes_popped = std::min(max_size, bound(_callback_size));
 
     size_ -= bytes_popped;
     pop_from_ = next(pop_from_, bytes_popped);
@@ -164,9 +166,9 @@ class unsafe_stream : public swiss::non_copyable, public swiss::non_movable {
     return try_push(
         [&](std::span<std::byte> postfix,
             std::span<std::byte> prefix) noexcept {
-          std::copy_n(bytes.data(), postfix.size(), postfix.data());
-          std::copy_n(bytes.subspan(postfix.size()).data(), prefix.size(),
-                      prefix.data());
+          std::memcpy(postfix.data(), bytes.data(), postfix.size());
+          std::memcpy(prefix.data(), bytes.subspan(postfix.size()).data(),
+                      prefix.size());
         },
         bytes.size());
   }
@@ -176,9 +178,9 @@ class unsafe_stream : public swiss::non_copyable, public swiss::non_movable {
     return try_pop(
         [&](std::span<std::byte> postfix,
             std::span<std::byte> prefix) noexcept {
-          std::copy_n(postfix.data(), postfix.size(), bytes.data());
-          std::copy_n(prefix.data(), prefix.size(),
-                      bytes.subspan(postfix.size()).data());
+          std::memcpy(bytes.data(), postfix.data(), postfix.size());
+          std::memcpy(bytes.subspan(postfix.size()).data(), prefix.data(),
+                      prefix.size());
         },
         bytes.size());
   }
@@ -187,18 +189,18 @@ class unsafe_stream : public swiss::non_copyable, public swiss::non_movable {
   constexpr void push(std::span<std::byte const> bytes) {
     push(bytes.size(), [&](std::span<std::byte> postfix,
                            std::span<std::byte> prefix) noexcept {
-      std::copy_n(bytes.data(), postfix.size(), postfix.data());
-      std::copy_n(bytes.subspan(postfix.size()).data(), prefix.size(),
-                  prefix.data());
+      std::memcpy(postfix.data(), bytes.data(), postfix.size());
+      std::memcpy(prefix.data(), bytes.subspan(postfix.size()).data(),
+                  prefix.size());
     });
   }
 
   constexpr void pop(std::span<std::byte> bytes) {
     pop(bytes.size(), [&](std::span<std::byte> postfix,
                           std::span<std::byte> prefix) noexcept {
-      std::copy_n(postfix.data(), postfix.size(), bytes.data());
-      std::copy_n(prefix.data(), prefix.size(),
-                  bytes.subspan(postfix.size()).data());
+      std::memcpy(bytes.data(), postfix.data(), postfix.size());
+      std::memcpy(bytes.subspan(postfix.size()).data(), prefix.data(),
+                  prefix.size());
     });
   }
 
@@ -223,8 +225,10 @@ class unsafe_stream : public swiss::non_copyable, public swiss::non_movable {
 
  private:
   [[no_unique_address]] allocator_type allocator_;
+
   index_type pop_from_ = 0;
   index_type size_     = 0;
+
   // NOLINTBEGIN(cppcoreguidelines-avoid-const-or-ref-data-members)
   [[no_unique_address]] swiss::conditionally_runtime<
       index_type, Capacity == swiss::kDynamicExtent<index_type>, Capacity> const
@@ -233,8 +237,8 @@ class unsafe_stream : public swiss::non_copyable, public swiss::non_movable {
   // NOLINTEND(cppcoreguidelines-avoid-const-or-ref-data-members)
 
  private:
-  [[nodiscard]] constexpr auto bound_to_index_type(
-      std::size_t size) const noexcept -> index_type {
+  [[nodiscard]] constexpr auto bound(std::size_t size) const noexcept
+      -> index_type {
     return static_cast<index_type>(
         std::min<std::size_t>(std::numeric_limits<index_type>::max(), size));
   }

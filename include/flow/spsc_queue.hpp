@@ -5,70 +5,115 @@
 #include <new>
 #include <stdexcept>
 #include <stop_token>
-#include <thread>
 
 #include <swiss/aligned.hpp>
 #include <swiss/conditionally_runtime.hpp>
 #include <swiss/dynamic_extent.hpp>
+#include <swiss/manual_lifetime.hpp>
 #include <swiss/mixins.hpp>
 #include <swiss/predicates.hpp>
 #include <swiss/scope_exit.hpp>
+#include <swiss/scope_fail.hpp>
+
+#include "wait_policy.hpp"
+#include "yield_wait_policy.hpp"
 
 namespace flow {
 
 /**
  * @brief Fixed-size threadsafe queue for 1 producer and 1 consumer
  * @note Implemented as a ring buffer with cached pop and push indices
+ * @note Capacity must be a power of 2 for efficient division
  */
 template <typename Value, std::unsigned_integral Index = std::size_t,
           Index Capacity     = swiss::kDynamicExtent<Index>,
-          Index Alignment    = alignof(Value),
-          typename Allocator = std::allocator<Value>>
+          Index Alignment    = alignof(swiss::manual_lifetime<Value>),
+          typename Allocator = std::allocator<Value>,
+          concepts::wait_policy WaitPolicy = yield_wait_policy>
 // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
+ private:
+  template <typename T>
+  static constexpr bool is_callback = std::invocable<T, Value *>;
+
+  template <typename T>
+  static constexpr bool is_nothrow_callback =
+      std::is_nothrow_invocable_v<T, Value *>;
+
+ private:
+  using entry_type         = swiss::manual_lifetime<Value>;
+  using aligned_entry_type = swiss::aligned<entry_type, Alignment>;
+
  public:
   using value_type     = Value;
   using index_type     = Index;
   using allocator_type = std::allocator_traits<
-      Allocator>::template rebind_alloc<swiss::aligned<Value, Alignment>>;
+      Allocator>::template rebind_alloc<aligned_entry_type>;
+  using wait_policy_type = WaitPolicy;
 
  private:
-  template <typename T>
-  static constexpr bool is_callback = std::invocable<T, value_type *>;
+  [[nodiscard]] static constexpr auto valid(index_type capacity) noexcept
+      -> bool {
+    return swiss::is_power_of_two(capacity);
+  }
 
-  template <typename T>
-  static constexpr bool is_nothrow_callback =
-      std::is_nothrow_invocable_v<T, value_type *>;
+  constexpr void initialize() {
+    index_type constructed = 0;
+
+    swiss::scope_fail const scope_fail([&]() noexcept {
+      for (index_type index = 0; index < constructed; ++index) {
+        std::allocator_traits<allocator_type>::destroy(
+            allocator_,
+            aligned_at(writer_.ring_buffer, *writer_.capacity, constructed));
+      }
+      std::allocator_traits<allocator_type>::deallocate(
+          allocator_, writer_.ring_buffer, *writer_.capacity);
+    });
+
+    for (; constructed < *writer_.capacity; ++constructed) {
+      std::allocator_traits<allocator_type>::construct(
+          allocator_,
+          aligned_at(writer_.ring_buffer, *writer_.capacity, constructed));
+    }
+  }
 
  public:
-  explicit constexpr spsc_queue(allocator_type allocator = allocator_type())
+  explicit constexpr spsc_queue(
+      allocator_type allocator     = allocator_type(),
+      wait_policy_type wait_policy = wait_policy_type())
     requires(Capacity != swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
+        wait_policy_(std::move(wait_policy)),
         writer_{.ring_buffer = std::allocator_traits<allocator_type>::allocate(
                     allocator_, Capacity)},
         reader_{.ring_buffer = writer_.ring_buffer} {
-    static_assert(swiss::is_power_of_two(Capacity),
-                  "spsc_queue::spsc_queue(): invalid capacity != 2^n");
+    static_assert(valid(Capacity),
+                  "spsc_queue::spsc_queue(): invalid capacity");
+    initialize();
   }
 
-  explicit constexpr spsc_queue(index_type capacity,
-                                allocator_type allocator = allocator_type())
+  explicit constexpr spsc_queue(
+      index_type capacity, allocator_type allocator = allocator_type(),
+      wait_policy_type wait_policy = wait_policy_type())
     requires(Capacity == swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
+        wait_policy_(std::move(wait_policy)),
         writer_{
             .capacity{capacity},
             .ring_buffer =
                 [&] {
-                  if (!swiss::is_power_of_two(capacity)) {
+                  if (!valid(capacity)) {
                     throw std::invalid_argument(
-                        "spsc_queue::spsc_queue(): invalid capacity != 2^n");
+                        "spsc_queue::spsc_queue(): invalid capacity");
                   }
                   return std::allocator_traits<allocator_type>::allocate(
                       allocator_, capacity);
                 }(),
         },
         reader_{.capacity    = writer_.capacity,
-                .ring_buffer = writer_.ring_buffer} {}
+                .ring_buffer = writer_.ring_buffer} {
+    initialize();
+  }
 
   /**
    * @warning Destructor requires exlusive access to the queue
@@ -79,8 +124,14 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     })) {
     }
 
+    for (index_type index = 0; index < *writer_.capacity; ++index) {
+      std::allocator_traits<allocator_type>::destroy(
+          allocator_,
+          aligned_at(writer_.ring_buffer, *writer_.capacity, index));
+    }
+
     std::allocator_traits<allocator_type>::deallocate(
-        allocator_, reader_.ring_buffer, *reader_.capacity);
+        allocator_, writer_.ring_buffer, *writer_.capacity);
   }
 
  public:
@@ -187,21 +238,23 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
     index_type const push_to  = writer_.index.load(std::memory_order::relaxed);
 
-    index_type const _size = size(push_to, pop_from);
-    return _size > *writer_.capacity ? 0 : _size;
+    return size(push_to, pop_from);
   }
 
   [[nodiscard]] constexpr auto empty() const noexcept -> bool {
-    index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
-    index_type const push_to  = writer_.index.load(std::memory_order::relaxed);
-
-    return empty(push_to, pop_from);
+    return size() == 0;
   }
 
   [[nodiscard]] constexpr auto get_allocator() const
       noexcept(std::is_nothrow_copy_constructible_v<allocator_type>)
           -> allocator_type {
     return allocator_;
+  }
+
+  [[nodiscard]] constexpr auto get_wait_policy() const
+      noexcept(std::is_nothrow_copy_constructible_v<wait_policy_type>)
+          -> wait_policy_type {
+    return wait_policy_;
   }
 
  private:
@@ -212,11 +265,13 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     [[no_unique_address]] swiss::conditionally_runtime<
         index_type, Capacity == swiss::kDynamicExtent<index_type>,
         Capacity> const capacity;
-    swiss::aligned<value_type, Alignment> * const ring_buffer;
+    aligned_entry_type * const ring_buffer;
     // NOLINTEND(cppcoreguidelines-avoid-const-or-ref-data-members)
   };
 
   [[no_unique_address]] allocator_type allocator_;
+  [[no_unique_address]] wait_policy_type wait_policy_;
+
   CacheLine writer_;
   CacheLine reader_;
 
@@ -239,21 +294,19 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     return push_to == pop_from;
   }
 
-  [[nodiscard]] constexpr auto next(index_type index) const noexcept
-      -> index_type {
-    return index + 1;
+  [[nodiscard]] constexpr auto aligned_at(aligned_entry_type * ring_buffer,
+                                          index_type capacity,
+                                          index_type index) const noexcept
+      -> aligned_entry_type * {
+    index_type const slot = index & static_cast<index_type>(capacity - 1);
+    return ring_buffer + slot;
   }
 
-  [[nodiscard]] constexpr auto slot(index_type capacity,
-                                    index_type index) const noexcept
-      -> index_type {
-    return index & static_cast<index_type>(capacity - 1);
-  }
-
-  [[nodiscard]] constexpr auto at(
-      swiss::aligned<value_type, Alignment> * ring_buffer, index_type capacity,
-      index_type index) const noexcept -> value_type * {
-    return &**(ring_buffer + slot(capacity, index));
+  [[nodiscard]] constexpr auto at(aligned_entry_type * ring_buffer,
+                                  index_type capacity,
+                                  index_type index) const noexcept
+      -> value_type * {
+    return &***aligned_at(ring_buffer, capacity, index);
   }
 
  private:
@@ -272,7 +325,8 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
 
     std::invoke(std::forward<Callback>(callback),
                 at(writer_.ring_buffer, *writer_.capacity, push_to));
-    writer_.index.store(next(push_to), std::memory_order::release);
+    writer_.index.store(push_to + 1, std::memory_order::release);
+    wait_policy_.notify_not_empty();
     return true;
   }
 
@@ -290,7 +344,8 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
 
     std::invoke(std::forward<Callback>(callback),
                 at(reader_.ring_buffer, *reader_.capacity, pop_from));
-    reader_.index.store(next(pop_from), std::memory_order::release);
+    reader_.index.store(pop_from + 1, std::memory_order::release);
+    wait_policy_.notify_not_full();
     return true;
   }
 
@@ -306,11 +361,12 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
       if (!full(*writer_.capacity, push_to, writer_.cache)) {
         std::invoke(std::forward<Callback>(callback),
                     at(writer_.ring_buffer, *writer_.capacity, push_to));
-        writer_.index.store(next(push_to), std::memory_order::release);
+        writer_.index.store(push_to + 1, std::memory_order::release);
+        wait_policy_.notify_not_empty();
         return true;
       }
 
-      std::this_thread::yield();
+      wait_policy_.wait_not_full();
 
       writer_.cache = reader_.index.load(std::memory_order::acquire);
     }
@@ -328,11 +384,12 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
       if (!empty(reader_.cache, pop_from)) {
         std::invoke(std::forward<Callback>(callback),
                     at(reader_.ring_buffer, *reader_.capacity, pop_from));
-        reader_.index.store(next(pop_from), std::memory_order::release);
+        reader_.index.store(pop_from + 1, std::memory_order::release);
+        wait_policy_.notify_not_full();
         return true;
       }
 
-      std::this_thread::yield();
+      wait_policy_.wait_not_empty();
 
       reader_.cache = writer_.index.load(std::memory_order::acquire);
     }

@@ -2,7 +2,6 @@
 
 #include <memory>
 #include <stdexcept>
-#include <type_traits>
 
 #include <swiss/conditionally_runtime.hpp>
 #include <swiss/dynamic_extent.hpp>
@@ -14,6 +13,7 @@ namespace flow {
 /**
  * @brief Fixed-size queue for single-threaded usage
  * @note Implemented as a ring buffer
+ * @note Minimal capacity is 1
  * @warning Not thread-safe
  */
 template <typename Value, std::unsigned_integral Index = std::size_t,
@@ -21,43 +21,49 @@ template <typename Value, std::unsigned_integral Index = std::size_t,
           typename Allocator = std::allocator<Value>>
 // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
+ private:
+  template <typename T>
+  static constexpr bool is_callback = std::invocable<T, Value *>;
+
+  template <typename T>
+  static constexpr bool is_nothrow_callback =
+      std::is_nothrow_invocable_v<T, Value *>;
+
  public:
   using value_type     = Value;
   using index_type     = Index;
   using allocator_type = Allocator;
 
  private:
-  template <typename T>
-  static constexpr bool is_callback = std::invocable<T, value_type *>;
-
-  template <typename T>
-  static constexpr bool is_nothrow_callback =
-      std::is_nothrow_invocable_v<T, value_type *>;
+  [[nodiscard]] static constexpr auto valid(index_type capacity) noexcept
+      -> bool {
+    return capacity > 0;
+  }
 
  public:
   explicit constexpr unsafe_queue(allocator_type allocator = allocator_type())
     requires(Capacity != swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
-        ring_buffer_(std::allocator_traits<allocator_type>::allocate(allocator_,
-                                                                     Capacity)),
-        capacity_() {
-    static_assert(Capacity > 0,
-                  "unsafe_queue::unsafe_queue(): invalid capacity < 1");
+        capacity_(),
+        ring_buffer_(std::allocator_traits<allocator_type>::allocate(
+            allocator_, Capacity)) {
+    static_assert(valid(Capacity),
+                  "unsafe_queue::unsafe_queue(): invalid capacity");
   }
 
   explicit constexpr unsafe_queue(index_type capacity,
                                   allocator_type allocator = allocator_type())
     requires(Capacity == swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
+        capacity_(capacity),
         ring_buffer_([&] {
-          if (capacity < 1) {
+          if (!valid(capacity)) {
             throw std::invalid_argument(
-                "unsafe_queue::unsafe_queue(): invalid capacity < 1");
+                "unsafe_queue::unsafe_queue(): invalid capacity");
           }
           return std::allocator_traits<allocator_type>::allocate(allocator_,
                                                                  capacity);
-        }()),
-        capacity_(capacity) {}
+        }()) {}
 
   constexpr ~unsafe_queue() noexcept {
     while (try_pop([&](value_type * front) {
@@ -145,13 +151,15 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
 
  private:
   [[no_unique_address]] allocator_type allocator_;
+
   index_type pop_from_ = 0;
   index_type size_     = 0;
+
   // NOLINTBEGIN(cppcoreguidelines-avoid-const-or-ref-data-members)
-  value_type * const ring_buffer_;
   [[no_unique_address]] swiss::conditionally_runtime<
       index_type, Capacity == swiss::kDynamicExtent<index_type>, Capacity> const
       capacity_;
+  value_type * const ring_buffer_;
   // NOLINTEND(cppcoreguidelines-avoid-const-or-ref-data-members)
 
  private:

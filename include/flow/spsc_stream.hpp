@@ -1,6 +1,5 @@
 #pragma once
 
-#include <algorithm>
 #include <atomic>
 #include <limits>
 #include <memory>
@@ -8,7 +7,6 @@
 #include <span>
 #include <stdexcept>
 #include <stop_token>
-#include <thread>
 
 #include <swiss/concepts.hpp>
 #include <swiss/conditionally_runtime.hpp>
@@ -17,6 +15,9 @@
 #include <swiss/mixins.hpp>
 #include <swiss/predicates.hpp>
 
+#include "wait_policy.hpp"
+#include "yield_wait_policy.hpp"
+
 namespace flow {
 
 /**
@@ -24,17 +25,14 @@ namespace flow {
  * @note Implemented as a ring buffer
  * @note Callback may return a value of an integral type to restrict the number
  * of bytes that will be marked as read in the stream
- * @note Capacity must be a power of 2
+ * @note Capacity must be a power of 2 for efficient division
  */
-template <std::unsigned_integral Index = std::size_t,
-          Index Capacity               = swiss::kDynamicExtent<Index>,
-          typename Allocator           = std::allocator<std::byte>>
+template <std::unsigned_integral Index     = std::size_t,
+          Index Capacity                   = swiss::kDynamicExtent<Index>,
+          typename Allocator               = std::allocator<std::byte>,
+          concepts::wait_policy WaitPolicy = yield_wait_policy>
 // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
- public:
-  using index_type     = Index;
-  using allocator_type = Allocator;
-
  private:
   template <typename T>
   static constexpr bool is_callback =
@@ -50,31 +48,46 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
                                   std::span<std::byte>>;
 
  public:
-  explicit constexpr spsc_stream(allocator_type allocator = allocator_type())
+  using index_type       = Index;
+  using allocator_type   = Allocator;
+  using wait_policy_type = WaitPolicy;
+
+ private:
+  [[nodiscard]] static constexpr auto valid(index_type capacity) noexcept
+      -> bool {
+    return swiss::is_power_of_two(capacity);
+  }
+
+ public:
+  explicit constexpr spsc_stream(
+      allocator_type allocator     = allocator_type(),
+      wait_policy_type wait_policy = wait_policy_type())
     requires(Capacity != swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
+        wait_policy_(std::move(wait_policy)),
         writer_{.ring_buffer = std::allocator_traits<allocator_type>::allocate(
                     allocator_, Capacity)},
         reader_{.ring_buffer = writer_.ring_buffer} {
-    static_assert(swiss::is_power_of_two(Capacity),
-                  "spsc_stream::spsc_stream(): invalid capacity != 2^n");
+    static_assert(valid(Capacity),
+                  "spsc_stream::spsc_stream(): invalid capacity");
   }
 
-  explicit constexpr spsc_stream(index_type capacity,
-                                 allocator_type allocator = allocator_type())
+  explicit constexpr spsc_stream(
+      index_type capacity, allocator_type allocator = allocator_type(),
+      wait_policy_type wait_policy = wait_policy_type())
     requires(Capacity == swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
-        writer_{
-            .capacity{capacity},
-            .ring_buffer =
-                [&] {
-                  if (!swiss::is_power_of_two(capacity)) {
-                    throw std::invalid_argument(
-                        "spsc_stream::spsc_stream(): invalid capacity != 2^n");
-                  }
-                  return std::allocator_traits<allocator_type>::allocate(
-                      allocator_, capacity);
-                }()},
+        wait_policy_(std::move(wait_policy)),
+        writer_{.capacity{capacity},
+                .ring_buffer =
+                    [&] {
+                      if (!valid(capacity)) {
+                        throw std::invalid_argument(
+                            "spsc_stream::spsc_stream(): invalid capacity");
+                      }
+                      return std::allocator_traits<allocator_type>::allocate(
+                          allocator_, capacity);
+                    }()},
         reader_{.capacity    = writer_.capacity,
                 .ring_buffer = writer_.ring_buffer} {}
 
@@ -94,7 +107,7 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
     index_type const push_to = writer_.index.load(std::memory_order::relaxed);
 
     index_type const total = [&]() {
-      index_type const max_size = bound_to_index_type(_max_size);
+      index_type const max_size = bound(_max_size);
 
       index_type _free = free(*writer_.capacity, push_to, writer_.cache);
       if (max_size > _free) {
@@ -121,11 +134,10 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
     swiss::assign_invoke_result_if_not_void(_callback_total,
                                             std::forward<Callback>(callback),
                                             postfix_span, prefix_span);
-    index_type const callback_total =
-        std::min(bound_to_index_type(_callback_total), total);
+    index_type const callback_total = std::min(bound(_callback_total), total);
 
-    writer_.index.store(next(push_to, callback_total),
-                        std::memory_order::release);
+    writer_.index.store(push_to + callback_total, std::memory_order::release);
+    wait_policy_.notify_not_full();
     return callback_total;
   }
 
@@ -138,7 +150,7 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
 
     index_type const total = [&]() {
-      index_type const max_size = bound_to_index_type(_max_size);
+      index_type const max_size = bound(_max_size);
       index_type _size          = size(reader_.cache, pop_from);
       if (max_size > _size) {
         reader_.cache = writer_.index.load(std::memory_order::acquire);
@@ -164,11 +176,10 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
     swiss::assign_invoke_result_if_not_void(_callback_total,
                                             std::forward<Callback>(callback),
                                             postfix_span, prefix_span);
-    index_type const callback_total =
-        std::min(bound_to_index_type(_callback_total), total);
+    index_type const callback_total = std::min(bound(_callback_total), total);
 
-    reader_.index.store(next(pop_from, callback_total),
-                        std::memory_order::release);
+    reader_.index.store(pop_from + callback_total, std::memory_order::release);
+    wait_policy_.notify_not_empty();
     return callback_total;
   }
 
@@ -178,23 +189,23 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
   constexpr auto push(
       std::stop_token const & stop_token, std::size_t _exact_size,
       Callback && callback) noexcept(is_nothrow_callback<Callback>) -> bool {
-    if (!is_valid_input_size(*writer_.capacity, _exact_size)) {
+    if (!fits(*writer_.capacity, _exact_size)) {
       return false;
     }
 
-    index_type const exact_size = bound_to_index_type(_exact_size);
+    index_type const exact_size = bound(_exact_size);
     index_type const push_to = writer_.index.load(std::memory_order::relaxed);
 
     while (!stop_token.stop_requested()) {
       if (exact_size <= free(*writer_.capacity, push_to, writer_.cache)) {
         std::ignore = try_push(std::forward<Callback>(callback), exact_size);
 
-        writer_.index.store(next(push_to, exact_size),
-                            std::memory_order::release);
+        writer_.index.store(push_to + exact_size, std::memory_order::release);
+        wait_policy_.notify_not_full();
         return true;
       }
 
-      std::this_thread::yield();
+      wait_policy_.wait_not_empty();
 
       writer_.cache = reader_.index.load(std::memory_order::acquire);
     }
@@ -207,23 +218,23 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
   constexpr auto pop(std::stop_token const & stop_token,
                      std::size_t _exact_size, Callback && callback) noexcept
       -> bool {
-    if (!is_valid_input_size(*reader_.capacity, _exact_size)) {
+    if (!fits(*reader_.capacity, _exact_size)) {
       return false;
     }
 
-    index_type const exact_size = bound_to_index_type(_exact_size);
+    index_type const exact_size = bound(_exact_size);
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
 
     while (!stop_token.stop_requested()) {
       if (exact_size <= size(reader_.cache, pop_from)) {
         std::ignore = try_pop(std::forward<Callback>(callback), exact_size);
 
-        reader_.index.store(next(pop_from, exact_size),
-                            std::memory_order::release);
+        reader_.index.store(pop_from + exact_size, std::memory_order::release);
+        wait_policy_.notify_not_empty();
         return true;
       }
 
-      std::this_thread::yield();
+      wait_policy_.wait_not_full();
 
       reader_.cache = writer_.index.load(std::memory_order::acquire);
     }
@@ -251,9 +262,9 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
     return try_push(
         [&](std::span<std::byte> postfix,
             std::span<std::byte> prefix) noexcept {
-          std::copy_n(bytes.data(), postfix.size(), postfix.data());
-          std::copy_n(bytes.subspan(postfix.size()).data(), prefix.size(),
-                      prefix.data());
+          std::memcpy(postfix.data(), bytes.data(), postfix.size());
+          std::memcpy(prefix.data(), bytes.subspan(postfix.size()).data(),
+                      prefix.size());
         },
         bytes.size());
   }
@@ -263,9 +274,9 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
     return try_pop(
         [&](std::span<std::byte> postfix,
             std::span<std::byte> prefix) noexcept {
-          std::copy_n(postfix.data(), postfix.size(), bytes.data());
-          std::copy_n(prefix.data(), prefix.size(),
-                      bytes.subspan(postfix.size()).data());
+          std::memcpy(bytes.data(), postfix.data(), postfix.size());
+          std::memcpy(bytes.subspan(postfix.size()).data(), prefix.data(),
+                      prefix.size());
         },
         bytes.size());
   }
@@ -276,9 +287,10 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
     return push(stop_token, bytes.size(),
                 [&](std::span<std::byte> postfix,
                     std::span<std::byte> prefix) noexcept {
-                  std::copy_n(bytes.data(), postfix.size(), postfix.data());
-                  std::copy_n(bytes.subspan(postfix.size()).data(),
-                              prefix.size(), prefix.data());
+                  std::memcpy(postfix.data(), bytes.data(), postfix.size());
+                  std::memcpy(prefix.data(),
+                              bytes.subspan(postfix.size()).data(),
+                              prefix.size());
                 });
   }
 
@@ -287,9 +299,9 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
     return pop(stop_token, bytes.size(),
                [&](std::span<std::byte> postfix,
                    std::span<std::byte> prefix) noexcept {
-                 std::copy_n(postfix.data(), postfix.size(), bytes.data());
-                 std::copy_n(prefix.data(), prefix.size(),
-                             bytes.subspan(postfix.size()).data());
+                 std::memcpy(bytes.data(), postfix.data(), postfix.size());
+                 std::memcpy(bytes.subspan(postfix.size()).data(),
+                             prefix.data(), prefix.size());
                });
   }
 
@@ -311,8 +323,7 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
     index_type const push_to  = writer_.index.load(std::memory_order::relaxed);
 
-    index_type const _size = size(push_to, pop_from);
-    return _size > *writer_.capacity ? 0 : _size;
+    return size(push_to, pop_from);
   }
 
   [[nodiscard]] constexpr auto empty() const noexcept -> bool {
@@ -342,19 +353,21 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
   };
 
   [[no_unique_address]] allocator_type allocator_;
+  [[no_unique_address]] wait_policy_type wait_policy_;
+
   CacheLine writer_;
   CacheLine reader_;
 
  private:
-  [[nodiscard]] constexpr auto bound_to_index_type(
-      std::size_t size) const noexcept -> index_type {
+  [[nodiscard]] constexpr auto bound(std::size_t size) const noexcept
+      -> index_type {
     return static_cast<index_type>(
         std::min<std::size_t>(std::numeric_limits<index_type>::max(), size));
   }
 
-  [[nodiscard]] constexpr auto is_valid_input_size(
-      index_type capacity, std::size_t bytes) const noexcept -> bool {
-    return bytes != 0 && bytes <= capacity;
+  [[nodiscard]] constexpr auto fits(index_type capacity,
+                                    std::size_t bytes) const noexcept -> bool {
+    return (bytes != 0) && (bytes <= capacity);
   }
 
   [[nodiscard]] constexpr auto size(index_type push_to,
@@ -367,12 +380,6 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
                                     index_type pop_from) const noexcept
       -> index_type {
     return capacity - size(push_to, pop_from);
-  }
-
-  [[nodiscard]] constexpr auto next(index_type index,
-                                    index_type bytes) const noexcept
-      -> index_type {
-    return index + bytes;
   }
 
   [[nodiscard]] constexpr auto slot(index_type capacity,

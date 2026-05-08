@@ -1,10 +1,8 @@
 #pragma once
 
-#include <algorithm>
 #include <memory>
 #include <span>
 #include <stdexcept>
-#include <type_traits>
 
 #include <swiss/conditionally_runtime.hpp>
 #include <swiss/dynamic_extent.hpp>
@@ -15,6 +13,7 @@ namespace flow {
 /**
  * @brief Fixed-size message buffer for single-threaded usage
  * @note Implemented as a ring buffer
+ * @note Minimal capacity is sizeof(Index)
  * @warning Not thread-safe
  */
 template <std::unsigned_integral Index = std::size_t,
@@ -22,10 +21,6 @@ template <std::unsigned_integral Index = std::size_t,
           typename Allocator           = std::allocator<std::byte>>
 // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class unsafe_msgbuf : public swiss::non_copyable, public swiss::non_movable {
- public:
-  using index_type     = Index;
-  using allocator_type = Allocator;
-
  private:
   template <typename T>
   static constexpr bool is_callback = std::invocable<T, std::span<std::byte>>;
@@ -35,14 +30,24 @@ class unsafe_msgbuf : public swiss::non_copyable, public swiss::non_movable {
       std::is_nothrow_invocable_v<T, std::span<std::byte>>;
 
  public:
+  using index_type     = Index;
+  using allocator_type = Allocator;
+
+ private:
+  [[nodiscard]] static constexpr auto valid(index_type capacity) noexcept
+      -> bool {
+    return capacity >= header_size();
+  }
+
+ public:
   explicit constexpr unsafe_msgbuf(allocator_type allocator = allocator_type())
     requires(Capacity != swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
+        capacity_(),
         ring_buffer_(std::allocator_traits<allocator_type>::allocate(
             allocator_, Capacity)) {
-    static_assert(
-        Capacity >= header_size(),
-        "unsafe_msgbuf::unsafe_msgbuf(): invalid capacity < header_size()");
+    static_assert(valid(Capacity),
+                  "unsafe_msgbuf::unsafe_msgbuf(): invalid capacity");
   }
 
   explicit constexpr unsafe_msgbuf(index_type capacity,
@@ -51,10 +56,9 @@ class unsafe_msgbuf : public swiss::non_copyable, public swiss::non_movable {
       : allocator_(std::move(allocator)),
         capacity_(capacity),
         ring_buffer_([&] {
-          if (capacity < header_size()) {
+          if (!valid(capacity)) {
             throw std::invalid_argument(
-                "unsafe_msgbuf::unsafe_msgbuf(): invalid capacity < "
-                "header_size()");
+                "unsafe_msgbuf::unsafe_msgbuf(): invalid capacity");
           }
           return std::allocator_traits<allocator_type>::allocate(allocator_,
                                                                  capacity);
@@ -70,12 +74,13 @@ class unsafe_msgbuf : public swiss::non_copyable, public swiss::non_movable {
     requires(is_callback<Callback>)
   constexpr auto try_push(std::size_t _msg_size, Callback && callback) noexcept(
       is_nothrow_callback<Callback>) -> bool {
-    if (!is_valid_input_size(_msg_size)) {
+    if (!fits(_msg_size)) {
       return false;
     }
 
-    index_type const msg_size            = bound_to_index_type(_msg_size);
-    auto const [fits, padding, _push_to] = [&]() {
+    index_type const msg_size = bound(_msg_size);
+    auto const [fits, padding,
+                _push_to] = [&]() -> std::tuple<bool, index_type, index_type> {
       index_type const _pushto = push_to();
       index_type const _free   = free();
       index_type const postfix = *capacity_ - _pushto;
@@ -87,7 +92,7 @@ class unsafe_msgbuf : public swiss::non_copyable, public swiss::non_movable {
           (_free >= header_size() + msg_size && postfix == header_size() &&
            prefix >= msg_size);
       if (can_insert_whole || can_split_header) {
-        return std::tuple{true, static_cast<index_type>(0), _pushto};
+        return {true, 0, _pushto};
       }
 
       bool const can_insert_with_padding =
@@ -96,11 +101,10 @@ class unsafe_msgbuf : public swiss::non_copyable, public swiss::non_movable {
         if (postfix >= header_size()) {
           write_header(_pushto, padding_header());
         }
-        return std::tuple{true, postfix, static_cast<index_type>(0)};
+        return {true, postfix, 0};
       }
 
-      return std::tuple{false, static_cast<index_type>(0),
-                        static_cast<index_type>(0)};
+      return {false, 0, 0};
     }();
 
     if (!fits) {
@@ -123,18 +127,17 @@ class unsafe_msgbuf : public swiss::non_copyable, public swiss::non_movable {
       return 0;
     }
 
-    auto const [padding, pop_from, msg_size] = [&]() {
+    auto const [padding, pop_from, msg_size] =
+        [&]() -> std::tuple<index_type, index_type, index_type> {
       index_type const postfix = *capacity_ - pop_from_;
       index_type const header =
           postfix < header_size() ? padding_header() : read_header(pop_from_);
 
       if (header == padding_header()) {
-        return std::tuple{postfix, static_cast<index_type>(header_size()),
-                          read_header(0)};
+        return {postfix, header_size(), read_header(0)};
       }
 
-      return std::tuple{static_cast<index_type>(0),
-                        next(pop_from_, header_size()), header};
+      return {0, next(pop_from_, header_size()), header};
     }();
 
     std::span<std::byte> const msg(ring_buffer_ + pop_from, msg_size);
@@ -167,7 +170,7 @@ class unsafe_msgbuf : public swiss::non_copyable, public swiss::non_movable {
  public:
   constexpr auto try_push(std::span<std::byte const> msg) noexcept -> bool {
     return try_push(msg.size(), [msg](std::span<std::byte> chunk) noexcept {
-      std::copy_n(msg.begin(), msg.size(), chunk.begin());
+      std::memcpy(chunk.data(), msg.data(), msg.size());
     });
   }
 
@@ -178,15 +181,14 @@ class unsafe_msgbuf : public swiss::non_copyable, public swiss::non_movable {
     }
 
     return try_pop([msg](std::span<std::byte> chunk) noexcept {
-      std::copy_n(chunk.begin(), std::min(msg.size(), chunk.size()),
-                  msg.begin());
+      std::memcpy(msg.data(), chunk.data(), std::min(msg.size(), chunk.size()));
     });
   }
 
  public:
   constexpr void push(std::span<std::byte const> msg) {
     push(msg.size(), [msg](std::span<std::byte> chunk) noexcept {
-      std::copy_n(msg.begin(), msg.size(), chunk.begin());
+      std::memcpy(chunk.data(), msg.data(), msg.size());
     });
   }
 
@@ -196,8 +198,7 @@ class unsafe_msgbuf : public swiss::non_copyable, public swiss::non_movable {
     }
 
     return pop([msg](std::span<std::byte> chunk) noexcept {
-      std::copy_n(chunk.begin(), std::min(msg.size(), chunk.size()),
-                  msg.begin());
+      std::memcpy(msg.data(), chunk.data(), std::min(msg.size(), chunk.size()));
     });
   }
 
@@ -226,8 +227,10 @@ class unsafe_msgbuf : public swiss::non_copyable, public swiss::non_movable {
 
  private:
   [[no_unique_address]] allocator_type allocator_;
+
   index_type pop_from_ = 0;
   index_type size_     = 0;
+
   // NOLINTBEGIN(cppcoreguidelines-avoid-const-or-ref-data-members)
   [[no_unique_address]] swiss::conditionally_runtime<
       index_type, Capacity == swiss::kDynamicExtent<index_type>, Capacity> const
@@ -236,15 +239,14 @@ class unsafe_msgbuf : public swiss::non_copyable, public swiss::non_movable {
   // NOLINTEND(cppcoreguidelines-avoid-const-or-ref-data-members)
 
  private:
-  [[nodiscard]] constexpr auto bound_to_index_type(
-      std::size_t size) const noexcept -> index_type {
+  [[nodiscard]] constexpr auto bound(std::size_t size) const noexcept
+      -> index_type {
     return static_cast<index_type>(
         std::min<std::size_t>(std::numeric_limits<index_type>::max(), size));
   }
 
-  [[nodiscard]] constexpr auto is_valid_input_size(
-      std::size_t bytes) const noexcept -> bool {
-    return bytes != 0 && bytes <= *capacity_ - header_size();
+  [[nodiscard]] constexpr auto fits(std::size_t bytes) const noexcept -> bool {
+    return (bytes != 0) && bytes <= (*capacity_ - header_size());
   }
 
   [[nodiscard]] constexpr auto padding_header() const noexcept -> index_type {
@@ -266,17 +268,18 @@ class unsafe_msgbuf : public swiss::non_copyable, public swiss::non_movable {
     return next(pop_from_, size_);
   }
 
+  // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
   constexpr void write_header(index_type index,
                               index_type msg_size) const noexcept {
-    std::copy_n(
-        std::bit_cast<std::array<std::byte, header_size()>>(msg_size).data(),
-        header_size(), ring_buffer_ + index);
+    auto const header =
+        std::bit_cast<std::array<std::byte, header_size()>>(msg_size);
+    std::memcpy(ring_buffer_ + index, header.data(), header_size());
   }
 
   [[nodiscard]] constexpr auto read_header(index_type index) const noexcept
       -> index_type {
     std::array<std::byte, header_size()> msg_size{};
-    std::copy_n(ring_buffer_ + index, header_size(), msg_size.data());
+    std::memcpy(msg_size.data(), ring_buffer_ + index, header_size());
     return std::bit_cast<index_type>(msg_size);
   }
 };

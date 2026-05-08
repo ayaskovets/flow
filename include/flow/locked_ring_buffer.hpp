@@ -9,9 +9,11 @@
 #include <swiss/aligned.hpp>
 #include <swiss/conditionally_runtime.hpp>
 #include <swiss/dynamic_extent.hpp>
+#include <swiss/manual_lifetime.hpp>
 #include <swiss/mixins.hpp>
 #include <swiss/predicates.hpp>
 #include <swiss/scope_exit.hpp>
+#include <swiss/scope_fail.hpp>
 
 namespace flow {
 
@@ -19,26 +21,55 @@ namespace flow {
  * @brief Locked ring buffer for many producers and many consumers
  * @note Implemented as a ring buffer
  * @note Serves as a naive baseline implementation of an MPMC queue
+ * @note Capacity must be a power of 2 for efficient division
  * @warning Uses standard locking privitives (i.e. std::mutex and
  * std::condition_variable) and thus not safe to use in any coroutine
  * environment
  */
 template <typename Value, std::unsigned_integral Index = std::size_t,
           Index Capacity     = swiss::kDynamicExtent<Index>,
-          Index Alignment    = alignof(Value),
+          Index Alignment    = alignof(swiss::manual_lifetime<Value>),
           typename Allocator = std::allocator<Value>>
 // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class locked_ring_buffer : public swiss::non_copyable,
                            public swiss::non_movable {
+ private:
+  template <typename T>
+  static constexpr bool is_callback = std::invocable<T, Value *>;
+
+ private:
+  using entry_type         = swiss::manual_lifetime<Value>;
+  using aligned_entry_type = swiss::aligned<entry_type, Alignment>;
+
  public:
   using value_type     = Value;
   using index_type     = Index;
   using allocator_type = std::allocator_traits<
-      Allocator>::template rebind_alloc<swiss::aligned<Value, Alignment>>;
+      Allocator>::template rebind_alloc<aligned_entry_type>;
 
  private:
-  template <typename T>
-  static constexpr bool is_callback = std::invocable<T, value_type *>;
+  [[nodiscard]] static constexpr auto valid(index_type capacity) noexcept
+      -> bool {
+    return swiss::is_power_of_two(capacity);
+  }
+
+  constexpr void initialize() {
+    index_type constructed = 0;
+
+    swiss::scope_fail const scope_fail([&]() noexcept {
+      for (index_type index = 0; index < constructed; ++index) {
+        std::allocator_traits<allocator_type>::destroy(allocator_,
+                                                       aligned_at(constructed));
+      }
+      std::allocator_traits<allocator_type>::deallocate(
+          allocator_, ring_buffer_, *capacity_);
+    });
+
+    for (; constructed < *capacity_; ++constructed) {
+      std::allocator_traits<allocator_type>::construct(allocator_,
+                                                       aligned_at(constructed));
+    }
+  }
 
  public:
   explicit constexpr locked_ring_buffer(
@@ -47,9 +78,9 @@ class locked_ring_buffer : public swiss::non_copyable,
       : allocator_(std::move(allocator)),
         ring_buffer_(std::allocator_traits<allocator_type>::allocate(
             allocator_, Capacity)) {
-    static_assert(
-        swiss::is_power_of_two(Capacity),
-        "locked_ring_buffer::locked_ring_buffer(): invalid capacity != 2^n");
+    static_assert(valid(Capacity),
+                  "locked_ring_buffer::locked_ring_buffer(): invalid capacity");
+    initialize();
   }
 
   explicit constexpr locked_ring_buffer(
@@ -58,23 +89,28 @@ class locked_ring_buffer : public swiss::non_copyable,
       : allocator_(std::move(allocator)),
         capacity_(capacity),
         ring_buffer_([&] {
-          if (!swiss::is_power_of_two(capacity)) {
+          if (!valid(capacity)) {
             throw std::invalid_argument(
-                "locked_ring_buffer::locked_ring_buffer(): invalid capacity != "
-                "2^n");
+                "locked_ring_buffer::locked_ring_buffer(): invalid capacity");
           }
           return std::allocator_traits<allocator_type>::allocate(allocator_,
                                                                  capacity);
-        }()) {}
+        }()) {
+    initialize();
+  }
 
   /**
    * @warning Destructor requires exlusive access to the queue
    */
   constexpr ~locked_ring_buffer() noexcept {
     while (!empty(push_to_, pop_from_)) {
-      std::allocator_traits<allocator_type>::destroy(
-          allocator_, ring_buffer_ + slot(pop_from_));
-      pop_from_ = next(pop_from_);
+      std::destroy_at(at(pop_from_));
+      pop_from_ += 1;
+    }
+
+    for (index_type index = 0; index < *capacity_; ++index) {
+      std::allocator_traits<allocator_type>::destroy(allocator_,
+                                                     aligned_at(index));
     }
 
     std::allocator_traits<allocator_type>::deallocate(allocator_, ring_buffer_,
@@ -86,8 +122,7 @@ class locked_ring_buffer : public swiss::non_copyable,
     requires(std::constructible_from<value_type, Args...>)
   constexpr auto try_emplace(Args &&... args) -> bool {
     return try_push([&](value_type * front) {
-      std::allocator_traits<allocator_type>::construct(
-          allocator_, front, std::forward<Args>(args)...);
+      std::construct_at(front, std::forward<Args>(args)...);
     });
   }
 
@@ -101,9 +136,8 @@ class locked_ring_buffer : public swiss::non_copyable,
 
   constexpr auto try_pop(auto & value) -> bool {
     return try_pop([&](value_type * front) {
-      swiss::scope_exit const scope_exit([&]() noexcept {
-        std::allocator_traits<allocator_type>::destroy(allocator_, front);
-      });
+      swiss::scope_exit const scope_exit(
+          [&]() noexcept { std::destroy_at(at(pop_from_)); });
       value = std::move(*front);
     });
   }
@@ -114,8 +148,7 @@ class locked_ring_buffer : public swiss::non_copyable,
   constexpr auto emplace(std::stop_token const & stop_token, Args &&... args)
       -> bool {
     return push(stop_token, [&](value_type * front) {
-      std::allocator_traits<allocator_type>::construct(
-          allocator_, front, std::forward<Args>(args)...);
+      std::construct_at(front, std::forward<Args>(args)...);
     });
   }
 
@@ -131,9 +164,8 @@ class locked_ring_buffer : public swiss::non_copyable,
 
   constexpr auto pop(std::stop_token const & stop_token, auto & value) -> bool {
     return pop(stop_token, [&](value_type * front) {
-      swiss::scope_exit const scope_exit([&]() noexcept {
-        std::allocator_traits<allocator_type>::destroy(allocator_, front);
-      });
+      swiss::scope_exit const scope_exit(
+          [&]() noexcept { std::destroy_at(at(pop_from_)); });
       value = std::move(*front);
     });
   }
@@ -180,17 +212,20 @@ class locked_ring_buffer : public swiss::non_copyable,
 
  private:
   [[no_unique_address]] allocator_type allocator_;
-  mutable std::mutex mutex_;
-  std::condition_variable_any push_available_cv_;
-  index_type push_to_ = 0;
-  std::condition_variable_any pop_available_cv_;
-  index_type pop_from_ = 0;
+
   // NOLINTBEGIN(cppcoreguidelines-avoid-const-or-ref-data-members)
   [[no_unique_address]] swiss::conditionally_runtime<
       index_type, Capacity == swiss::kDynamicExtent<index_type>, Capacity> const
       capacity_;
-  swiss::aligned<value_type, Alignment> * const ring_buffer_;
+  aligned_entry_type * const ring_buffer_;
   // NOLINTEND(cppcoreguidelines-avoid-const-or-ref-data-members)
+
+  mutable std::mutex mutex_;
+
+  std::condition_variable_any pop_available_cv_;
+  index_type push_to_ = 0;
+  std::condition_variable_any push_available_cv_;
+  index_type pop_from_ = 0;
 
  private:
   [[nodiscard]] constexpr auto size(index_type push_to,
@@ -209,20 +244,15 @@ class locked_ring_buffer : public swiss::non_copyable,
     return push_to == pop_from;
   }
 
-  [[nodiscard]] constexpr auto next(index_type index) const noexcept
-      -> index_type {
-    return index + 1;
+  [[nodiscard]] constexpr auto aligned_at(index_type index) const noexcept
+      -> aligned_entry_type * {
+    index_type const slot = index & static_cast<index_type>(*capacity_ - 1);
+    return ring_buffer_ + slot;
   }
 
-  [[nodiscard]] constexpr auto slot(index_type index) const noexcept
-      -> index_type {
-    return index & static_cast<index_type>(*capacity_ - 1);
-  }
-
-  [[nodiscard]] constexpr auto at(
-      swiss::aligned<value_type, Alignment> * ring_buffer,
-      index_type index) const noexcept -> value_type * {
-    return &**(ring_buffer + slot(index));
+  [[nodiscard]] constexpr auto at(index_type index) const noexcept
+      -> value_type * {
+    return &***aligned_at(index);
   }
 
  private:
@@ -234,9 +264,9 @@ class locked_ring_buffer : public swiss::non_copyable,
       return false;
     }
 
-    std::invoke(std::forward<Callback>(callback), at(ring_buffer_, push_to_));
+    std::invoke(std::forward<Callback>(callback), at(push_to_));
 
-    push_to_ = next(push_to_);
+    push_to_ += 1;
     pop_available_cv_.notify_one();
     return true;
   }
@@ -249,9 +279,9 @@ class locked_ring_buffer : public swiss::non_copyable,
       return false;
     }
 
-    std::invoke(std::forward<Callback>(callback), at(ring_buffer_, pop_from_));
+    std::invoke(std::forward<Callback>(callback), at(pop_from_));
 
-    pop_from_ = next(pop_from_);
+    pop_from_ += 1;
     push_available_cv_.notify_one();
     return true;
   }
@@ -267,9 +297,9 @@ class locked_ring_buffer : public swiss::non_copyable,
       return false;
     }
 
-    std::invoke(std::forward<Callback>(callback), at(ring_buffer_, push_to_));
+    std::invoke(std::forward<Callback>(callback), at(push_to_));
 
-    push_to_ = next(push_to_);
+    push_to_ += 1;
     pop_available_cv_.notify_one();
     return true;
   }
@@ -284,9 +314,9 @@ class locked_ring_buffer : public swiss::non_copyable,
       return false;
     }
 
-    std::invoke(std::forward<Callback>(callback), at(ring_buffer_, pop_from_));
+    std::invoke(std::forward<Callback>(callback), at(pop_from_));
 
-    pop_from_ = next(pop_from_);
+    pop_from_ += 1;
     push_available_cv_.notify_one();
     return true;
   }

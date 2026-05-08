@@ -10,10 +10,14 @@ namespace tests::unit {
 
 TEST(spsc_msgbuf, size) {
   // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
-  static_assert(sizeof(flow::spsc_msgbuf<std::size_t, 10>) == 128);
-  static_assert(alignof(flow::spsc_msgbuf<std::size_t, 10>) == 64);
-  static_assert(sizeof(flow::spsc_msgbuf<std::uint8_t>) == 128);
-  static_assert(alignof(flow::spsc_msgbuf<std::uint8_t>) == 64);
+  static_assert(sizeof(flow::spsc_msgbuf<std::size_t, 10>) ==
+                std::hardware_destructive_interference_size * 2);
+  static_assert(alignof(flow::spsc_msgbuf<std::size_t, 10>) ==
+                std::hardware_destructive_interference_size);
+  static_assert(sizeof(flow::spsc_msgbuf<std::uint8_t>) ==
+                std::hardware_destructive_interference_size * 2);
+  static_assert(alignof(flow::spsc_msgbuf<std::uint8_t>) ==
+                std::hardware_destructive_interference_size);
   // NOLINTEND(cppcoreguidelines-avoid-magic-numbers)
 }
 

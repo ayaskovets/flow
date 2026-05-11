@@ -67,10 +67,10 @@ concept blocking_stream =
              decltype([](std::span<std::byte>, std::span<std::byte>) noexcept {
              }) callback,
              std::size_t exact_size) {
-      { stream.push(exact_size, callback) } -> std::same_as<void>;
-      { stream.pop(exact_size, callback) } -> std::same_as<void>;
-      { stream.push(bytes) } -> std::same_as<void>;
-      { stream.pop(bytes) } -> std::same_as<void>;
+      { stream.push(exact_size, callback) };
+      { stream.pop(exact_size, callback) };
+      { stream.push(bytes) };
+      { stream.pop(bytes) };
     };
 
 /**

@@ -66,9 +66,9 @@ concept blocking_msgbuf =
     msgbuf<T> &&
     requires(T msgbuf, std::span<std::byte> msg, std::size_t msg_size,
              decltype([](std::span<std::byte>) noexcept {}) callback) {
-      { msgbuf.push(msg_size, callback) } -> std::same_as<void>;
+      { msgbuf.push(msg_size, callback) };
       { msgbuf.pop(callback) } -> std::same_as<std::size_t>;
-      { msgbuf.push(msg) } -> std::same_as<void>;
+      { msgbuf.push(msg) };
       { msgbuf.pop(msg) } -> std::same_as<std::size_t>;
     };
 

@@ -50,9 +50,9 @@ concept noexcept_nonblocking_queue =
 template <typename T>
 concept blocking_queue =
     queue<T> && requires(T queue, typename T::value_type value) {
-      { queue.emplace(std::move(value)) } -> std::same_as<void>;
-      { queue.push(std::move(value)) } -> std::same_as<void>;
-      { queue.pop(value) } -> std::same_as<void>;
+      { queue.emplace(std::move(value)) };
+      { queue.push(std::move(value)) };
+      { queue.pop(value) };
     };
 
 /**

@@ -42,7 +42,8 @@ set(SOURCES
     stream_test.cpp
     unsafe_msgbuf_test.cpp
     unsafe_queue_test.cpp
-    unsafe_stream_test.cpp)
+    unsafe_stream_test.cpp
+    wait_policy_test.cpp)
 
 # ------------------------------------------------------------------------------
 # target

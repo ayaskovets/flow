@@ -12,8 +12,8 @@
 #include <swiss/mixins.hpp>
 #include <swiss/predicates.hpp>
 
+#include "noop_wait_policy.hpp"
 #include "wait_policy.hpp"
-#include "yield_wait_policy.hpp"
 
 namespace flow {
 
@@ -27,7 +27,7 @@ namespace flow {
 template <std::unsigned_integral Index     = std::size_t,
           Index Capacity                   = swiss::kDynamicExtent<Index>,
           typename Allocator               = std::allocator<Index>,
-          concepts::wait_policy WaitPolicy = yield_wait_policy>
+          concepts::wait_policy WaitPolicy = noop_wait_policy>
 // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class mpsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
  private:
@@ -108,6 +108,7 @@ class mpsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
       index_type _push_to = push_to_.load(std::memory_order::relaxed);
       index_type pop_from = pop_from_.load(std::memory_order::relaxed);
 
+      auto backoff_token = wait_policy_.backoff_token();
       while (true) {
         index_type postfix = *capacity_ - slot(_push_to);
         index_type prefix  = slot(pop_from);
@@ -131,7 +132,7 @@ class mpsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
           if (!push_to_.compare_exchange_weak(
                   _push_to, _push_to + header_size() + aligned_msg_size,
                   std::memory_order::relaxed, std::memory_order::relaxed)) {
-            wait_policy_.yield_contention();
+            wait_policy_.backoff(backoff_token);
             continue;
           }
 
@@ -145,7 +146,7 @@ class mpsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
                   _push_to,
                   _push_to + postfix + header_size() + aligned_msg_size,
                   std::memory_order::relaxed, std::memory_order::relaxed)) {
-            wait_policy_.yield_contention();
+            wait_policy_.backoff(backoff_token);
             continue;
           }
 
@@ -239,7 +240,7 @@ class mpsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
         return true;
       }
 
-      wait_policy_.wait_not_full();
+      wait_policy_.wait_not_full(stop_token);
     }
 
     return false;
@@ -254,7 +255,7 @@ class mpsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
         return true;
       }
 
-      wait_policy_.wait_not_empty();
+      wait_policy_.wait_not_empty(stop_token);
     }
 
     return false;

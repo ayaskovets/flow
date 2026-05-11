@@ -15,8 +15,8 @@
 #include <swiss/scope_exit.hpp>
 #include <swiss/scope_fail.hpp>
 
+#include "noop_wait_policy.hpp"
 #include "wait_policy.hpp"
-#include "yield_wait_policy.hpp"
 
 namespace flow {
 
@@ -29,7 +29,7 @@ template <typename Value, std::unsigned_integral Index = std::size_t,
           Index Capacity     = swiss::kDynamicExtent<Index>,
           Index Alignment    = alignof(swiss::manual_lifetime<Value>),
           typename Allocator = std::allocator<Value>,
-          concepts::wait_policy WaitPolicy = yield_wait_policy>
+          concepts::wait_policy WaitPolicy = noop_wait_policy>
 // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
  private:

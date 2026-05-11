@@ -15,8 +15,8 @@
 #include <swiss/mixins.hpp>
 #include <swiss/predicates.hpp>
 
+#include "noop_wait_policy.hpp"
 #include "wait_policy.hpp"
-#include "yield_wait_policy.hpp"
 
 namespace flow {
 
@@ -30,7 +30,7 @@ namespace flow {
 template <std::unsigned_integral Index     = std::size_t,
           Index Capacity                   = swiss::kDynamicExtent<Index>,
           typename Allocator               = std::allocator<std::byte>,
-          concepts::wait_policy WaitPolicy = yield_wait_policy>
+          concepts::wait_policy WaitPolicy = noop_wait_policy>
 // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
  private:

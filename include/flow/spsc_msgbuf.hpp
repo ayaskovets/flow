@@ -206,7 +206,7 @@ class spsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
         return true;
       }
 
-      wait_policy_.wait_not_full();
+      wait_policy_.wait_not_full(stop_token);
     }
 
     return false;
@@ -221,7 +221,7 @@ class spsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
         return true;
       }
 
-      wait_policy_.wait_not_empty();
+      wait_policy_.wait_not_empty(stop_token);
     }
 
     return false;

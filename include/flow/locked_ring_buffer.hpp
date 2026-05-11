@@ -105,7 +105,7 @@ class locked_ring_buffer : public swiss::non_copyable,
   constexpr ~locked_ring_buffer() noexcept {
     while (!empty(push_to_, pop_from_)) {
       std::destroy_at(at(pop_from_));
-      pop_from_ += 1;
+      ++pop_from_;
     }
 
     for (index_type index = 0; index < *capacity_; ++index) {
@@ -266,7 +266,7 @@ class locked_ring_buffer : public swiss::non_copyable,
 
     std::invoke(std::forward<Callback>(callback), at(push_to_));
 
-    push_to_ += 1;
+    ++push_to_;
     pop_available_cv_.notify_one();
     return true;
   }
@@ -281,7 +281,7 @@ class locked_ring_buffer : public swiss::non_copyable,
 
     std::invoke(std::forward<Callback>(callback), at(pop_from_));
 
-    pop_from_ += 1;
+    ++pop_from_;
     push_available_cv_.notify_one();
     return true;
   }
@@ -299,7 +299,7 @@ class locked_ring_buffer : public swiss::non_copyable,
 
     std::invoke(std::forward<Callback>(callback), at(push_to_));
 
-    push_to_ += 1;
+    ++push_to_;
     pop_available_cv_.notify_one();
     return true;
   }
@@ -316,7 +316,7 @@ class locked_ring_buffer : public swiss::non_copyable,
 
     std::invoke(std::forward<Callback>(callback), at(pop_from_));
 
-    pop_from_ += 1;
+    ++pop_from_;
     push_available_cv_.notify_one();
     return true;
   }

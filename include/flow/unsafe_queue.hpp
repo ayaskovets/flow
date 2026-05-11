@@ -188,7 +188,7 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
     }
 
     std::invoke(std::forward<Callback>(callback), ring_buffer_ + push_to());
-    size_ += 1;
+    ++size_;
     return true;
   }
 

@@ -35,7 +35,7 @@ constexpr void nonblocking_throughput(benchmark::State & state) {
     // NOLINTNEXTLINE(readability-identifier-length)
     for (auto const _ : state) {
       if (queue->try_emplace()) {
-        items += 1;
+        ++items;
       }
     }
 
@@ -53,7 +53,7 @@ constexpr void nonblocking_throughput(benchmark::State & state) {
     for (auto const _ : state) {
       if (queue->try_pop(value)) {
         benchmark::DoNotOptimize(value);
-        items += 1;
+        ++items;
       }
     }
 

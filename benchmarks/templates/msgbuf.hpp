@@ -39,7 +39,7 @@ constexpr void nonblocking_throughput(benchmark::State & state) {
     for (auto const _ : state) {
       if (msgbuf->try_push(msg)) {
         bytes += msg_size;
-        successful += 1;
+        ++successful;
       }
     }
 
@@ -53,7 +53,7 @@ constexpr void nonblocking_throughput(benchmark::State & state) {
     for (auto const _ : state) {
       if (msgbuf->try_pop(msg)) {
         bytes += msg_size;
-        successful += 1;
+        ++successful;
       }
     }
 

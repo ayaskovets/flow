@@ -29,6 +29,7 @@ set(SOURCES
     templates/queue.hpp
     templates/stream.hpp
     templates/templates.hpp
+    backoff_policy_test.cpp
     locked_ring_buffer_test.cpp
     mpmc_queue_test.cpp
     mpsc_msgbuf_test.cpp

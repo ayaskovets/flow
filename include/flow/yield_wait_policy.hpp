@@ -3,8 +3,6 @@
 #include <stop_token>
 #include <thread>
 
-#include <swiss/cpu_relax.hpp>
-
 namespace flow {
 
 /**
@@ -20,9 +18,6 @@ struct yield_wait_policy final {
 
   static constexpr void notify_not_full() noexcept {}
   static constexpr void notify_not_empty() noexcept {}
-
-  static constexpr auto backoff_token() noexcept -> int { return {}; }
-  static constexpr void backoff(int &) noexcept {}
 };
 
 }  // namespace flow

@@ -24,11 +24,15 @@ add_library(flow::flow ALIAS flow)
 # ------------------------------------------------------------------------------
 
 set(HEADERS
+    include/flow/backoff_policy.hpp
+    include/flow/exponential_backoff_policy.hpp
     include/flow/locked_ring_buffer.hpp
     include/flow/mpmc_queue.hpp
+    include/flow/mpsc_msgbuf.hpp
     include/flow/mpsc_queue.hpp
     include/flow/msgbuf.hpp
-    include/flow/yield_wait_policy.hpp
+    include/flow/noop_backoff_policy.hpp
+    include/flow/noop_wait_policy.hpp
     include/flow/queue.hpp
     include/flow/spmc_queue.hpp
     include/flow/spsc_msgbuf.hpp
@@ -38,7 +42,8 @@ set(HEADERS
     include/flow/unsafe_msgbuf.hpp
     include/flow/unsafe_queue.hpp
     include/flow/unsafe_stream.hpp
-    include/flow/wait_policy.hpp)
+    include/flow/wait_policy.hpp
+    include/flow/yield_wait_policy.hpp)
 
 # ------------------------------------------------------------------------------
 # target

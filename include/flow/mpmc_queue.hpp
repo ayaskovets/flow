@@ -14,6 +14,8 @@
 #include <swiss/predicates.hpp>
 #include <swiss/scope_fail.hpp>
 
+#include "backoff_policy.hpp"
+#include "noop_backoff_policy.hpp"
 #include "noop_wait_policy.hpp"
 #include "wait_policy.hpp"
 
@@ -29,8 +31,9 @@ template <typename Value, std::unsigned_integral Index = std::size_t,
           Index Capacity  = swiss::kDynamicExtent<Index>,
           Index Alignment = alignof(
               std::pair<swiss::manual_lifetime<Value>, std::atomic<Index>>),
-          typename Allocator               = std::allocator<Value>,
-          concepts::wait_policy WaitPolicy = noop_wait_policy>
+          typename Allocator                     = std::allocator<Value>,
+          concepts::wait_policy WaitPolicy       = noop_wait_policy,
+          concepts::backoff_policy BackoffPolicy = noop_backoff_policy>
 // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
  private:
@@ -55,7 +58,8 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
   using index_type     = Index;
   using allocator_type = std::allocator_traits<
       Allocator>::template rebind_alloc<aligned_entry_type>;
-  using wait_policy_type = WaitPolicy;
+  using wait_policy_type    = WaitPolicy;
+  using backoff_policy_type = BackoffPolicy;
 
  private:
   [[nodiscard]] static constexpr auto valid(index_type capacity) noexcept
@@ -85,11 +89,13 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
 
  public:
   explicit constexpr mpmc_queue(
-      allocator_type allocator     = allocator_type(),
-      wait_policy_type wait_policy = wait_policy_type())
+      allocator_type allocator           = allocator_type(),
+      wait_policy_type wait_policy       = wait_policy_type(),
+      backoff_policy_type backoff_policy = backoff_policy_type())
     requires(Capacity != swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
         wait_policy_(std::move(wait_policy)),
+        backoff_policy_(std::move(backoff_policy)),
         capacity_(),
         ring_buffer_(std::allocator_traits<allocator_type>::allocate(
             allocator_, Capacity)) {
@@ -100,10 +106,12 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
 
   explicit constexpr mpmc_queue(
       index_type capacity, allocator_type allocator = allocator_type(),
-      wait_policy_type wait_policy = wait_policy_type())
+      wait_policy_type wait_policy       = wait_policy_type(),
+      backoff_policy_type backoff_policy = backoff_policy_type())
     requires(Capacity == swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
         wait_policy_(std::move(wait_policy)),
+        backoff_policy_(std::move(backoff_policy)),
         capacity_(capacity),
         ring_buffer_([&] {
           if (!valid(capacity)) {
@@ -258,6 +266,7 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
  private:
   [[no_unique_address]] allocator_type allocator_;
   [[no_unique_address]] wait_policy_type wait_policy_;
+  [[no_unique_address]] backoff_policy_type backoff_policy_;
 
   // NOLINTBEGIN(cppcoreguidelines-avoid-const-or-ref-data-members)
   [[no_unique_address]] swiss::conditionally_runtime<
@@ -317,7 +326,7 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
   constexpr auto try_push(Callback && callback) noexcept -> bool {
     index_type push_to = push_to_.load(std::memory_order::relaxed);
 
-    auto backoff_token = wait_policy_.backoff_token();
+    auto backoff_token = backoff_policy_.backoff_token();
     while (true) {
       entry_type * const entry = at(push_to);
 
@@ -331,14 +340,14 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
           wait_policy_.notify_not_empty();
           return true;
         }
-        wait_policy_.backoff(backoff_token);
+        backoff_policy_.backoff(backoff_token);
       } else {
         index_type const actual_push_to =
             push_to_.load(std::memory_order::relaxed);
         if (push_to == actual_push_to) {
           return false;
         }
-        wait_policy_.backoff(backoff_token);
+        backoff_policy_.backoff(backoff_token);
         push_to = actual_push_to;
       }
     }
@@ -349,7 +358,7 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
   constexpr auto try_pop(Callback && callback) noexcept -> bool {
     index_type pop_from = pop_from_.load(std::memory_order::relaxed);
 
-    auto backoff_token = wait_policy_.backoff_token();
+    auto backoff_token = backoff_policy_.backoff_token();
     while (true) {
       entry_type * const entry = at(pop_from);
 
@@ -364,14 +373,14 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
           wait_policy_.notify_not_full();
           return true;
         }
-        wait_policy_.backoff(backoff_token);
+        backoff_policy_.backoff(backoff_token);
       } else {
         index_type const actual_pop_from =
             pop_from_.load(std::memory_order::relaxed);
         if (pop_from == actual_pop_from) {
           return false;
         }
-        wait_policy_.backoff(backoff_token);
+        backoff_policy_.backoff(backoff_token);
         pop_from = actual_pop_from;
       }
     }
@@ -384,7 +393,7 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
                       Callback && callback) noexcept -> bool {
     index_type push_to = push_to_.load(std::memory_order::relaxed);
 
-    auto backoff_token = wait_policy_.backoff_token();
+    auto backoff_token = backoff_policy_.backoff_token();
     while (!stop_token.stop_requested()) {
       entry_type * const entry = at(push_to);
 
@@ -398,7 +407,7 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
           wait_policy_.notify_not_empty();
           return true;
         }
-        wait_policy_.backoff(backoff_token);
+        backoff_policy_.backoff(backoff_token);
       } else {
         wait_policy_.wait_not_full(stop_token);
         push_to = push_to_.load(std::memory_order::relaxed);
@@ -414,7 +423,7 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
                      Callback && callback) noexcept -> bool {
     index_type pop_from = pop_from_.load(std::memory_order::relaxed);
 
-    auto backoff_token = wait_policy_.backoff_token();
+    auto backoff_token = backoff_policy_.backoff_token();
     while (!stop_token.stop_requested()) {
       entry_type * const entry = at(pop_from);
 
@@ -429,7 +438,7 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
           wait_policy_.notify_not_full();
           return true;
         }
-        wait_policy_.backoff(backoff_token);
+        backoff_policy_.backoff(backoff_token);
       } else {
         wait_policy_.wait_not_empty(stop_token);
         pop_from = pop_from_.load(std::memory_order::relaxed);

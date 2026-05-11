@@ -303,7 +303,7 @@ constexpr void nonblocking(auto const & param) {
           }
           for (std::byte & byte : msg) {
             byte = std::byte(index % std::numeric_limits<std::uint8_t>::max());
-            pushed_byte_counts[static_cast<std::size_t>(byte)] += 1;
+            ++pushed_byte_counts[static_cast<std::size_t>(byte)];
           }
           while (!msgbuf.try_push(msg)) {
           }
@@ -323,7 +323,7 @@ constexpr void nonblocking(auto const & param) {
           while (msgbuf.try_pop(msg) == 0) {
           }
           for (std::byte const byte : msg) {
-            popped_byte_counts[static_cast<std::size_t>(byte)] += 1;
+            ++popped_byte_counts[static_cast<std::size_t>(byte)];
           }
         }
       });
@@ -365,7 +365,7 @@ constexpr void blocking(auto const & param) {
           }
           for (std::byte & byte : msg) {
             byte = std::byte(index % std::numeric_limits<std::uint8_t>::max());
-            pushed_byte_counts[static_cast<std::size_t>(byte)] += 1;
+            ++pushed_byte_counts[static_cast<std::size_t>(byte)];
           }
           msgbuf.push(msg);
         }
@@ -383,7 +383,7 @@ constexpr void blocking(auto const & param) {
           }
           EXPECT_EQ(msgbuf.pop(msg), msg_size);
           for (std::byte const byte : msg) {
-            popped_byte_counts[static_cast<std::size_t>(byte)] += 1;
+            ++popped_byte_counts[static_cast<std::size_t>(byte)];
           }
         }
       });

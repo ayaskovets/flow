@@ -205,7 +205,7 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
         return true;
       }
 
-      wait_policy_.wait_not_empty();
+      wait_policy_.wait_not_empty(stop_token);
 
       writer_.cache = reader_.index.load(std::memory_order::acquire);
     }
@@ -234,7 +234,7 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
         return true;
       }
 
-      wait_policy_.wait_not_full();
+      wait_policy_.wait_not_full(stop_token);
 
       reader_.cache = writer_.index.load(std::memory_order::acquire);
     }

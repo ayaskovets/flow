@@ -2,8 +2,6 @@
 
 #include <stop_token>
 
-#include <swiss/concepts.hpp>
-
 namespace flow::concepts {
 
 /**
@@ -28,15 +26,6 @@ concept wait_policy = requires(T policy, std::stop_token stop_token) {
    */
   { policy.notify_not_empty() };
   { policy.notify_not_full() };
-
-  /**
-   * @brief Backoff implementation for relaxing CPU usage in hot loops. Should
-   * not block
-   */
-  { policy.backoff_token() } -> swiss::not_convertible_to<void>;
-  requires requires(decltype(policy.backoff_token()) backoff_token) {
-    policy.backoff(backoff_token);
-  };
 };
 
 }  // namespace flow::concepts

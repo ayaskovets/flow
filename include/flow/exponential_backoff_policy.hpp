@@ -4,6 +4,7 @@
 #include <thread>
 
 #include <swiss/cpu_relax.hpp>
+#include <swiss/predicates.hpp>
 
 namespace flow {
 
@@ -12,6 +13,7 @@ namespace flow {
  */
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
 template <std::uint16_t MaxSpins = 128, std::uint16_t MinSpins = 8>
+  requires(swiss::is_power_of_two(MaxSpins) && swiss::is_power_of_two(MinSpins))
 struct exponential_backoff_policy {
   struct backoff_token final {
     std::uint16_t max_spins;

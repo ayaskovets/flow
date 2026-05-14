@@ -98,18 +98,16 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     requires(Capacity == swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
         wait_policy_(std::move(wait_policy)),
-        writer_{
-            .capacity{capacity},
-            .ring_buffer =
-                [&] {
-                  if (!valid(capacity)) {
-                    throw std::invalid_argument(
-                        "spsc_queue::spsc_queue(): invalid capacity");
-                  }
-                  return std::allocator_traits<allocator_type>::allocate(
-                      allocator_, capacity);
-                }(),
-        },
+        writer_{.capacity{capacity},
+                .ring_buffer =
+                    [&] {
+                      if (!valid(capacity)) {
+                        throw std::invalid_argument(
+                            "spsc_queue::spsc_queue(): invalid capacity");
+                      }
+                      return std::allocator_traits<allocator_type>::allocate(
+                          allocator_, capacity);
+                    }()},
         reader_{.capacity    = writer_.capacity,
                 .ring_buffer = writer_.ring_buffer} {
     initialize();
@@ -119,9 +117,8 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
    * @warning Destructor requires exlusive access to the queue
    */
   constexpr ~spsc_queue() noexcept {
-    while (try_pop([this](value_type * front) noexcept {
-      std::allocator_traits<allocator_type>::destroy(allocator_, front);
-    })) {
+    while (
+        try_pop([](value_type * front) noexcept { std::destroy_at(front); })) {
     }
 
     for (index_type index = 0; index < *writer_.capacity; ++index) {
@@ -140,8 +137,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
   constexpr auto try_emplace(Args &&... args) noexcept(
       std::is_nothrow_constructible_v<value_type, Args...>) -> bool {
     return try_push([&](value_type * front) {
-      std::allocator_traits<allocator_type>::construct(
-          allocator_, front, std::forward<Args>(args)...);
+      std::construct_at(front, std::forward<Args>(args)...);
     });
   }
 
@@ -160,9 +156,8 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
              std::is_nothrow_destructible_v<value_type>)
   {
     return try_pop([&](value_type * front) noexcept {
-      swiss::scope_exit const scope_exit([&]() noexcept {
-        std::allocator_traits<allocator_type>::destroy(allocator_, front);
-      });
+      swiss::scope_exit const scope_exit(
+          [&]() noexcept { std::destroy_at(front); });
       value = std::move(*front);
     });
   }
@@ -174,8 +169,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
   emplace(std::stop_token const & stop_token, Args &&... args) noexcept(
       std::is_nothrow_constructible_v<value_type, Args...>) -> bool {
     return push(stop_token, [&](value_type * front) {
-      std::allocator_traits<allocator_type>::construct(
-          allocator_, front, std::forward<Args>(args)...);
+      std::construct_at(front, std::forward<Args>(args)...);
     });
   }
 
@@ -197,9 +191,8 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
              std::is_nothrow_destructible_v<value_type>)
   {
     return pop(stop_token, [&](value_type * front) noexcept {
-      swiss::scope_exit const scope_exit([&]() noexcept {
-        std::allocator_traits<allocator_type>::destroy(allocator_, front);
-      });
+      swiss::scope_exit const scope_exit(
+          [&]() noexcept { std::destroy_at(front); });
       value = std::move(*front);
     });
   }

@@ -6,14 +6,12 @@
 namespace flow::concepts {
 
 /**
- * @brief Generic queue of fixed capacity with custom allocator support and
- * typed items
+ * @brief Generic queue with custom allocator support and typed items
  * @warning The result of size() method for lock-free queues is approximate and
  * should be used carefully
  */
 template <typename T>
 concept queue = requires(T queue, typename T::value_type) {
-  { queue.capacity() } -> std::same_as<std::size_t>;
   { queue.size() } -> std::same_as<std::size_t>;
   { queue.empty() } -> std::same_as<bool>;
   { queue.get_allocator() } -> std::same_as<typename T::allocator_type>;

@@ -9,6 +9,7 @@
 
 #include <swiss/conditionally_runtime.hpp>
 #include <swiss/dynamic_extent.hpp>
+#include <swiss/memory.hpp>
 #include <swiss/mixins.hpp>
 #include <swiss/predicates.hpp>
 
@@ -22,9 +23,9 @@ namespace flow {
 /**
  * @brief Fixed-size message buffer for many producers and 1 consumer
  * @note Implemented as a ring buffer
- * @note Each message is aligned to sizeof(Index)
+ * @note Each message is aligned to alignof(Index)
  * @note Capacity must be a power of 2 for efficient division
- * @note Minimal capacity is twice the sizeof(Index)
+ * @note Minimal capacity is twice the alignof(Index)
  */
 template <std::unsigned_integral Index           = std::size_t,
           Index Capacity                         = swiss::kDynamicExtent<Index>,
@@ -115,9 +116,10 @@ class mpsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
                                    std::memory_order::release);
     };
 
-    index_type const msg_size         = bound(_msg_size);
-    index_type const aligned_msg_size = aligned(msg_size);
-    auto const [fits, push_to]        = [&]() -> std::pair<bool, index_type> {
+    index_type const msg_size = bound(_msg_size);
+    index_type const aligned_msg_size =
+        swiss::align_up(msg_size, alignof(index_type));
+    auto const [fits, push_to] = [&]() -> std::pair<bool, index_type> {
       index_type _push_to = push_to_.load(std::memory_order::relaxed);
       index_type pop_from = pop_from_.load(std::memory_order::relaxed);
 
@@ -177,8 +179,9 @@ class mpsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
       return false;
     }
 
-    std::span<index_type> const blocks(at(push_to + header_size()),
-                                       aligned(msg_size));
+    std::span<index_type> const blocks(
+        at(push_to + header_size()),
+        swiss::align_up(msg_size, alignof(index_type)));
     std::span<std::byte> const msg =
         std::as_writable_bytes(blocks).subspan(0, msg_size);
     std::invoke(std::forward<Callback>(callback), msg);
@@ -229,12 +232,14 @@ class mpsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
       return 0;
     }
 
-    std::span<index_type> const blocks(at(pop_from), aligned(msg_size));
+    std::span<index_type> const blocks(
+        at(pop_from), swiss::align_up(msg_size, alignof(index_type)));
     std::span<std::byte> const msg =
         std::as_writable_bytes(blocks).subspan(0, msg_size);
     std::invoke(std::forward<Callback>(callback), msg);
 
-    pop_from_.store(pop_from + aligned(msg_size), std::memory_order::relaxed);
+    pop_from_.store(pop_from + swiss::align_up(msg_size, alignof(index_type)),
+                    std::memory_order::relaxed);
     wait_policy_.notify_not_full();
     return msg_size;
   }
@@ -403,10 +408,6 @@ class mpsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
   [[nodiscard]] constexpr auto padding_header_msg_size() const noexcept
       -> index_type {
     return 0;
-  }
-
-  [[nodiscard]] auto aligned(index_type msg_size) const noexcept -> index_type {
-    return (msg_size + sizeof(index_type) - 1) & ~(sizeof(index_type) - 1);
   }
 
   [[nodiscard]] constexpr auto size_bytes(index_type push_to,

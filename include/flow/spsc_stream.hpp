@@ -137,7 +137,9 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
     index_type const callback_total = std::min(bound(_callback_total), total);
 
     writer_.index.store(push_to + callback_total, std::memory_order::release);
+
     wait_policy_.notify_not_full();
+
     return callback_total;
   }
 
@@ -179,7 +181,9 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
     index_type const callback_total = std::min(bound(_callback_total), total);
 
     reader_.index.store(pop_from + callback_total, std::memory_order::release);
+
     wait_policy_.notify_not_empty();
+
     return callback_total;
   }
 
@@ -201,7 +205,9 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
         std::ignore = try_push(std::forward<Callback>(callback), exact_size);
 
         writer_.index.store(push_to + exact_size, std::memory_order::release);
+
         wait_policy_.notify_not_full();
+
         return true;
       }
 
@@ -230,7 +236,9 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
         std::ignore = try_pop(std::forward<Callback>(callback), exact_size);
 
         reader_.index.store(pop_from + exact_size, std::memory_order::release);
+
         wait_policy_.notify_not_empty();
+
         return true;
       }
 
@@ -331,6 +339,12 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
     index_type const push_to  = writer_.index.load(std::memory_order::relaxed);
 
     return pop_from == push_to;
+  }
+
+  constexpr void clear() noexcept {
+    while (
+        try_pop([](std::span<std::byte>, std::span<std::byte>) noexcept {})) {
+    }
   }
 
   [[nodiscard]] constexpr auto get_allocator() const

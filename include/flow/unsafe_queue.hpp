@@ -66,11 +66,7 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
         }()) {}
 
   constexpr ~unsafe_queue() noexcept {
-    while (try_pop([&](value_type * front) {
-      std::allocator_traits<allocator_type>::destroy(allocator_, front);
-    })) {
-    }
-
+    clear();
     std::allocator_traits<allocator_type>::deallocate(allocator_, ring_buffer_,
                                                       *capacity_);
   }
@@ -141,6 +137,13 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
 
   [[nodiscard]] constexpr auto empty() const noexcept -> bool {
     return size_ == 0;
+  }
+
+  constexpr void clear() noexcept {
+    while (try_pop([&](value_type * front) noexcept {
+      std::allocator_traits<allocator_type>::destroy(allocator_, front);
+    })) {
+    }
   }
 
   [[nodiscard]] constexpr auto get_allocator() const

@@ -50,6 +50,10 @@ constexpr void size_capacity() {
     EXPECT_EQ(msgbuf.size(), 16);
     EXPECT_EQ(msgbuf.capacity(), kCapacity);
   }
+
+  msgbuf.clear();
+  EXPECT_EQ(msgbuf.size(), 0);
+  EXPECT_TRUE(msgbuf.empty());
 }
 
 template <flow::concepts::nonblocking_msgbuf Msgbuf>

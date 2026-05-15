@@ -148,7 +148,9 @@ class spsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
     write_header(writer_.ring_buffer, *writer_.capacity, push_to, msg_size);
     writer_.index.store(push_to + header_size() + msg_size,
                         std::memory_order::release);
+
     wait_policy_.notify_not_empty();
+
     return true;
   }
 
@@ -187,7 +189,9 @@ class spsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
     std::invoke(std::forward<Callback>(callback), msg);
 
     reader_.index.store(pop_from + msg_size, std::memory_order::release);
+
     wait_policy_.notify_not_full();
+
     return msg_size;
   }
 
@@ -318,6 +322,11 @@ class spsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
 
   [[nodiscard]] constexpr auto empty() const noexcept -> bool {
     return size() == 0;
+  }
+
+  constexpr void clear() noexcept {
+    while (try_pop([](std::span<std::byte>) noexcept {})) {
+    }
   }
 
   [[nodiscard]] constexpr auto get_allocator() const

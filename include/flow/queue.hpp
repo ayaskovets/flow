@@ -12,8 +12,10 @@ namespace flow::concepts {
  */
 template <typename T>
 concept queue = requires(T queue, typename T::value_type) {
+  { queue.capacity() } -> std::same_as<std::size_t>;
   { queue.size() } -> std::same_as<std::size_t>;
   { queue.empty() } -> std::same_as<bool>;
+  { queue.clear() } -> std::same_as<void>;
   { queue.get_allocator() } -> std::same_as<typename T::allocator_type>;
 };
 

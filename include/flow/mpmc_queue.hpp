@@ -12,7 +12,6 @@
 #include <swiss/manual_lifetime.hpp>
 #include <swiss/mixins.hpp>
 #include <swiss/predicates.hpp>
-#include <swiss/scope_fail.hpp>
 
 #include "backoff_policy.hpp"
 #include "noop_backoff_policy.hpp"
@@ -67,23 +66,19 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
     return swiss::is_power_of_two_gt(capacity, static_cast<index_type>(1));
   }
 
-  constexpr void initialize() {
-    index_type constructed = 0;
-
-    swiss::scope_fail const scope_fail([&]() noexcept {
-      for (index_type index = 0; index < constructed; ++index) {
-        std::allocator_traits<allocator_type>::destroy(allocator_,
-                                                       aligned_at(constructed));
-      }
-      std::allocator_traits<allocator_type>::deallocate(
-          allocator_, ring_buffer_, *capacity_);
-    });
-
-    for (; constructed < *capacity_; ++constructed) {
+  constexpr void initialize() noexcept {
+    for (index_type index = 0; index < *capacity_; ++index) {
       std::allocator_traits<allocator_type>::construct(allocator_,
-                                                       aligned_at(constructed));
+                                                       aligned_at(index));
 
-      seqnum(at(constructed)).store(constructed, std::memory_order::relaxed);
+      seqnum(at(index)).store(index, std::memory_order::relaxed);
+    }
+  }
+
+  constexpr void deinitialize() noexcept {
+    for (index_type index = 0; index < *capacity_; ++index) {
+      std::allocator_traits<allocator_type>::destroy(allocator_,
+                                                     aligned_at(index));
     }
   }
 
@@ -124,19 +119,9 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
     initialize();
   }
 
-  /**
-   * @warning Destructor requires exlusive access to the queue
-   */
   constexpr ~mpmc_queue() noexcept {
-    while (
-        try_pop([&](value_type * front) noexcept { std::destroy_at(front); })) {
-    }
-
-    for (index_type index = 0; index < *capacity_; ++index) {
-      std::allocator_traits<allocator_type>::destroy(allocator_,
-                                                     aligned_at(index));
-    }
-
+    clear();
+    deinitialize();
     std::allocator_traits<allocator_type>::deallocate(allocator_, ring_buffer_,
                                                       *capacity_);
   }
@@ -251,6 +236,12 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
     return size() == 0;
   }
 
+  constexpr void clear() noexcept {
+    while (
+        try_pop([](value_type * front) noexcept { std::destroy_at(front); })) {
+    }
+  }
+
   [[nodiscard]] constexpr auto get_allocator() const
       noexcept(std::is_nothrow_copy_constructible_v<allocator_type>)
           -> allocator_type {
@@ -337,9 +328,12 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
           std::invoke(std::forward<Callback>(callback), value(entry));
 
           seqnum(entry).store(push_to + 1, std::memory_order::release);
+
           wait_policy_.notify_not_empty();
+
           return true;
         }
+
         backoff_policy_.backoff(backoff_token);
       } else {
         index_type const actual_push_to =
@@ -347,7 +341,9 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
         if (push_to == actual_push_to) {
           return false;
         }
+
         backoff_policy_.backoff(backoff_token);
+
         push_to = actual_push_to;
       }
     }
@@ -370,9 +366,12 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
 
           seqnum(entry).store(pop_from + *capacity_,
                               std::memory_order::release);
+
           wait_policy_.notify_not_full();
+
           return true;
         }
+
         backoff_policy_.backoff(backoff_token);
       } else {
         index_type const actual_pop_from =
@@ -380,7 +379,9 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
         if (pop_from == actual_pop_from) {
           return false;
         }
+
         backoff_policy_.backoff(backoff_token);
+
         pop_from = actual_pop_from;
       }
     }
@@ -407,9 +408,11 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
           wait_policy_.notify_not_empty();
           return true;
         }
+
         backoff_policy_.backoff(backoff_token);
       } else {
         wait_policy_.wait_not_full(stop_token);
+
         push_to = push_to_.load(std::memory_order::relaxed);
       }
     }
@@ -435,12 +438,16 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
 
           seqnum(entry).store(pop_from + *capacity_,
                               std::memory_order::release);
+
           wait_policy_.notify_not_full();
+
           return true;
         }
+
         backoff_policy_.backoff(backoff_token);
       } else {
         wait_policy_.wait_not_empty(stop_token);
+
         pop_from = pop_from_.load(std::memory_order::relaxed);
       }
     }
@@ -463,6 +470,7 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
     std::invoke(std::forward<Callback>(callback), value(entry));
 
     seqnum(entry).store(push_to + 1, std::memory_order::release);
+
     wait_policy_.notify_not_empty();
   }
 
@@ -481,6 +489,7 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
     std::invoke(std::forward<Callback>(callback), value(entry));
 
     seqnum(entry).store(pop_from + *capacity_, std::memory_order::release);
+
     wait_policy_.notify_not_full();
   }
 };

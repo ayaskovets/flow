@@ -219,6 +219,11 @@ class unsafe_msgbuf : public swiss::non_copyable, public swiss::non_movable {
     return size_ == 0;
   }
 
+  constexpr void clear() noexcept {
+    while (try_pop([](std::span<std::byte>) noexcept {})) {
+    }
+  }
+
   [[nodiscard]] constexpr auto get_allocator() const
       noexcept(std::is_nothrow_copy_constructible_v<allocator_type>)
           -> allocator_type {

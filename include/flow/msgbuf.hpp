@@ -15,6 +15,7 @@ concept msgbuf = requires(T msgbuf) {
   { msgbuf.capacity() } -> std::same_as<std::size_t>;
   { msgbuf.size() } -> std::same_as<std::size_t>;
   { msgbuf.empty() } -> std::same_as<bool>;
+  { msgbuf.clear() } -> std::same_as<void>;
   { msgbuf.get_allocator() } -> std::same_as<typename T::allocator_type>;
 };
 

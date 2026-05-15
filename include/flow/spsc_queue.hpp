@@ -13,7 +13,6 @@
 #include <swiss/mixins.hpp>
 #include <swiss/predicates.hpp>
 #include <swiss/scope_exit.hpp>
-#include <swiss/scope_fail.hpp>
 
 #include "noop_wait_policy.hpp"
 #include "wait_policy.hpp"
@@ -57,23 +56,19 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     return swiss::is_power_of_two(capacity);
   }
 
-  constexpr void initialize() {
-    index_type constructed = 0;
-
-    swiss::scope_fail const scope_fail([&]() noexcept {
-      for (index_type index = 0; index < constructed; ++index) {
-        std::allocator_traits<allocator_type>::destroy(
-            allocator_,
-            aligned_at(writer_.ring_buffer, *writer_.capacity, constructed));
-      }
-      std::allocator_traits<allocator_type>::deallocate(
-          allocator_, writer_.ring_buffer, *writer_.capacity);
-    });
-
-    for (; constructed < *writer_.capacity; ++constructed) {
+  constexpr void initialize() noexcept {
+    for (index_type index = 0; index < *writer_.capacity; ++index) {
       std::allocator_traits<allocator_type>::construct(
           allocator_,
-          aligned_at(writer_.ring_buffer, *writer_.capacity, constructed));
+          aligned_at(writer_.ring_buffer, *writer_.capacity, index));
+    }
+  }
+
+  constexpr void deinitialize() noexcept {
+    for (index_type index = 0; index < *writer_.capacity; ++index) {
+      std::allocator_traits<allocator_type>::destroy(
+          allocator_,
+          aligned_at(writer_.ring_buffer, *writer_.capacity, index));
     }
   }
 
@@ -113,20 +108,9 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     initialize();
   }
 
-  /**
-   * @warning Destructor requires exlusive access to the queue
-   */
   constexpr ~spsc_queue() noexcept {
-    while (
-        try_pop([](value_type * front) noexcept { std::destroy_at(front); })) {
-    }
-
-    for (index_type index = 0; index < *writer_.capacity; ++index) {
-      std::allocator_traits<allocator_type>::destroy(
-          allocator_,
-          aligned_at(writer_.ring_buffer, *writer_.capacity, index));
-    }
-
+    clear();
+    deinitialize();
     std::allocator_traits<allocator_type>::deallocate(
         allocator_, writer_.ring_buffer, *writer_.capacity);
   }
@@ -238,6 +222,12 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     return size() == 0;
   }
 
+  constexpr void clear() noexcept {
+    while (
+        try_pop([](value_type * front) noexcept { std::destroy_at(front); })) {
+    }
+  }
+
   [[nodiscard]] constexpr auto get_allocator() const
       noexcept(std::is_nothrow_copy_constructible_v<allocator_type>)
           -> allocator_type {
@@ -319,7 +309,9 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     std::invoke(std::forward<Callback>(callback),
                 at(writer_.ring_buffer, *writer_.capacity, push_to));
     writer_.index.store(push_to + 1, std::memory_order::release);
+
     wait_policy_.notify_not_empty();
+
     return true;
   }
 
@@ -338,7 +330,9 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     std::invoke(std::forward<Callback>(callback),
                 at(reader_.ring_buffer, *reader_.capacity, pop_from));
     reader_.index.store(pop_from + 1, std::memory_order::release);
+
     wait_policy_.notify_not_full();
+
     return true;
   }
 
@@ -355,7 +349,9 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
         std::invoke(std::forward<Callback>(callback),
                     at(writer_.ring_buffer, *writer_.capacity, push_to));
         writer_.index.store(push_to + 1, std::memory_order::release);
+
         wait_policy_.notify_not_empty();
+
         return true;
       }
 
@@ -378,7 +374,9 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
         std::invoke(std::forward<Callback>(callback),
                     at(reader_.ring_buffer, *reader_.capacity, pop_from));
         reader_.index.store(pop_from + 1, std::memory_order::release);
+
         wait_policy_.notify_not_full();
+
         return true;
       }
 

@@ -13,7 +13,6 @@
 #include <swiss/mixins.hpp>
 #include <swiss/predicates.hpp>
 #include <swiss/scope_exit.hpp>
-#include <swiss/scope_fail.hpp>
 
 namespace flow {
 
@@ -53,21 +52,17 @@ class locked_ring_buffer : public swiss::non_copyable,
     return swiss::is_power_of_two(capacity);
   }
 
-  constexpr void initialize() {
-    index_type constructed = 0;
-
-    swiss::scope_fail const scope_fail([&]() noexcept {
-      for (index_type index = 0; index < constructed; ++index) {
-        std::allocator_traits<allocator_type>::destroy(allocator_,
-                                                       aligned_at(constructed));
-      }
-      std::allocator_traits<allocator_type>::deallocate(
-          allocator_, ring_buffer_, *capacity_);
-    });
-
-    for (; constructed < *capacity_; ++constructed) {
+  constexpr void initialize() noexcept {
+    for (index_type index = 0; index < *capacity_; ++index) {
       std::allocator_traits<allocator_type>::construct(allocator_,
-                                                       aligned_at(constructed));
+                                                       aligned_at(index));
+    }
+  }
+
+  constexpr void deinitialize() noexcept {
+    for (index_type index = 0; index < *capacity_; ++index) {
+      std::allocator_traits<allocator_type>::destroy(allocator_,
+                                                     aligned_at(index));
     }
   }
 
@@ -99,20 +94,9 @@ class locked_ring_buffer : public swiss::non_copyable,
     initialize();
   }
 
-  /**
-   * @warning Destructor requires exlusive access to the queue
-   */
   constexpr ~locked_ring_buffer() noexcept {
-    while (!empty(push_to_, pop_from_)) {
-      std::destroy_at(at(pop_from_));
-      ++pop_from_;
-    }
-
-    for (index_type index = 0; index < *capacity_; ++index) {
-      std::allocator_traits<allocator_type>::destroy(allocator_,
-                                                     aligned_at(index));
-    }
-
+    clear();
+    deinitialize();
     std::allocator_traits<allocator_type>::deallocate(allocator_, ring_buffer_,
                                                       *capacity_);
   }
@@ -202,6 +186,15 @@ class locked_ring_buffer : public swiss::non_copyable,
     std::lock_guard const lock(mutex_);
 
     return empty(push_to_, pop_from_);
+  }
+
+  constexpr void clear() noexcept {
+    std::lock_guard const lock(mutex_);
+
+    while (!empty(push_to_, pop_from_)) {
+      std::destroy_at(at(pop_from_));
+      ++pop_from_;
+    }
   }
 
   [[nodiscard]] constexpr auto get_allocator() const

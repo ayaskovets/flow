@@ -47,6 +47,10 @@ constexpr void size_capacity() {
     EXPECT_EQ(stream.size(), 4);
     EXPECT_EQ(stream.capacity(), kCapacity);
   }
+
+  stream.clear();
+  EXPECT_EQ(stream.size(), 0);
+  EXPECT_TRUE(stream.empty());
 }
 
 template <flow::concepts::nonblocking_stream Stream>

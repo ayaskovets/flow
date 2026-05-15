@@ -14,6 +14,7 @@ concept stream = requires(T stream) {
   { stream.capacity() } -> std::same_as<std::size_t>;
   { stream.size() } -> std::same_as<std::size_t>;
   { stream.empty() } -> std::same_as<bool>;
+  { stream.clear() } -> std::same_as<void>;
   { stream.get_allocator() } -> std::same_as<typename T::allocator_type>;
 };
 

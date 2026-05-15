@@ -49,6 +49,10 @@ constexpr void size_capacity() {
     EXPECT_EQ(queue.size(), 2);
     EXPECT_EQ(queue.capacity(), kCapacity);
   }
+
+  queue.clear();
+  EXPECT_EQ(queue.size(), 0);
+  EXPECT_TRUE(queue.empty());
 }
 
 template <flow::concepts::nonblocking_queue Queue>

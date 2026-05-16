@@ -13,7 +13,6 @@ using msgbuf_t =
 
 BENCHMARK_T(spsc_msgbuf, nonblocking_throughput, msgbuf_t)
     /* stream_capacity, producers, consumers, msg_size */
-    ->Args({64, 1, 1, 4})
     ->Args({128, 1, 1, 8})
     ->Args({128, 1, 1, 16})
     ->Args({512, 1, 1, 54})
@@ -23,7 +22,6 @@ BENCHMARK_T(spsc_msgbuf, nonblocking_throughput, msgbuf_t)
 
 BENCHMARK_T(spsc_msgbuf, blocking_throughput, msgbuf_t)
     /* stream_capacity, producers, consumers, msg_size */
-    ->Args({64, 1, 1, 4})
     ->Args({128, 1, 1, 8})
     ->Args({128, 1, 1, 16})
     ->Args({512, 1, 1, 54})

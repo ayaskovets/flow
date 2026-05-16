@@ -14,9 +14,8 @@ using queue_t =
 
 BENCHMARK_TEMPLATE_T(mpmc_queue, nonblocking_throughput, int, queue_t<int>)
     /* queue_capacity, producers, consumers */
-    ->Args({64, 1, 1})
     ->Args({128, 2, 2})
-    ->Args({512, 4, 4})
+    ->Args({256, 4, 4})
     ->UseRealTime()
     ->Threads(2)
     ->Threads(4)
@@ -24,9 +23,8 @@ BENCHMARK_TEMPLATE_T(mpmc_queue, nonblocking_throughput, int, queue_t<int>)
 
 BENCHMARK_TEMPLATE_T(mpmc_queue, blocking_throughput, int, queue_t<int>)
     /* queue_capacity, producers, consumers */
-    ->Args({64, 1, 1})
     ->Args({128, 2, 2})
-    ->Args({512, 4, 4})
+    ->Args({256, 4, 4})
     ->UseRealTime()
     ->Threads(2)
     ->Threads(4)
@@ -35,9 +33,8 @@ BENCHMARK_TEMPLATE_T(mpmc_queue, blocking_throughput, int, queue_t<int>)
 BENCHMARK_TEMPLATE_T(mpmc_queue, nonblocking_throughput, shared_ptr,
                      queue_t<std::shared_ptr<int>>)
     /* queue_capacity, producers, consumers */
-    ->Args({64, 1, 1})
     ->Args({128, 2, 2})
-    ->Args({512, 4, 4})
+    ->Args({256, 4, 4})
     ->UseRealTime()
     ->Threads(2)
     ->Threads(4)
@@ -46,9 +43,8 @@ BENCHMARK_TEMPLATE_T(mpmc_queue, nonblocking_throughput, shared_ptr,
 BENCHMARK_TEMPLATE_T(mpmc_queue, blocking_throughput, shared_ptr,
                      queue_t<std::shared_ptr<int>>)
     /* queue_capacity, producers, consumers */
-    ->Args({64, 1, 1})
     ->Args({128, 2, 2})
-    ->Args({512, 4, 4})
+    ->Args({256, 4, 4})
     ->UseRealTime()
     ->Threads(2)
     ->Threads(4)

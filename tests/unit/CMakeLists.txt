@@ -41,6 +41,7 @@ set(SOURCES
     spsc_queue_test.cpp
     spsc_stream_test.cpp
     stream_test.cpp
+    unbounded_spsc_queue_test.cpp
     unsafe_msgbuf_test.cpp
     unsafe_queue_test.cpp
     unsafe_stream_test.cpp

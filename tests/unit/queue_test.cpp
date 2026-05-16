@@ -4,6 +4,7 @@
 #include <flow/queue.hpp>
 #include <flow/spmc_queue.hpp>
 #include <flow/spsc_queue.hpp>
+#include <flow/unbounded_spsc_queue.hpp>
 #include <flow/unsafe_queue.hpp>
 
 #include <gtest/gtest.h>
@@ -68,6 +69,18 @@ TEST(queue, spsc_queue) {
   static_assert(flow::concepts::noexcept_blocking_queue<queue_t>);
   static_assert(flow::concepts::cancellable_blocking_queue<queue_t>);
   static_assert(flow::concepts::noexcept_cancellable_blocking_queue<queue_t>);
+}
+
+TEST(queue, unbounded_spsc_queue) {
+  using queue_t = flow::unbounded_spsc_queue<int>;
+
+  static_assert(flow::concepts::queue<queue_t>);
+  static_assert(flow::concepts::nonblocking_queue<queue_t>);
+  static_assert(!flow::concepts::noexcept_nonblocking_queue<queue_t>);
+  static_assert(flow::concepts::blocking_queue<queue_t>);
+  static_assert(!flow::concepts::noexcept_blocking_queue<queue_t>);
+  static_assert(flow::concepts::cancellable_blocking_queue<queue_t>);
+  static_assert(!flow::concepts::noexcept_cancellable_blocking_queue<queue_t>);
 }
 
 TEST(queue, unsafe_queue) {

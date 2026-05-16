@@ -39,6 +39,7 @@ set(HEADERS
     include/flow/spsc_queue.hpp
     include/flow/spsc_stream.hpp
     include/flow/stream.hpp
+    include/flow/unbounded_spsc_queue.hpp
     include/flow/unsafe_msgbuf.hpp
     include/flow/unsafe_queue.hpp
     include/flow/unsafe_stream.hpp

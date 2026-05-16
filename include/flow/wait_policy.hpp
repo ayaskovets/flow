@@ -21,11 +21,17 @@ concept wait_policy = requires(T policy, std::stop_token stop_token) {
   { policy.wait_not_full(stop_token) };
   { policy.wait_not_empty(stop_token) };
 
+  requires noexcept(policy.wait_not_full(stop_token));
+  requires noexcept(policy.wait_not_empty(stop_token));
+
   /**
    * @brief Called after a successful push and pop
    */
   { policy.notify_not_empty() };
   { policy.notify_not_full() };
+
+  requires noexcept(policy.notify_not_empty());
+  requires noexcept(policy.notify_not_full());
 };
 
 }  // namespace flow::concepts

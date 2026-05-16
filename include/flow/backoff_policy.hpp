@@ -14,8 +14,13 @@ concept backoff_policy = requires(T policy) {
    * not block
    */
   { policy.backoff_token() } -> swiss::not_convertible_to<void>;
+
+  requires noexcept(policy.backoff_token());
+
   requires requires(decltype(policy.backoff_token()) backoff_token) {
     policy.backoff(backoff_token);
+
+    requires noexcept(policy.backoff(backoff_token));
   };
 };
 

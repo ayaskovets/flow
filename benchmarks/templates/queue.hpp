@@ -11,7 +11,7 @@ namespace benchmarks::templates {
 
 template <flow::concepts::nonblocking_queue Queue>
 constexpr void nonblocking_throughput(benchmark::State & state) {
-  auto const queue_capacity = static_cast<std::size_t>(state.range(0));
+  auto const queue_capacity = state.range(0);
   auto const producers      = state.range(1);
   auto const consumers      = state.range(2);
 
@@ -27,16 +27,14 @@ constexpr void nonblocking_throughput(benchmark::State & state) {
 
   static std::optional<Queue> queue;
   if (state.thread_index() == 0) {
-    queue.emplace(queue_capacity);
+    queue.emplace(static_cast<std::size_t>(queue_capacity));
   }
 
   std::int64_t items = 0;
   if (state.thread_index() < producers) {
     // NOLINTNEXTLINE(readability-identifier-length)
     for (auto const _ : state) {
-      if (queue->try_emplace()) {
-        ++items;
-      }
+      items += queue->try_emplace();
     }
 
     /**
@@ -51,10 +49,7 @@ constexpr void nonblocking_throughput(benchmark::State & state) {
     typename Queue::value_type value{};
     // NOLINTNEXTLINE(readability-identifier-length)
     for (auto const _ : state) {
-      if (queue->try_pop(value)) {
-        benchmark::DoNotOptimize(value);
-        ++items;
-      }
+      items += queue->try_pop(value);
     }
 
     /**
@@ -73,7 +68,7 @@ constexpr void nonblocking_throughput(benchmark::State & state) {
 
 template <flow::concepts::blocking_queue Queue>
 constexpr void blocking_throughput(benchmark::State & state) {
-  auto const queue_capacity = static_cast<std::size_t>(state.range(0));
+  auto const queue_capacity = state.range(0);
   auto const producers      = state.range(1);
   auto const consumers      = state.range(2);
 
@@ -89,7 +84,7 @@ constexpr void blocking_throughput(benchmark::State & state) {
 
   static std::optional<Queue> queue;
   if (state.thread_index() == 0) {
-    queue.emplace(queue_capacity);
+    queue.emplace(static_cast<std::size_t>(queue_capacity));
   }
 
   if (state.thread_index() < producers) {
@@ -102,7 +97,6 @@ constexpr void blocking_throughput(benchmark::State & state) {
     // NOLINTNEXTLINE(readability-identifier-length)
     for (auto const _ : state) {
       queue->pop(value);
-      benchmark::DoNotOptimize(value);
     }
 
     state.SetBytesProcessed(

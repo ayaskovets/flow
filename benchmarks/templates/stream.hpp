@@ -11,7 +11,7 @@ namespace benchmarks::templates {
 
 template <flow::concepts::nonblocking_stream Stream>
 constexpr void nonblocking_throughput(benchmark::State & state) {
-  auto const stream_capacity = static_cast<std::size_t>(state.range(0));
+  auto const stream_capacity = state.range(0);
   auto const producers       = state.range(1);
   auto const consumers       = state.range(2);
   auto const buffer_capacity = static_cast<std::size_t>(state.range(3));
@@ -28,7 +28,7 @@ constexpr void nonblocking_throughput(benchmark::State & state) {
 
   static std::optional<Stream> stream;
   if (state.thread_index() == 0) {
-    stream.emplace(stream_capacity);
+    stream.emplace(static_cast<std::size_t>(stream_capacity));
   }
 
   std::int64_t bytes      = 0;
@@ -37,10 +37,9 @@ constexpr void nonblocking_throughput(benchmark::State & state) {
     std::vector<std::byte> const buffer(buffer_capacity);
     // NOLINTNEXTLINE(readability-identifier-length)
     for (auto const _ : state) {
-      if (auto const pushed = stream->try_push(buffer); pushed > 0) {
-        bytes += pushed;
-        ++successful;
-      }
+      auto const pushed = stream->try_push(buffer);
+      bytes += pushed;
+      successful += pushed != 0;
     }
 
     state.counters["push%"] =
@@ -51,10 +50,9 @@ constexpr void nonblocking_throughput(benchmark::State & state) {
     std::vector<std::byte> buffer(buffer_capacity);
     // NOLINTNEXTLINE(readability-identifier-length)
     for (auto const _ : state) {
-      if (auto const popped = stream->try_pop(buffer); popped > 0) {
-        bytes += popped;
-        ++successful;
-      }
+      auto const popped = stream->try_pop(buffer);
+      bytes += popped;
+      successful += popped != 0;
     }
 
     state.counters["pop%"] =
@@ -67,10 +65,10 @@ constexpr void nonblocking_throughput(benchmark::State & state) {
 
 template <flow::concepts::blocking_stream Stream>
 constexpr void blocking_throughput(benchmark::State & state) {
-  auto const stream_capacity = static_cast<std::size_t>(state.range(0));
+  auto const stream_capacity = state.range(0);
   auto const producers       = state.range(1);
   auto const consumers       = state.range(2);
-  auto const buffer_capacity = static_cast<std::size_t>(state.range(3));
+  auto const buffer_capacity = state.range(3);
 
   if (producers + consumers != state.threads()) {
     state.SkipWithMessage("Invalid (producers + consumers) for thread count");
@@ -84,23 +82,24 @@ constexpr void blocking_throughput(benchmark::State & state) {
 
   static std::optional<Stream> stream;
   if (state.thread_index() == 0) {
-    stream.emplace(stream_capacity);
+    stream.emplace(static_cast<std::size_t>(stream_capacity));
   }
 
   std::int64_t bytes = 0;
   if (state.thread_index() < producers) {
-    std::vector<std::byte> const buffer(buffer_capacity);
+    std::vector<std::byte> const buffer(
+        static_cast<std::size_t>(buffer_capacity));
     // NOLINTNEXTLINE(readability-identifier-length)
     for (auto const _ : state) {
       stream->push(buffer);
-      bytes += static_cast<std::int64_t>(buffer_capacity);
+      bytes += buffer_capacity;
     }
   } else {
-    std::vector<std::byte> buffer(buffer_capacity);
+    std::vector<std::byte> buffer(static_cast<std::size_t>((buffer_capacity)));
     // NOLINTNEXTLINE(readability-identifier-length)
     for (auto const _ : state) {
       stream->pop(buffer);
-      bytes += static_cast<std::int64_t>(buffer_capacity);
+      bytes += buffer_capacity;
     }
 
     state.SetBytesProcessed(bytes);

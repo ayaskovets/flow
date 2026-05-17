@@ -83,6 +83,8 @@ class unbounded_spsc_queue : public swiss::non_copyable,
 
     write_tail(chunk, *writer_.chunk_capacity, chunk_tail{});
 
+    shared_.chunks.fetch_add(1, std::memory_order::relaxed);
+
     return chunk;
   }
 
@@ -94,7 +96,18 @@ class unbounded_spsc_queue : public swiss::non_copyable,
 
     std::allocator_traits<allocator_type>::deallocate(
         allocator_, chunk, *reader_.chunk_capacity + kAlignedChunkTailEntries);
+
+    shared_.chunks.fetch_sub(1, std::memory_order::relaxed);
   }
+
+  constexpr void deallocate_chain(aligned_entry_type * chunk) noexcept {
+    while (chunk) {
+      aligned_entry_type * const next =
+          read_tail(chunk, *reader_.chunk_capacity).next;
+      deallocate_chunk(chunk);
+      chunk = next;
+    }
+  };
 
   [[nodiscard]] constexpr auto try_reclaim_chunk() noexcept
       -> aligned_entry_type * {
@@ -157,18 +170,9 @@ class unbounded_spsc_queue : public swiss::non_copyable,
 
   constexpr ~unbounded_spsc_queue() noexcept {
     clear();
-    retire_chunk(writer_.chunk);
-    if (writer_.freelist) {
-      retire_chunk(writer_.freelist);
-    }
-    aligned_entry_type * chunk =
-        shared_.freelist.load(std::memory_order::relaxed);
-    while (chunk) {
-      aligned_entry_type * const next =
-          read_tail(chunk, *writer_.chunk_capacity).next;
-      deallocate_chunk(chunk);
-      chunk = next;
-    }
+    deallocate_chain(reader_.chunk);
+    deallocate_chain(writer_.freelist);
+    deallocate_chain(shared_.freelist.load(std::memory_order::relaxed));
   }
 
  public:
@@ -255,8 +259,8 @@ class unbounded_spsc_queue : public swiss::non_copyable,
 
  public:
   [[nodiscard]] constexpr auto capacity() const noexcept -> std::size_t {
-    // TODO: impl correctly with shared_.chunks
-    return *reader_.chunk_capacity;
+    return *reader_.chunk_capacity *
+           shared_.chunks.load(std::memory_order::relaxed);
   }
 
   [[nodiscard]] constexpr auto chunk_capacity() const noexcept -> std::size_t {
@@ -278,6 +282,11 @@ class unbounded_spsc_queue : public swiss::non_copyable,
     while (
         try_pop([](value_type * front) noexcept { std::destroy_at(front); })) {
     }
+  }
+
+  constexpr void shrink_to_fit() noexcept {
+    deallocate_chain(writer_.freelist);
+    deallocate_chain(shared_.freelist.load(std::memory_order::relaxed));
   }
 
   [[nodiscard]] constexpr auto get_allocator() const
@@ -308,7 +317,7 @@ class unbounded_spsc_queue : public swiss::non_copyable,
   struct alignas(std::hardware_destructive_interference_size)
       SharedCacheLine final {
     std::atomic<aligned_entry_type *> freelist = nullptr;
-    index_type chunks                          = 0;
+    std::atomic<index_type> chunks             = 0;
   };
 
   [[no_unique_address]] allocator_type allocator_;
@@ -374,15 +383,31 @@ class unbounded_spsc_queue : public swiss::non_copyable,
   constexpr auto try_push(Callback && callback) -> bool {
     index_type const push_to = writer_.index.load(std::memory_order::relaxed);
 
-    std::invoke(std::forward<Callback>(callback),
-                at(writer_.chunk, *writer_.chunk_capacity, push_to));
-
-    // TODO: handle allocate_chunk throwing an exception
-    if (last(*writer_.chunk_capacity, push_to)) {
-      aligned_entry_type * next = try_reclaim_chunk();
-      if (!next) {
-        next = allocate_chunk();
+    aligned_entry_type * const next = [&]() -> aligned_entry_type * {
+      if (!last(*writer_.chunk_capacity, push_to)) {
+        return nullptr;
       }
+
+      aligned_entry_type * const _next = try_reclaim_chunk();
+      if (_next) {
+        return _next;
+      }
+      return allocate_chunk();
+    }();
+
+    try {
+      std::invoke(std::forward<Callback>(callback),
+                  at(writer_.chunk, *writer_.chunk_capacity, push_to));
+    } catch (...) {
+      if (next) {
+        write_tail(next, *writer_.chunk_capacity,
+                   chunk_tail{.next = writer_.freelist});
+        writer_.freelist = next;
+      }
+      throw;
+    }
+
+    if (next) {
       write_tail(writer_.chunk, *writer_.chunk_capacity,
                  chunk_tail{.next = next});
       writer_.chunk = next;

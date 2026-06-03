@@ -9,6 +9,7 @@
 #include <swiss/conditionally_runtime.hpp>
 #include <swiss/dynamic_extent.hpp>
 #include <swiss/functional.hpp>
+#include <swiss/math.hpp>
 #include <swiss/mixins.hpp>
 
 namespace flow {
@@ -87,7 +88,8 @@ class unsafe_stream : public swiss::non_copyable, public swiss::non_movable {
       std::size_t _max_size = std::numeric_limits<
           std::size_t>::max()) noexcept(is_nothrow_callback<Callback>)
       -> std::size_t {
-    index_type const max_size = std::min(bound(_max_size), free());
+    index_type const max_size =
+        std::min(swiss::bound<index_type>(_max_size), free());
     if (max_size == 0) {
       return 0;
     }
@@ -105,7 +107,8 @@ class unsafe_stream : public swiss::non_copyable, public swiss::non_movable {
     swiss::assign_invoke_result_if_not_void(_callback_size,
                                             std::forward<Callback>(callback),
                                             postfix_span, prefix_span);
-    index_type const bytes_pushed = std::min(max_size, bound(_callback_size));
+    index_type const bytes_pushed =
+        std::min(max_size, swiss::bound<index_type>(_callback_size));
 
     size_ += bytes_pushed;
     return bytes_pushed;
@@ -117,7 +120,8 @@ class unsafe_stream : public swiss::non_copyable, public swiss::non_movable {
       Callback && callback,
       std::size_t _max_size = std::numeric_limits<std::size_t>::max()) noexcept
       -> std::size_t {
-    index_type const max_size = std::min(bound(_max_size), size_);
+    index_type const max_size =
+        std::min(swiss::bound<index_type>(_max_size), size_);
     if (max_size == 0) {
       return 0;
     }
@@ -134,7 +138,8 @@ class unsafe_stream : public swiss::non_copyable, public swiss::non_movable {
     swiss::assign_invoke_result_if_not_void(_callback_size,
                                             std::forward<Callback>(callback),
                                             postfix_span, prefix_span);
-    index_type const bytes_popped = std::min(max_size, bound(_callback_size));
+    index_type const bytes_popped =
+        std::min(max_size, swiss::bound<index_type>(_callback_size));
 
     size_ -= bytes_popped;
     pop_from_ = next(pop_from_, bytes_popped);
@@ -243,12 +248,6 @@ class unsafe_stream : public swiss::non_copyable, public swiss::non_movable {
   // NOLINTEND(cppcoreguidelines-avoid-const-or-ref-data-members)
 
  private:
-  [[nodiscard]] constexpr auto bound(std::size_t size) const noexcept
-      -> index_type {
-    return static_cast<index_type>(
-        std::min<std::size_t>(std::numeric_limits<index_type>::max(), size));
-  }
-
   [[nodiscard]] constexpr auto next(index_type index,
                                     index_type bytes) const noexcept
       -> index_type {

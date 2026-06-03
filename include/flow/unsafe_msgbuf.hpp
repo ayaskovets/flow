@@ -6,6 +6,7 @@
 
 #include <swiss/conditionally_runtime.hpp>
 #include <swiss/dynamic_extent.hpp>
+#include <swiss/math.hpp>
 #include <swiss/mixins.hpp>
 
 namespace flow {
@@ -78,7 +79,7 @@ class unsafe_msgbuf : public swiss::non_copyable, public swiss::non_movable {
       return false;
     }
 
-    index_type const msg_size = bound(_msg_size);
+    index_type const msg_size = swiss::bound<index_type>(_msg_size);
     auto const [fits, padding,
                 _push_to] = [&]() -> std::tuple<bool, index_type, index_type> {
       index_type const _pushto = push_to();
@@ -244,12 +245,6 @@ class unsafe_msgbuf : public swiss::non_copyable, public swiss::non_movable {
   // NOLINTEND(cppcoreguidelines-avoid-const-or-ref-data-members)
 
  private:
-  [[nodiscard]] constexpr auto bound(std::size_t size) const noexcept
-      -> index_type {
-    return static_cast<index_type>(
-        std::min<std::size_t>(std::numeric_limits<index_type>::max(), size));
-  }
-
   [[nodiscard]] constexpr auto fits(std::size_t bytes) const noexcept -> bool {
     return (bytes != 0) && bytes <= (*capacity_ - header_size());
   }

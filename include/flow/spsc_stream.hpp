@@ -12,6 +12,7 @@
 #include <swiss/conditionally_runtime.hpp>
 #include <swiss/dynamic_extent.hpp>
 #include <swiss/functional.hpp>
+#include <swiss/math.hpp>
 #include <swiss/mixins.hpp>
 #include <swiss/predicates.hpp>
 
@@ -107,7 +108,7 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
     index_type const push_to = writer_.index.load(std::memory_order::relaxed);
 
     index_type const total = [&]() {
-      index_type const max_size = bound(_max_size);
+      index_type const max_size = swiss::bound<index_type>(_max_size);
 
       index_type _free = free(*writer_.capacity, push_to, writer_.cache);
       if (max_size > _free) {
@@ -134,7 +135,8 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
     swiss::assign_invoke_result_if_not_void(_callback_total,
                                             std::forward<Callback>(callback),
                                             postfix_span, prefix_span);
-    index_type const callback_total = std::min(bound(_callback_total), total);
+    index_type const callback_total =
+        std::min(swiss::bound<index_type>(_callback_total), total);
 
     writer_.index.store(push_to + callback_total, std::memory_order::release);
 
@@ -152,7 +154,7 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
 
     index_type const total = [&]() {
-      index_type const max_size = bound(_max_size);
+      index_type const max_size = swiss::bound<index_type>(_max_size);
       index_type _size          = size(reader_.cache, pop_from);
       if (max_size > _size) {
         reader_.cache = writer_.index.load(std::memory_order::acquire);
@@ -178,7 +180,8 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
     swiss::assign_invoke_result_if_not_void(_callback_total,
                                             std::forward<Callback>(callback),
                                             postfix_span, prefix_span);
-    index_type const callback_total = std::min(bound(_callback_total), total);
+    index_type const callback_total =
+        std::min(swiss::bound<index_type>(_callback_total), total);
 
     reader_.index.store(pop_from + callback_total, std::memory_order::release);
 
@@ -197,7 +200,7 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
       return false;
     }
 
-    index_type const exact_size = bound(_exact_size);
+    index_type const exact_size = swiss::bound<index_type>(_exact_size);
     index_type const push_to = writer_.index.load(std::memory_order::relaxed);
 
     while (!stop_token.stop_requested()) {
@@ -228,7 +231,7 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
       return false;
     }
 
-    index_type const exact_size = bound(_exact_size);
+    index_type const exact_size = swiss::bound<index_type>(_exact_size);
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
 
     while (!stop_token.stop_requested()) {
@@ -373,12 +376,6 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
   CacheLine reader_;
 
  private:
-  [[nodiscard]] constexpr auto bound(std::size_t size) const noexcept
-      -> index_type {
-    return static_cast<index_type>(
-        std::min<std::size_t>(std::numeric_limits<index_type>::max(), size));
-  }
-
   [[nodiscard]] constexpr auto fits(index_type capacity,
                                     std::size_t bytes) const noexcept -> bool {
     return (bytes != 0) && (bytes <= capacity);

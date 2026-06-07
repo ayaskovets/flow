@@ -25,10 +25,6 @@ add_executable(flow-unit-tests)
 # ------------------------------------------------------------------------------
 
 set(SOURCES
-    templates/msgbuf.hpp
-    templates/queue.hpp
-    templates/stream.hpp
-    templates/templates.hpp
     backoff_policy_test.cpp
     locked_ring_buffer_test.cpp
     mpmc_queue_test.cpp
@@ -41,6 +37,10 @@ set(SOURCES
     spsc_queue_test.cpp
     spsc_stream_test.cpp
     stream_test.cpp
+    templates/msgbuf.hpp
+    templates/queue.hpp
+    templates/stream.hpp
+    templates/templates.hpp
     unbounded_spsc_queue_test.cpp
     unsafe_msgbuf_test.cpp
     unsafe_queue_test.cpp

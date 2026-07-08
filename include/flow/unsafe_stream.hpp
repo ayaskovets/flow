@@ -66,7 +66,7 @@ class unsafe_stream : public swiss::non_copyable, public swiss::non_movable {
     requires(Capacity == swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
         capacity_(capacity),
-        ring_buffer_([&] {
+        ring_buffer_([&] -> std::byte * {
           if (!valid(capacity)) {
             throw std::invalid_argument(
                 "unsafe_stream::unsafe_stream(): invalid capacity");
@@ -94,7 +94,8 @@ class unsafe_stream : public swiss::non_copyable, public swiss::non_movable {
       return 0;
     }
 
-    auto const [postfix_span, prefix_span] = [&]() {
+    auto const [postfix_span, prefix_span] = [&]() noexcept
+        -> std::pair<std::span<std::byte>, std::span<std::byte>> {
       index_type const _push_to = push_to();
       index_type const postfix  = *capacity_ - _push_to;
       index_type const chunk    = std::min(max_size, postfix);
@@ -126,7 +127,8 @@ class unsafe_stream : public swiss::non_copyable, public swiss::non_movable {
       return 0;
     }
 
-    auto const [postfix_span, prefix_span] = [&]() {
+    auto const [postfix_span, prefix_span] = [&]() noexcept
+        -> std::pair<std::span<std::byte>, std::span<std::byte>> {
       index_type const postfix = *capacity_ - pop_from_;
       index_type const chunk   = std::min(max_size, postfix);
       index_type const prefix  = max_size - chunk;
@@ -170,7 +172,7 @@ class unsafe_stream : public swiss::non_copyable, public swiss::non_movable {
       std::span<std::byte const> bytes) noexcept -> std::size_t {
     return try_push(
         [&](std::span<std::byte> postfix,
-            std::span<std::byte> prefix) noexcept {
+            std::span<std::byte> prefix) noexcept -> void {
           std::memcpy(postfix.data(), bytes.data(), postfix.size());
           std::memcpy(prefix.data(), bytes.subspan(postfix.size()).data(),
                       prefix.size());
@@ -182,7 +184,7 @@ class unsafe_stream : public swiss::non_copyable, public swiss::non_movable {
       -> std::size_t {
     return try_pop(
         [&](std::span<std::byte> postfix,
-            std::span<std::byte> prefix) noexcept {
+            std::span<std::byte> prefix) noexcept -> void {
           std::memcpy(bytes.data(), postfix.data(), postfix.size());
           std::memcpy(bytes.subspan(postfix.size()).data(), prefix.data(),
                       prefix.size());
@@ -192,21 +194,23 @@ class unsafe_stream : public swiss::non_copyable, public swiss::non_movable {
 
  public:
   constexpr void push(std::span<std::byte const> bytes) {
-    push(bytes.size(), [&](std::span<std::byte> postfix,
-                           std::span<std::byte> prefix) noexcept {
-      std::memcpy(postfix.data(), bytes.data(), postfix.size());
-      std::memcpy(prefix.data(), bytes.subspan(postfix.size()).data(),
-                  prefix.size());
-    });
+    push(bytes.size(),
+         [&](std::span<std::byte> postfix,
+             std::span<std::byte> prefix) noexcept -> void {
+           std::memcpy(postfix.data(), bytes.data(), postfix.size());
+           std::memcpy(prefix.data(), bytes.subspan(postfix.size()).data(),
+                       prefix.size());
+         });
   }
 
   constexpr void pop(std::span<std::byte> bytes) {
-    pop(bytes.size(), [&](std::span<std::byte> postfix,
-                          std::span<std::byte> prefix) noexcept {
-      std::memcpy(bytes.data(), postfix.data(), postfix.size());
-      std::memcpy(bytes.subspan(postfix.size()).data(), prefix.data(),
-                  prefix.size());
-    });
+    pop(bytes.size(),
+        [&](std::span<std::byte> postfix,
+            std::span<std::byte> prefix) noexcept -> void {
+          std::memcpy(bytes.data(), postfix.data(), postfix.size());
+          std::memcpy(bytes.subspan(postfix.size()).data(), prefix.data(),
+                      prefix.size());
+        });
   }
 
  public:
@@ -223,8 +227,8 @@ class unsafe_stream : public swiss::non_copyable, public swiss::non_movable {
   }
 
   constexpr void clear() noexcept {
-    while (
-        try_pop([](std::span<std::byte>, std::span<std::byte>) noexcept {})) {
+    while (try_pop(
+        [](std::span<std::byte>, std::span<std::byte>) noexcept -> void {})) {
     }
   }
 

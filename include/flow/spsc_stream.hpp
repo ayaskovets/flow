@@ -80,15 +80,14 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
       : allocator_(std::move(allocator)),
         wait_policy_(std::move(wait_policy)),
         writer_{.capacity{capacity},
-                .ring_buffer =
-                    [&] {
-                      if (!valid(capacity)) {
-                        throw std::invalid_argument(
-                            "spsc_stream::spsc_stream(): invalid capacity");
-                      }
-                      return std::allocator_traits<allocator_type>::allocate(
-                          allocator_, capacity);
-                    }()},
+                .ring_buffer = [&] -> std::byte * {
+                  if (!valid(capacity)) {
+                    throw std::invalid_argument(
+                        "spsc_stream::spsc_stream(): invalid capacity");
+                  }
+                  return std::allocator_traits<allocator_type>::allocate(
+                      allocator_, capacity);
+                }()},
         reader_{.capacity    = writer_.capacity,
                 .ring_buffer = writer_.ring_buffer} {}
 
@@ -107,7 +106,7 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
       -> std::size_t {
     index_type const push_to = writer_.index.load(std::memory_order::relaxed);
 
-    index_type const total = [&]() {
+    index_type const total = [&]() noexcept -> index_type {
       index_type const max_size = swiss::bound<index_type>(_max_size);
 
       index_type _free = free(*writer_.capacity, push_to, writer_.cache);
@@ -122,7 +121,8 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
       return 0;
     }
 
-    auto const [postfix_span, prefix_span] = [&]() {
+    auto const [postfix_span, prefix_span] = [&]() noexcept
+        -> std::pair<std::span<std::byte>, std::span<std::byte>> {
       index_type const _slot   = slot(*writer_.capacity, push_to);
       index_type const postfix = *writer_.capacity - _slot;
       index_type const chunk   = std::min(total, postfix);
@@ -153,7 +153,7 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
       -> std::size_t {
     index_type const pop_from = reader_.index.load(std::memory_order::relaxed);
 
-    index_type const total = [&]() {
+    index_type const total = [&]() noexcept -> index_type {
       index_type const max_size = swiss::bound<index_type>(_max_size);
       index_type _size          = size(reader_.cache, pop_from);
       if (max_size > _size) {
@@ -167,7 +167,8 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
       return 0;
     }
 
-    auto const [postfix_span, prefix_span] = [&]() {
+    auto const [postfix_span, prefix_span] = [&]() noexcept
+        -> std::pair<std::span<std::byte>, std::span<std::byte>> {
       index_type const _slot   = slot(*reader_.capacity, pop_from);
       index_type const postfix = *reader_.capacity - _slot;
       index_type const chunk   = std::min(total, postfix);
@@ -272,7 +273,7 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
       std::span<std::byte const> bytes) noexcept -> std::size_t {
     return try_push(
         [&](std::span<std::byte> postfix,
-            std::span<std::byte> prefix) noexcept {
+            std::span<std::byte> prefix) noexcept -> void {
           std::memcpy(postfix.data(), bytes.data(), postfix.size());
           std::memcpy(prefix.data(), bytes.subspan(postfix.size()).data(),
                       prefix.size());
@@ -284,7 +285,7 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
       -> std::size_t {
     return try_pop(
         [&](std::span<std::byte> postfix,
-            std::span<std::byte> prefix) noexcept {
+            std::span<std::byte> prefix) noexcept -> void {
           std::memcpy(bytes.data(), postfix.data(), postfix.size());
           std::memcpy(bytes.subspan(postfix.size()).data(), prefix.data(),
                       prefix.size());
@@ -297,7 +298,7 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
                       std::span<std::byte const> bytes) noexcept -> bool {
     return push(stop_token, bytes.size(),
                 [&](std::span<std::byte> postfix,
-                    std::span<std::byte> prefix) noexcept {
+                    std::span<std::byte> prefix) noexcept -> void {
                   std::memcpy(postfix.data(), bytes.data(), postfix.size());
                   std::memcpy(prefix.data(),
                               bytes.subspan(postfix.size()).data(),
@@ -309,7 +310,7 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
                      std::span<std::byte> bytes) noexcept -> bool {
     return pop(stop_token, bytes.size(),
                [&](std::span<std::byte> postfix,
-                   std::span<std::byte> prefix) noexcept {
+                   std::span<std::byte> prefix) noexcept -> void {
                  std::memcpy(bytes.data(), postfix.data(), postfix.size());
                  std::memcpy(bytes.subspan(postfix.size()).data(),
                              prefix.data(), prefix.size());
@@ -345,8 +346,8 @@ class spsc_stream : public swiss::non_copyable, public swiss::non_movable {
   }
 
   constexpr void clear() noexcept {
-    while (
-        try_pop([](std::span<std::byte>, std::span<std::byte>) noexcept {})) {
+    while (try_pop(
+        [](std::span<std::byte>, std::span<std::byte>) noexcept -> void {})) {
     }
   }
 

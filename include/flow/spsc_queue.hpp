@@ -94,15 +94,14 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
       : allocator_(std::move(allocator)),
         wait_policy_(std::move(wait_policy)),
         writer_{.capacity{capacity},
-                .ring_buffer =
-                    [&] {
-                      if (!valid(capacity)) {
-                        throw std::invalid_argument(
-                            "spsc_queue::spsc_queue(): invalid capacity");
-                      }
-                      return std::allocator_traits<allocator_type>::allocate(
-                          allocator_, capacity);
-                    }()},
+                .ring_buffer = [&] -> aligned_entry_type * {
+                  if (!valid(capacity)) {
+                    throw std::invalid_argument(
+                        "spsc_queue::spsc_queue(): invalid capacity");
+                  }
+                  return std::allocator_traits<allocator_type>::allocate(
+                      allocator_, capacity);
+                }()},
         reader_{.capacity    = writer_.capacity,
                 .ring_buffer = writer_.ring_buffer} {
     initialize();
@@ -120,7 +119,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     requires(std::constructible_from<value_type, Args...>)
   constexpr auto try_emplace(Args &&... args) noexcept(
       std::is_nothrow_constructible_v<value_type, Args...>) -> bool {
-    return try_push([&](value_type * front) {
+    return try_push([&](value_type * front) -> void {
       std::construct_at(front, std::forward<Args>(args)...);
     });
   }
@@ -139,9 +138,9 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     requires(std::is_nothrow_assignable_v<decltype(value), value_type> &&
              std::is_nothrow_destructible_v<value_type>)
   {
-    return try_pop([&](value_type * front) noexcept {
+    return try_pop([&](value_type * front) noexcept -> void {
       swiss::scope_exit const scope_exit(
-          [&]() noexcept { std::destroy_at(front); });
+          [&]() noexcept -> void { std::destroy_at(front); });
       value = std::move(*front);
     });
   }
@@ -152,7 +151,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
   constexpr auto
   emplace(std::stop_token const & stop_token, Args &&... args) noexcept(
       std::is_nothrow_constructible_v<value_type, Args...>) -> bool {
-    return push(stop_token, [&](value_type * front) {
+    return push(stop_token, [&](value_type * front) -> void {
       std::construct_at(front, std::forward<Args>(args)...);
     });
   }
@@ -174,9 +173,9 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     requires(std::is_nothrow_assignable_v<decltype(value), value_type> &&
              std::is_nothrow_destructible_v<value_type>)
   {
-    return pop(stop_token, [&](value_type * front) noexcept {
+    return pop(stop_token, [&](value_type * front) noexcept -> void {
       swiss::scope_exit const scope_exit(
-          [&]() noexcept { std::destroy_at(front); });
+          [&]() noexcept -> void { std::destroy_at(front); });
       value = std::move(*front);
     });
   }
@@ -223,8 +222,8 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
   }
 
   constexpr void clear() noexcept {
-    while (
-        try_pop([](value_type * front) noexcept { std::destroy_at(front); })) {
+    while (try_pop(
+        [](value_type * front) noexcept -> void { std::destroy_at(front); })) {
     }
   }
 

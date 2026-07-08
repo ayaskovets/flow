@@ -108,7 +108,7 @@ class mpsc_queue : public swiss::non_copyable, public swiss::non_movable {
         wait_policy_(std::move(wait_policy)),
         backoff_policy_(std::move(backoff_policy)),
         capacity_(capacity),
-        ring_buffer_([&] {
+        ring_buffer_([&] -> aligned_entry_type * {
           if (!valid(capacity)) {
             throw std::invalid_argument(
                 "mpsc_queue::mpsc_queue(): invalid capacity");
@@ -130,7 +130,7 @@ class mpsc_queue : public swiss::non_copyable, public swiss::non_movable {
   template <typename... Args>
     requires(std::is_nothrow_constructible_v<value_type, Args...>)
   constexpr auto try_emplace(Args &&... args) noexcept -> bool {
-    return try_push([&](value_type * front) noexcept {
+    return try_push([&](value_type * front) noexcept -> void {
       std::construct_at(front, std::forward<Args>(args)...);
     });
   }
@@ -150,7 +150,7 @@ class mpsc_queue : public swiss::non_copyable, public swiss::non_movable {
   constexpr auto try_pop(auto & value) noexcept -> bool
     requires(std::is_nothrow_assignable_v<decltype(value), value_type>)
   {
-    return try_pop([&](value_type * front) noexcept {
+    return try_pop([&](value_type * front) noexcept -> void {
       value = std::move(*front);
       std::destroy_at(front);
     });
@@ -161,7 +161,7 @@ class mpsc_queue : public swiss::non_copyable, public swiss::non_movable {
     requires(std::is_nothrow_constructible_v<value_type, Args...>)
   constexpr auto emplace(std::stop_token const & stop_token,
                          Args &&... args) noexcept -> bool {
-    return push(stop_token, [&](value_type * front) noexcept {
+    return push(stop_token, [&](value_type * front) noexcept -> void {
       std::construct_at(front, std::forward<Args>(args)...);
     });
   }
@@ -184,7 +184,7 @@ class mpsc_queue : public swiss::non_copyable, public swiss::non_movable {
       -> bool
     requires(std::is_nothrow_assignable_v<decltype(value), value_type>)
   {
-    return pop(stop_token, [&](value_type * front) noexcept {
+    return pop(stop_token, [&](value_type * front) noexcept -> void {
       value = std::move(*front);
       std::destroy_at(front);
     });
@@ -194,7 +194,7 @@ class mpsc_queue : public swiss::non_copyable, public swiss::non_movable {
   template <typename... Args>
     requires(std::is_nothrow_constructible_v<value_type, Args...>)
   constexpr void emplace(Args &&... args) noexcept {
-    return push([&](value_type * front) noexcept {
+    return push([&](value_type * front) noexcept -> void {
       std::construct_at(front, std::forward<Args>(args)...);
     });
   }
@@ -214,7 +214,7 @@ class mpsc_queue : public swiss::non_copyable, public swiss::non_movable {
   constexpr void pop(auto & value) noexcept
     requires(std::is_nothrow_assignable_v<decltype(value), value_type>)
   {
-    return pop([&](value_type * front) noexcept {
+    return pop([&](value_type * front) noexcept -> void {
       value = std::move(*front);
       std::destroy_at(front);
     });
@@ -237,8 +237,8 @@ class mpsc_queue : public swiss::non_copyable, public swiss::non_movable {
   }
 
   constexpr void clear() noexcept {
-    while (
-        try_pop([](value_type * front) noexcept { std::destroy_at(front); })) {
+    while (try_pop(
+        [](value_type * front) noexcept -> void { std::destroy_at(front); })) {
     }
   }
 

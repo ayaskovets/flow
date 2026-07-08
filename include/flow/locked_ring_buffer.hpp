@@ -83,7 +83,7 @@ class locked_ring_buffer : public swiss::non_copyable,
     requires(Capacity == swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
         capacity_(capacity),
-        ring_buffer_([&] {
+        ring_buffer_([&] -> aligned_entry_type * {
           if (!valid(capacity)) {
             throw std::invalid_argument(
                 "locked_ring_buffer::locked_ring_buffer(): invalid capacity");
@@ -105,7 +105,7 @@ class locked_ring_buffer : public swiss::non_copyable,
   template <typename... Args>
     requires(std::constructible_from<value_type, Args...>)
   constexpr auto try_emplace(Args &&... args) -> bool {
-    return try_push([&](value_type * front) {
+    return try_push([&](value_type * front) -> void {
       std::construct_at(front, std::forward<Args>(args)...);
     });
   }
@@ -119,9 +119,9 @@ class locked_ring_buffer : public swiss::non_copyable,
   }
 
   constexpr auto try_pop(auto & value) -> bool {
-    return try_pop([&](value_type * front) {
+    return try_pop([&](value_type * front) -> void {
       swiss::scope_exit const scope_exit(
-          [&]() noexcept { std::destroy_at(at(pop_from_)); });
+          [&]() noexcept -> void { std::destroy_at(at(pop_from_)); });
       value = std::move(*front);
     });
   }
@@ -131,7 +131,7 @@ class locked_ring_buffer : public swiss::non_copyable,
     requires(std::constructible_from<value_type, Args...>)
   constexpr auto emplace(std::stop_token const & stop_token, Args &&... args)
       -> bool {
-    return push(stop_token, [&](value_type * front) {
+    return push(stop_token, [&](value_type * front) -> void {
       std::construct_at(front, std::forward<Args>(args)...);
     });
   }
@@ -147,9 +147,9 @@ class locked_ring_buffer : public swiss::non_copyable,
   }
 
   constexpr auto pop(std::stop_token const & stop_token, auto & value) -> bool {
-    return pop(stop_token, [&](value_type * front) {
+    return pop(stop_token, [&](value_type * front) -> void {
       swiss::scope_exit const scope_exit(
-          [&]() noexcept { std::destroy_at(at(pop_from_)); });
+          [&]() noexcept -> void { std::destroy_at(at(pop_from_)); });
       value = std::move(*front);
     });
   }
@@ -286,7 +286,7 @@ class locked_ring_buffer : public swiss::non_copyable,
       -> bool {
     std::unique_lock lock(mutex_);
     if (!push_available_cv_.wait(lock, stop_token,
-                                 [this] { return !full(); })) {
+                                 [this] noexcept -> bool { return !full(); })) {
       return false;
     }
 
@@ -302,8 +302,9 @@ class locked_ring_buffer : public swiss::non_copyable,
   constexpr auto pop(std::stop_token const & stop_token, Callback && callback)
       -> bool {
     std::unique_lock lock(mutex_);
-    if (!pop_available_cv_.wait(
-            lock, stop_token, [this] { return !empty(push_to_, pop_from_); })) {
+    if (!pop_available_cv_.wait(lock, stop_token, [this] noexcept -> bool {
+          return !empty(push_to_, pop_from_);
+        })) {
       return false;
     }
 

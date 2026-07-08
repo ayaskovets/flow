@@ -56,7 +56,7 @@ class unsafe_msgbuf : public swiss::non_copyable, public swiss::non_movable {
     requires(Capacity == swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
         capacity_(capacity),
-        ring_buffer_([&] {
+        ring_buffer_([&] -> std::byte * {
           if (!valid(capacity)) {
             throw std::invalid_argument(
                 "unsafe_msgbuf::unsafe_msgbuf(): invalid capacity");
@@ -170,9 +170,10 @@ class unsafe_msgbuf : public swiss::non_copyable, public swiss::non_movable {
 
  public:
   constexpr auto try_push(std::span<std::byte const> msg) noexcept -> bool {
-    return try_push(msg.size(), [msg](std::span<std::byte> chunk) noexcept {
-      std::memcpy(chunk.data(), msg.data(), msg.size());
-    });
+    return try_push(msg.size(),
+                    [msg](std::span<std::byte> chunk) noexcept -> void {
+                      std::memcpy(chunk.data(), msg.data(), msg.size());
+                    });
   }
 
   [[nodiscard]] constexpr auto try_pop(std::span<std::byte> msg) noexcept
@@ -181,14 +182,14 @@ class unsafe_msgbuf : public swiss::non_copyable, public swiss::non_movable {
       return 0;
     }
 
-    return try_pop([msg](std::span<std::byte> chunk) noexcept {
+    return try_pop([msg](std::span<std::byte> chunk) noexcept -> void {
       std::memcpy(msg.data(), chunk.data(), std::min(msg.size(), chunk.size()));
     });
   }
 
  public:
   constexpr void push(std::span<std::byte const> msg) {
-    push(msg.size(), [msg](std::span<std::byte> chunk) noexcept {
+    push(msg.size(), [msg](std::span<std::byte> chunk) noexcept -> void {
       std::memcpy(chunk.data(), msg.data(), msg.size());
     });
   }
@@ -198,7 +199,7 @@ class unsafe_msgbuf : public swiss::non_copyable, public swiss::non_movable {
       return 0;
     }
 
-    return pop([msg](std::span<std::byte> chunk) noexcept {
+    return pop([msg](std::span<std::byte> chunk) noexcept -> void {
       std::memcpy(msg.data(), chunk.data(), std::min(msg.size(), chunk.size()));
     });
   }
@@ -221,7 +222,7 @@ class unsafe_msgbuf : public swiss::non_copyable, public swiss::non_movable {
   }
 
   constexpr void clear() noexcept {
-    while (try_pop([](std::span<std::byte>) noexcept {})) {
+    while (try_pop([](std::span<std::byte>) noexcept -> void {})) {
     }
   }
 

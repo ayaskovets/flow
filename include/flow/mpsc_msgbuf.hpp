@@ -83,7 +83,7 @@ class mpsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
         wait_policy_(std::move(wait_policy)),
         backoff_policy_(std::move(backoff_policy)),
         capacity_(capacity),
-        ring_buffer_([&] {
+        ring_buffer_([&] -> block_type * {
           if (!valid(capacity)) {
             throw std::invalid_argument(
                 "mpsc_msgbuf::mpsc_msgbuf(): invalid capacity");
@@ -110,7 +110,7 @@ class mpsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
     }
 
     auto const write_commited_header = [&](index_type push_to,
-                                           index_type msg_size) {
+                                           index_type msg_size) -> void {
       header_msg_size(push_to) = msg_size;
       header_seqnum(push_to).store(commit_seqnum(push_to),
                                    std::memory_order::release);
@@ -296,7 +296,7 @@ class mpsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
     requires(is_nothrow_callback<Callback>)
   constexpr auto pop(Callback && callback) noexcept -> std::size_t {
     std::size_t msg_size{};
-    pop(std::stop_token{}, [&](std::span<std::byte> chunk) noexcept {
+    pop(std::stop_token{}, [&](std::span<std::byte> chunk) noexcept -> void {
       msg_size = chunk.size();
       std::invoke(std::forward<Callback>(callback), chunk);
     });
@@ -305,9 +305,10 @@ class mpsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
 
  public:
   constexpr auto try_push(std::span<std::byte const> msg) noexcept -> bool {
-    return try_push(msg.size(), [msg](std::span<std::byte> chunk) noexcept {
-      std::memcpy(chunk.data(), msg.data(), msg.size());
-    });
+    return try_push(msg.size(),
+                    [msg](std::span<std::byte> chunk) noexcept -> void {
+                      std::memcpy(chunk.data(), msg.data(), msg.size());
+                    });
   }
 
   [[nodiscard]] constexpr auto try_pop(std::span<std::byte> msg) noexcept
@@ -316,7 +317,7 @@ class mpsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
       return 0;
     }
 
-    return try_pop([msg](std::span<std::byte> chunk) noexcept {
+    return try_pop([msg](std::span<std::byte> chunk) noexcept -> void {
       std::memcpy(msg.data(), chunk.data(), std::min(msg.size(), chunk.size()));
     });
   }
@@ -325,7 +326,7 @@ class mpsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
   constexpr auto push(std::stop_token const & stop_token,
                       std::span<std::byte const> msg) noexcept -> bool {
     return push(stop_token, msg.size(),
-                [msg](std::span<std::byte> chunk) noexcept {
+                [msg](std::span<std::byte> chunk) noexcept -> void {
                   std::memcpy(chunk.data(), msg.data(), msg.size());
                 });
   }
@@ -336,7 +337,7 @@ class mpsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
       return false;
     }
 
-    return pop(stop_token, [msg](std::span<std::byte> chunk) noexcept {
+    return pop(stop_token, [msg](std::span<std::byte> chunk) noexcept -> void {
       std::memcpy(msg.data(), chunk.data(), std::min(msg.size(), chunk.size()));
     });
   }
@@ -352,7 +353,7 @@ class mpsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
       return 0;
     }
 
-    return pop([msg](std::span<std::byte> chunk) noexcept {
+    return pop([msg](std::span<std::byte> chunk) noexcept -> void {
       std::memcpy(msg.data(), chunk.data(), std::min(msg.size(), chunk.size()));
     });
   }
@@ -378,7 +379,7 @@ class mpsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
   }
 
   constexpr void clear() noexcept {
-    while (try_pop([](std::span<std::byte>) noexcept {})) {
+    while (try_pop([](std::span<std::byte>) noexcept -> void {})) {
     }
   }
 

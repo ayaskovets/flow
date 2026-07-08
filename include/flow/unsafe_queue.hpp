@@ -56,7 +56,7 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
     requires(Capacity == swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
         capacity_(capacity),
-        ring_buffer_([&] {
+        ring_buffer_([&] -> value_type * {
           if (!valid(capacity)) {
             throw std::invalid_argument(
                 "unsafe_queue::unsafe_queue(): invalid capacity");
@@ -76,7 +76,7 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
     requires(std::constructible_from<value_type, Args...>)
   constexpr auto try_emplace(Args &&... args) noexcept(
       std::is_nothrow_constructible_v<value_type, Args...>) -> bool {
-    return try_push([&](value_type * front) {
+    return try_push([&](value_type * front) -> void {
       std::allocator_traits<allocator_type>::construct(
           allocator_, front, std::forward<Args>(args)...);
     });
@@ -95,8 +95,8 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
   constexpr auto try_pop(auto & value) noexcept(
       std::is_nothrow_assignable_v<decltype(value), value_type> &&
       std::is_nothrow_destructible_v<value_type>) -> bool {
-    return try_pop([&](value_type * front) {
-      swiss::scope_exit const scope_exit([&]() noexcept {
+    return try_pop([&](value_type * front) -> void {
+      swiss::scope_exit const scope_exit([&]() noexcept -> void {
         std::allocator_traits<allocator_type>::destroy(allocator_, front);
       });
       value = std::move(*front);
@@ -107,7 +107,7 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
   template <typename... Args>
     requires(std::constructible_from<value_type, Args...>)
   constexpr void emplace(Args &&... args) {
-    push([&](value_type * front) {
+    push([&](value_type * front) -> void {
       std::allocator_traits<allocator_type>::construct(
           allocator_, front, std::forward<Args>(args)...);
     });
@@ -118,8 +118,8 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
   constexpr void push(value_type && value) { emplace(std::move(value)); }
 
   constexpr void pop(auto & value) {
-    pop([&](value_type * front) {
-      swiss::scope_exit const scope_exit([&]() noexcept {
+    pop([&](value_type * front) -> void {
+      swiss::scope_exit const scope_exit([&]() noexcept -> void {
         std::allocator_traits<allocator_type>::destroy(allocator_, front);
       });
       value = std::move(*front);
@@ -140,7 +140,7 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
   }
 
   constexpr void clear() noexcept {
-    while (try_pop([&](value_type * front) noexcept {
+    while (try_pop([&](value_type * front) noexcept -> void {
       std::allocator_traits<allocator_type>::destroy(allocator_, front);
     })) {
     }

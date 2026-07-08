@@ -30,8 +30,8 @@ template <typename T>
 concept nonblocking_stream =
     stream<T> &&
     requires(T stream, std::span<std::byte> bytes,
-             decltype([](std::span<std::byte>, std::span<std::byte>) noexcept {
-             }) callback,
+             decltype([](std::span<std::byte>,
+                         std::span<std::byte>) noexcept -> void {}) callback,
              std::size_t max_size) {
       { stream.try_push(callback, max_size) } -> std::same_as<std::size_t>;
       { stream.try_pop(callback, max_size) } -> std::same_as<std::size_t>;
@@ -46,8 +46,8 @@ template <typename T>
 concept noexcept_nonblocking_stream =
     nonblocking_stream<T> &&
     requires(T stream, std::span<std::byte> bytes,
-             decltype([](std::span<std::byte>, std::span<std::byte>) noexcept {
-             }) callback,
+             decltype([](std::span<std::byte>,
+                         std::span<std::byte>) noexcept -> void {}) callback,
              std::size_t max_size) {
       requires noexcept(stream.try_push(callback, max_size));
       requires noexcept(stream.try_pop(callback, max_size));
@@ -65,8 +65,8 @@ template <typename T>
 concept blocking_stream =
     stream<T> &&
     requires(T stream, std::span<std::byte> bytes,
-             decltype([](std::span<std::byte>, std::span<std::byte>) noexcept {
-             }) callback,
+             decltype([](std::span<std::byte>,
+                         std::span<std::byte>) noexcept -> void {}) callback,
              std::size_t exact_size) {
       { stream.push(exact_size, callback) };
       { stream.pop(exact_size, callback) };
@@ -81,8 +81,8 @@ template <typename T>
 concept noexcept_blocking_stream =
     blocking_stream<T> &&
     requires(T stream, std::span<std::byte> bytes,
-             decltype([](std::span<std::byte>, std::span<std::byte>) noexcept {
-             }) callback,
+             decltype([](std::span<std::byte>,
+                         std::span<std::byte>) noexcept -> void {}) callback,
              std::size_t exact_size) {
       requires noexcept(stream.push(exact_size, callback));
       requires noexcept(stream.pop(exact_size, callback));
@@ -99,8 +99,8 @@ template <typename T>
 concept cancellable_blocking_stream =
     blocking_stream<T> &&
     requires(T stream, std::span<std::byte> bytes, std::stop_token stop_token,
-             decltype([](std::span<std::byte>, std::span<std::byte>) noexcept {
-             }) callback,
+             decltype([](std::span<std::byte>,
+                         std::span<std::byte>) noexcept -> void {}) callback,
              std::size_t exact_size) {
       { stream.push(stop_token, exact_size, callback) } -> std::same_as<bool>;
       { stream.pop(stop_token, exact_size, callback) } -> std::same_as<bool>;
@@ -116,8 +116,8 @@ template <typename T>
 concept noexcept_cancellable_blocking_stream =
     cancellable_blocking_stream<T> &&
     requires(T stream, std::span<std::byte> bytes, std::stop_token stop_token,
-             decltype([](std::span<std::byte>, std::span<std::byte>) noexcept {
-             }) callback,
+             decltype([](std::span<std::byte>,
+                         std::span<std::byte>) noexcept -> void {}) callback,
              std::size_t exact_size) {
       requires noexcept(stream.push(stop_token, exact_size, callback));
       requires noexcept(stream.pop(stop_token, exact_size, callback));

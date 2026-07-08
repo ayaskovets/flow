@@ -33,7 +33,7 @@ template <typename T>
 concept nonblocking_msgbuf =
     msgbuf<T> &&
     requires(T msgbuf, std::span<std::byte> msg, std::size_t msg_size,
-             decltype([](std::span<std::byte>) noexcept {}) callback) {
+             decltype([](std::span<std::byte>) noexcept -> void {}) callback) {
       { msgbuf.try_push(msg_size, callback) } -> std::same_as<bool>;
       { msgbuf.try_pop(callback) } -> std::same_as<std::size_t>;
       { msgbuf.try_push(msg) } -> std::same_as<bool>;
@@ -47,7 +47,7 @@ template <typename T>
 concept noexcept_nonblocking_msgbuf =
     nonblocking_msgbuf<T> &&
     requires(T msgbuf, std::span<std::byte> msg, std::size_t msg_size,
-             decltype([](std::span<std::byte>) noexcept {}) callback) {
+             decltype([](std::span<std::byte>) noexcept -> void {}) callback) {
       requires noexcept(msgbuf.try_push(msg_size, callback));
       requires noexcept(msgbuf.try_pop(callback));
       requires noexcept(msgbuf.try_push(msg));
@@ -66,7 +66,7 @@ template <typename T>
 concept blocking_msgbuf =
     msgbuf<T> &&
     requires(T msgbuf, std::span<std::byte> msg, std::size_t msg_size,
-             decltype([](std::span<std::byte>) noexcept {}) callback) {
+             decltype([](std::span<std::byte>) noexcept -> void {}) callback) {
       { msgbuf.push(msg_size, callback) };
       { msgbuf.pop(callback) } -> std::same_as<std::size_t>;
       { msgbuf.push(msg) };
@@ -80,7 +80,7 @@ template <typename T>
 concept noexcept_blocking_msgbuf =
     blocking_msgbuf<T> &&
     requires(T msgbuf, std::span<std::byte> msg, std::size_t msg_size,
-             decltype([](std::span<std::byte>) noexcept {}) callback) {
+             decltype([](std::span<std::byte>) noexcept -> void {}) callback) {
       requires noexcept(msgbuf.push(msg_size, callback));
       requires noexcept(msgbuf.pop(callback));
       requires noexcept(msgbuf.push(msg));
@@ -97,7 +97,7 @@ concept cancellable_blocking_msgbuf =
     blocking_msgbuf<T> &&
     requires(T msgbuf, std::span<std::byte> msg, std::stop_token stop_token,
              std::size_t msg_size,
-             decltype([](std::span<std::byte>) noexcept {}) callback) {
+             decltype([](std::span<std::byte>) noexcept -> void {}) callback) {
       { msgbuf.push(stop_token, msg_size, callback) } -> std::same_as<bool>;
       { msgbuf.pop(stop_token, callback) } -> std::same_as<bool>;
       { msgbuf.push(stop_token, msg) } -> std::same_as<bool>;
@@ -113,7 +113,7 @@ concept noexcept_cancellable_blocking_msgbuf =
     cancellable_blocking_msgbuf<T> &&
     requires(T msgbuf, std::span<std::byte> msg, std::stop_token stop_token,
              std::size_t msg_size,
-             decltype([](std::span<std::byte>) noexcept {}) callback) {
+             decltype([](std::span<std::byte>) noexcept -> void {}) callback) {
       requires noexcept(msgbuf.push(stop_token, msg_size, callback));
       requires noexcept(msgbuf.pop(stop_token, callback));
       requires noexcept(msgbuf.push(stop_token, msg));

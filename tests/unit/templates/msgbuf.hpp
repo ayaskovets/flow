@@ -34,7 +34,8 @@ constexpr void size_capacity() {
 
   EXPECT_EQ(msgbuf.size(), 0);
   EXPECT_EQ(msgbuf.capacity(), kCapacity);
-  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept { GTEST_FAIL(); }),
+  EXPECT_EQ(msgbuf.try_pop(
+                [](std::span<std::byte>) noexcept -> void { GTEST_FAIL(); }),
             0);
 
   msgbuf.push(std::vector(8, std::byte(0)));
@@ -173,7 +174,7 @@ constexpr void blocking_push() {
 
   msgbuf.push(std::vector(8, std::byte(0)));
 
-  std::jthread const consumer([&] {
+  std::jthread const consumer([&] -> void {
     std::array<std::byte, 8> msg{};
     EXPECT_EQ(msgbuf.try_pop(msg), 8);
     EXPECT_EQ(msg, (std::array{std::byte(0), std::byte(0), std::byte(0),
@@ -196,8 +197,9 @@ constexpr void blocking_pop() {
 
   Msgbuf msgbuf(kCapacity);
 
-  std::jthread const producer(
-      [&] { EXPECT_TRUE(msgbuf.try_push(std::vector(2, std::byte(1)))); });
+  std::jthread const producer([&] -> void {
+    EXPECT_TRUE(msgbuf.try_push(std::vector(2, std::byte(1))));
+  });
 
   std::array<std::byte, 3> msg{};
   EXPECT_EQ(msgbuf.pop(msg), 2);
@@ -236,7 +238,7 @@ constexpr void blocking_push_stop_token() {
 
   EXPECT_TRUE(msgbuf.push(std::stop_token{}, std::vector(2, std::byte(0))));
 
-  std::jthread const consumer([&](std::stop_token stop_token) {
+  std::jthread const consumer([&](std::stop_token stop_token) -> void {
     EXPECT_FALSE(msgbuf.push(stop_token, std::vector(2, std::byte(0))));
   });
 }
@@ -252,7 +254,7 @@ constexpr void blocking_pop_stop_token() {
   EXPECT_TRUE(msgbuf.push(std::stop_token{}, std::vector(2, std::byte(0))));
   EXPECT_TRUE(msgbuf.pop(std::stop_token{}, msg));
 
-  std::jthread const producer([&](std::stop_token stop_token) {
+  std::jthread const producer([&](std::stop_token stop_token) -> void {
     EXPECT_FALSE(msgbuf.pop(stop_token, msg));
   });
 }
@@ -296,7 +298,7 @@ constexpr void nonblocking(auto const & param) {
     std::vector<std::jthread> threads;
     threads.reserve(producers + consumers);
     for (std::size_t i = 0; i < producers; ++i) {
-      threads.emplace_back([&] {
+      threads.emplace_back([&] -> void {
         latch.arrive_and_wait();
 
         std::vector<std::byte> msg(msg_size);
@@ -315,7 +317,7 @@ constexpr void nonblocking(auto const & param) {
       });
     }
     for (std::size_t i = 0; i < consumers; ++i) {
-      threads.emplace_back([&] {
+      threads.emplace_back([&] -> void {
         latch.arrive_and_wait();
 
         std::vector<std::byte> msg(msg_size);
@@ -358,7 +360,7 @@ constexpr void blocking(auto const & param) {
     std::vector<std::jthread> threads;
     threads.reserve(producers + consumers);
     for (std::size_t i = 0; i < producers; ++i) {
-      threads.emplace_back([&] {
+      threads.emplace_back([&] -> void {
         latch.arrive_and_wait();
 
         std::vector<std::byte> msg(msg_size);
@@ -376,7 +378,7 @@ constexpr void blocking(auto const & param) {
       });
     }
     for (std::size_t i = 0; i < consumers; ++i) {
-      threads.emplace_back([&] {
+      threads.emplace_back([&] -> void {
         latch.arrive_and_wait();
 
         std::vector<std::byte> msg(msg_size);
@@ -423,17 +425,19 @@ constexpr void nonblocking_callback() {
 
   Msgbuf msgbuf(kCapacity);
 
-  EXPECT_TRUE(msgbuf.try_push(8, [](std::span<std::byte> chunk) noexcept {
-    EXPECT_EQ(chunk.size(), 8);
-  }));
+  EXPECT_TRUE(
+      msgbuf.try_push(8, [](std::span<std::byte> chunk) noexcept -> void {
+        EXPECT_EQ(chunk.size(), 8);
+      }));
   EXPECT_EQ(msgbuf.size(), 16);
 
-  EXPECT_TRUE(msgbuf.try_push(8, [](std::span<std::byte> chunk) noexcept {
-    EXPECT_EQ(chunk.size(), 8);
-  }));
+  EXPECT_TRUE(
+      msgbuf.try_push(8, [](std::span<std::byte> chunk) noexcept -> void {
+        EXPECT_EQ(chunk.size(), 8);
+      }));
   EXPECT_EQ(msgbuf.size(), 32);
 
-  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte> chunk) noexcept {
+  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte> chunk) noexcept -> void {
     EXPECT_EQ(chunk.size(), 8);
   }),
             8);
@@ -442,13 +446,13 @@ constexpr void nonblocking_callback() {
   EXPECT_TRUE(msgbuf.try_push(std::vector(8, std::byte(0))));
   EXPECT_EQ(msgbuf.size(), 32);
 
-  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte> chunk) noexcept {
+  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte> chunk) noexcept -> void {
     EXPECT_EQ(chunk.size(), 8);
   }),
             8);
   EXPECT_EQ(msgbuf.size(), 16);
 
-  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte> chunk) noexcept {
+  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte> chunk) noexcept -> void {
     EXPECT_EQ(chunk.size(), 8);
   }),
             8);
@@ -462,17 +466,17 @@ constexpr void blocking_callback() {
 
   Msgbuf msgbuf(kCapacity);
 
-  msgbuf.push(8, [](std::span<std::byte> chunk) noexcept {
+  msgbuf.push(8, [](std::span<std::byte> chunk) noexcept -> void {
     EXPECT_EQ(chunk.size(), 8);
   });
   EXPECT_EQ(msgbuf.size(), 16);
 
-  msgbuf.push(8, [](std::span<std::byte> chunk) noexcept {
+  msgbuf.push(8, [](std::span<std::byte> chunk) noexcept -> void {
     EXPECT_EQ(chunk.size(), 8);
   });
   EXPECT_EQ(msgbuf.size(), 32);
 
-  EXPECT_EQ(msgbuf.pop([](std::span<std::byte> chunk) noexcept {
+  EXPECT_EQ(msgbuf.pop([](std::span<std::byte> chunk) noexcept -> void {
     EXPECT_EQ(chunk.size(), 8);
   }),
             8);
@@ -481,13 +485,13 @@ constexpr void blocking_callback() {
   EXPECT_TRUE(msgbuf.try_push(std::vector(8, std::byte(0))));
   EXPECT_EQ(msgbuf.size(), 32);
 
-  EXPECT_EQ(msgbuf.pop([](std::span<std::byte> chunk) noexcept {
+  EXPECT_EQ(msgbuf.pop([](std::span<std::byte> chunk) noexcept -> void {
     EXPECT_EQ(chunk.size(), 8);
   }),
             8);
   EXPECT_EQ(msgbuf.size(), 16);
 
-  EXPECT_EQ(msgbuf.pop([](std::span<std::byte> chunk) noexcept {
+  EXPECT_EQ(msgbuf.pop([](std::span<std::byte> chunk) noexcept -> void {
     EXPECT_EQ(chunk.size(), 8);
   }),
             8);
@@ -509,16 +513,16 @@ constexpr void padding() {
 
   EXPECT_FALSE(msgbuf.try_push(std::vector(1, std::byte(0))));
 
-  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept {}), 16);
+  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept -> void {}), 16);
   EXPECT_EQ(msgbuf.size(), 32);
 
   EXPECT_TRUE(msgbuf.try_push(std::vector(24, std::byte(0))));
   EXPECT_EQ(msgbuf.size(), 64);
 
-  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept {}), 24);
+  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept -> void {}), 24);
   EXPECT_EQ(msgbuf.size(), 32);
 
-  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept {}), 24);
+  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept -> void {}), 24);
   EXPECT_EQ(msgbuf.size(), 0);
 
   EXPECT_FALSE(msgbuf.try_push(std::vector(33, std::byte(0))));
@@ -529,20 +533,20 @@ constexpr void padding() {
   EXPECT_TRUE(msgbuf.try_push(std::vector(8, std::byte(0))));
   EXPECT_EQ(msgbuf.size(), 48);
 
-  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept {}), 24);
+  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept -> void {}), 24);
   EXPECT_EQ(msgbuf.size(), 16);
 
-  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept {}), 8);
+  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept -> void {}), 8);
   EXPECT_EQ(msgbuf.size(), 0);
 
   EXPECT_TRUE(msgbuf.try_push(std::vector(16, std::byte(0))));
-  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept {}), 16);
+  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept -> void {}), 16);
   EXPECT_EQ(msgbuf.size(), 0);
 
   EXPECT_TRUE(msgbuf.try_push(std::vector(24, std::byte(0))));
   EXPECT_EQ(msgbuf.size(), 32);
 
-  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept {}), 24);
+  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept -> void {}), 24);
   EXPECT_EQ(msgbuf.size(), 0);
 }
 
@@ -556,24 +560,26 @@ constexpr void exception_callback() {
   Msgbuf msgbuf(kCapacity);
 
   EXPECT_ANY_THROW(msgbuf.try_push(
-      4, [](std::span<std::byte>) { throw std::runtime_error(""); }));
+      4, [](std::span<std::byte>) -> void { throw std::runtime_error(""); }));
   EXPECT_EQ(msgbuf.size(), 0);
 
-  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept { GTEST_FAIL(); }),
+  EXPECT_EQ(msgbuf.try_pop(
+                [](std::span<std::byte>) noexcept -> void { GTEST_FAIL(); }),
             0);
   EXPECT_EQ(msgbuf.size(), 0);
 
   EXPECT_ANY_THROW(msgbuf.push(
-      4, [](std::span<std::byte>) { throw std::runtime_error(""); }));
+      4, [](std::span<std::byte>) -> void { throw std::runtime_error(""); }));
   EXPECT_EQ(msgbuf.size(), 0);
 
-  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept { GTEST_FAIL(); }),
+  EXPECT_EQ(msgbuf.try_pop(
+                [](std::span<std::byte>) noexcept -> void { GTEST_FAIL(); }),
             0);
   EXPECT_EQ(msgbuf.size(), 0);
 
   EXPECT_TRUE(msgbuf.try_push(std::vector(8, std::byte(0))));
   EXPECT_EQ(msgbuf.size(), 16);
-  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept {}), 8);
+  EXPECT_EQ(msgbuf.try_pop([](std::span<std::byte>) noexcept -> void {}), 8);
   EXPECT_EQ(msgbuf.size(), 0);
 }
 
@@ -595,24 +601,24 @@ constexpr void input_validation() {
 
   if constexpr (flow::concepts::blocking_msgbuf<Msgbuf>) {
     msgbuf.push(overflow_bytes.size(),
-                [](std::span<std::byte>) noexcept { GTEST_FAIL(); });
+                [](std::span<std::byte>) noexcept -> void { GTEST_FAIL(); });
 
     msgbuf.push(empty_bytes.size(),
-                [](std::span<std::byte>) noexcept { GTEST_FAIL(); });
+                [](std::span<std::byte>) noexcept -> void { GTEST_FAIL(); });
   }
 
   if constexpr (flow::concepts::cancellable_blocking_msgbuf<Msgbuf>) {
     EXPECT_FALSE(msgbuf.push(std::stop_token{}, overflow_bytes));
-    EXPECT_FALSE(
-        msgbuf.push(std::stop_token{}, overflow_bytes.size(),
-                    [](std::span<std::byte>) noexcept { GTEST_FAIL(); }));
+    EXPECT_FALSE(msgbuf.push(
+        std::stop_token{}, overflow_bytes.size(),
+        [](std::span<std::byte>) noexcept -> void { GTEST_FAIL(); }));
 
     EXPECT_FALSE(msgbuf.push(std::stop_token{}, empty_bytes));
     EXPECT_FALSE(msgbuf.pop(std::stop_token{}, empty_bytes));
 
-    EXPECT_FALSE(
-        msgbuf.push(std::stop_token{}, empty_bytes.size(),
-                    [](std::span<std::byte>) noexcept { GTEST_FAIL(); }));
+    EXPECT_FALSE(msgbuf.push(
+        std::stop_token{}, empty_bytes.size(),
+        [](std::span<std::byte>) noexcept -> void { GTEST_FAIL(); }));
   }
 }
 

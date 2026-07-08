@@ -165,7 +165,7 @@ constexpr void blocking_push() {
   queue.push(1);
   queue.push(2);
 
-  std::jthread const consumer([&] {
+  std::jthread const consumer([&] -> void {
     int value{};
     EXPECT_TRUE(queue.try_pop(value));
     EXPECT_EQ(value, 1);
@@ -185,7 +185,7 @@ constexpr void blocking_pop() {
 
   Queue queue(kCapacity);
 
-  std::jthread const producer([&] { EXPECT_TRUE(queue.try_push(2)); });
+  std::jthread const producer([&] -> void { EXPECT_TRUE(queue.try_push(2)); });
 
   int value{};
   queue.pop(value);
@@ -223,7 +223,7 @@ constexpr void blocking_push_stop_token() {
   EXPECT_TRUE(queue.push(std::stop_token{}, typename Queue::value_type{}));
   EXPECT_TRUE(queue.emplace(std::stop_token{}));
 
-  std::jthread const consumer([&](std::stop_token stop_token) {
+  std::jthread const consumer([&](std::stop_token stop_token) -> void {
     EXPECT_FALSE(queue.push(stop_token, typename Queue::value_type{}));
     EXPECT_FALSE(queue.emplace(stop_token));
   });
@@ -239,7 +239,7 @@ constexpr void blocking_pop_stop_token() {
   EXPECT_TRUE(queue.emplace(std::stop_token{}));
   EXPECT_TRUE(queue.pop(std::stop_token{}, value));
 
-  std::jthread const producer([&](std::stop_token stop_token) {
+  std::jthread const producer([&](std::stop_token stop_token) -> void {
     EXPECT_FALSE(queue.pop(stop_token, value));
   });
 }
@@ -349,7 +349,7 @@ template <flow::concepts::queue Queue>
 constexpr void pop_assignable_type() {
   constexpr std::size_t kCapacity = 2;
 
-  float value{};
+  std::int64_t value{};
   Queue queue(kCapacity);
 
   queue.push(42);
@@ -417,7 +417,7 @@ constexpr void nonblocking(auto const & param) {
     std::vector<std::jthread> threads;
     threads.reserve(producers + consumers);
     for (std::size_t i = 0; i < producers; ++i) {
-      threads.emplace_back([&] {
+      threads.emplace_back([&] -> void {
         latch.arrive_and_wait();
 
         while (true) {
@@ -431,7 +431,7 @@ constexpr void nonblocking(auto const & param) {
       });
     }
     for (std::size_t i = 0; i < consumers; ++i) {
-      threads.emplace_back([&] {
+      threads.emplace_back([&] -> void {
         latch.arrive_and_wait();
 
         while (true) {
@@ -469,7 +469,7 @@ constexpr void blocking(auto const & param) {
     std::vector<std::jthread> threads;
     threads.reserve(producers + consumers);
     for (std::size_t i = 0; i < producers; ++i) {
-      threads.emplace_back([&] {
+      threads.emplace_back([&] -> void {
         latch.arrive_and_wait();
 
         while (true) {
@@ -482,7 +482,7 @@ constexpr void blocking(auto const & param) {
       });
     }
     for (std::size_t i = 0; i < consumers; ++i) {
-      threads.emplace_back([&] {
+      threads.emplace_back([&] -> void {
         latch.arrive_and_wait();
 
         while (true) {
@@ -514,7 +514,7 @@ constexpr void queued_producers_nonblocking() {
   std::vector<std::jthread> producers;
   producers.reserve(kProducers);
   for (std::size_t i = 0; i < kProducers; ++i) {
-    producers.emplace_back([&] {
+    producers.emplace_back([&] -> void {
       latch.count_down();
       queue.emplace();
     });
@@ -541,7 +541,7 @@ constexpr void queued_producers_blocking() {
   std::vector<std::jthread> producers;
   producers.reserve(kProducers);
   for (std::size_t i = 0; i < kProducers; ++i) {
-    producers.emplace_back([&] {
+    producers.emplace_back([&] -> void {
       latch.count_down();
       queue.emplace();
     });
@@ -565,7 +565,7 @@ constexpr void queued_consumers_nonblocking() {
   std::vector<std::jthread> consumers;
   consumers.reserve(kConsumers);
   for (std::size_t i = 0; i < kConsumers; ++i) {
-    consumers.emplace_back([&] {
+    consumers.emplace_back([&] -> void {
       typename Queue::value_type value{};
       latch.count_down();
       queue.pop(value);
@@ -589,7 +589,7 @@ constexpr void queued_consumers_blocking() {
   std::vector<std::jthread> consumers;
   consumers.reserve(kConsumers);
   for (std::size_t i = 0; i < kConsumers; ++i) {
-    consumers.emplace_back([&] {
+    consumers.emplace_back([&] -> void {
       typename Queue::value_type value{};
       latch.count_down();
       queue.pop(value);

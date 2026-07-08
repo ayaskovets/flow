@@ -179,7 +179,7 @@ class unbounded_spsc_queue : public swiss::non_copyable,
   template <typename... Args>
     requires(std::constructible_from<value_type, Args...>)
   constexpr auto try_emplace(Args &&... args) -> bool {
-    return try_push([&](value_type * front) {
+    return try_push([&](value_type * front) -> void {
       std::construct_at(front, std::forward<Args>(args)...);
     });
   }
@@ -196,9 +196,9 @@ class unbounded_spsc_queue : public swiss::non_copyable,
     requires(std::is_nothrow_assignable_v<decltype(value), value_type> &&
              std::is_nothrow_destructible_v<value_type>)
   {
-    return try_pop([&](value_type * front) noexcept {
+    return try_pop([&](value_type * front) noexcept -> void {
       swiss::scope_exit const scope_exit(
-          [&]() noexcept { std::destroy_at(front); });
+          [&]() noexcept -> void { std::destroy_at(front); });
       value = std::move(*front);
     });
   }
@@ -208,7 +208,7 @@ class unbounded_spsc_queue : public swiss::non_copyable,
     requires(std::constructible_from<value_type, Args...>)
   constexpr auto emplace(std::stop_token const & stop_token, Args &&... args)
       -> bool {
-    return push(stop_token, [&](value_type * front) {
+    return push(stop_token, [&](value_type * front) -> void {
       std::construct_at(front, std::forward<Args>(args)...);
     });
   }
@@ -228,9 +228,9 @@ class unbounded_spsc_queue : public swiss::non_copyable,
     requires(std::is_nothrow_assignable_v<decltype(value), value_type> &&
              std::is_nothrow_destructible_v<value_type>)
   {
-    return pop(stop_token, [&](value_type * front) noexcept {
+    return pop(stop_token, [&](value_type * front) noexcept -> void {
       swiss::scope_exit const scope_exit(
-          [&]() noexcept { std::destroy_at(front); });
+          [&]() noexcept -> void { std::destroy_at(front); });
       value = std::move(*front);
     });
   }
@@ -279,8 +279,8 @@ class unbounded_spsc_queue : public swiss::non_copyable,
   }
 
   constexpr void clear() noexcept {
-    while (
-        try_pop([](value_type * front) noexcept { std::destroy_at(front); })) {
+    while (try_pop(
+        [](value_type * front) noexcept -> void { std::destroy_at(front); })) {
     }
   }
 
@@ -338,7 +338,7 @@ class unbounded_spsc_queue : public swiss::non_copyable,
 
   constexpr void write_tail(aligned_entry_type * chunk, index_type capacity,
                             chunk_tail tail) const noexcept {
-    std::memcpy(chunk + capacity, &tail, sizeof(tail));
+    std::memcpy(static_cast<void *>(chunk + capacity), &tail, sizeof(tail));
   }
 
   [[nodiscard]] constexpr auto size(index_type push_to,

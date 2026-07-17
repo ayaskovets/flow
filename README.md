@@ -8,7 +8,7 @@ This library is header-only and requires C++23
 
 This library uses CMake workflows (CMake >= 3.25.0) for all its build scripts
 
-Concepts that describe the general interface of all of the library containers can be found in [queue.hpp](./include/flow/queue.hpp), [stream.hpp](./include/flow/queue.hpp) and [mbuffer](./include/flow/mbuffer.hpp)
+Concepts that describe the general interface of all of the library containers can be found in [queue.hpp](./include/flow/queue.hpp), [stream.hpp](./include/flow/stream.hpp) and [mbuffer](./include/flow/msgbuf.hpp)
 
 # dependencies
 

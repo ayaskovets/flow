@@ -10,34 +10,33 @@ namespace flow::concepts {
  * @warning The result of size() method for lock-free queues is approximate and
  * should be used carefully
  */
-template <typename T>
-concept queue = requires(T queue, typename T::value_type) {
+template <typename T, typename Value = typename T::value_type>
+concept queue = requires(T queue) {
   { queue.capacity() } -> std::same_as<std::size_t>;
   { queue.size() } -> std::same_as<std::size_t>;
   { queue.empty() } -> std::same_as<bool>;
   { queue.clear() } -> std::same_as<void>;
   { queue.get_allocator() } -> std::same_as<typename T::allocator_type>;
-};
+} && std::is_same_v<Value, typename T::value_type>;
 
 /**
  * @brief Generic queue that supports nonblocking operations
  * @note Nonblocking methods return a flag indicating whether operation took
  * place
  */
-template <typename T>
-concept nonblocking_queue =
-    queue<T> && requires(T queue, typename T::value_type value) {
-      { queue.try_emplace(std::move(value)) } -> std::same_as<bool>;
-      { queue.try_push(std::move(value)) } -> std::same_as<bool>;
-      { queue.try_pop(value) } -> std::same_as<bool>;
-    };
+template <typename T, typename Value = typename T::value_type>
+concept nonblocking_queue = queue<T, Value> && requires(T queue, Value value) {
+  { queue.try_emplace(std::move(value)) } -> std::same_as<bool>;
+  { queue.try_push(std::move(value)) } -> std::same_as<bool>;
+  { queue.try_pop(value) } -> std::same_as<bool>;
+};
 
 /**
  * @brief Nonblocking queue with noexcept operations
  */
-template <typename T>
+template <typename T, typename Value = typename T::value_type>
 concept noexcept_nonblocking_queue =
-    nonblocking_queue<T> && requires(T queue, typename T::value_type value) {
+    nonblocking_queue<T, Value> && requires(T queue, Value value) {
       requires noexcept(queue.try_emplace(std::move(value)));
       requires noexcept(queue.try_push(std::move(value)));
       requires noexcept(queue.try_pop(value));
@@ -47,20 +46,19 @@ concept noexcept_nonblocking_queue =
  * @brief Generic queue that supports blocking operations
  * @note Blocking methods wait until the operation is completed
  */
-template <typename T>
-concept blocking_queue =
-    queue<T> && requires(T queue, typename T::value_type value) {
-      { queue.emplace(std::move(value)) };
-      { queue.push(std::move(value)) };
-      { queue.pop(value) };
-    };
+template <typename T, typename Value = typename T::value_type>
+concept blocking_queue = queue<T, Value> && requires(T queue, Value value) {
+  { queue.emplace(std::move(value)) };
+  { queue.push(std::move(value)) };
+  { queue.pop(value) };
+};
 
 /**
  * @brief Blocking queue with noexcept operations
  */
-template <typename T>
+template <typename T, typename Value = typename T::value_type>
 concept noexcept_blocking_queue =
-    blocking_queue<T> && requires(T queue, typename T::value_type value) {
+    blocking_queue<T, Value> && requires(T queue, Value value) {
       requires noexcept(queue.emplace(std::move(value)));
       requires noexcept(queue.push(std::move(value)));
       requires noexcept(queue.pop(value));
@@ -71,10 +69,10 @@ concept noexcept_blocking_queue =
  * @note Calcellable methods return false if operation was cancelled by
  * stop_token
  */
-template <typename T>
+template <typename T, typename Value = typename T::value_type>
 concept cancellable_blocking_queue =
-    blocking_queue<T> && requires(T queue, typename T::value_type value,
-                                  std::stop_token stop_token) {
+    blocking_queue<T, Value> &&
+    requires(T queue, Value value, std::stop_token stop_token) {
       { queue.emplace(stop_token, std::move(value)) } -> std::same_as<bool>;
       { queue.push(stop_token, std::move(value)) } -> std::same_as<bool>;
       { queue.pop(stop_token, value) } -> std::same_as<bool>;
@@ -84,11 +82,10 @@ concept cancellable_blocking_queue =
  * @brief Blocking queue that supports cancellation tokens with noexcept
  * operations
  */
-template <typename T>
+template <typename T, typename Value = typename T::value_type>
 concept noexcept_cancellable_blocking_queue =
-    cancellable_blocking_queue<T> &&
-    requires(T queue, typename T::value_type value,
-             std::stop_token stop_token) {
+    cancellable_blocking_queue<T, Value> &&
+    requires(T queue, Value value, std::stop_token stop_token) {
       requires noexcept(queue.emplace(stop_token, std::move(value)));
       requires noexcept(queue.push(stop_token, std::move(value)));
       requires noexcept(queue.pop(stop_token, value));

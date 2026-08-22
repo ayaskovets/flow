@@ -7,8 +7,8 @@
 #include <stdexcept>
 #include <stop_token>
 
-#include <swiss/conditionally_runtime.hpp>
 #include <swiss/dynamic_extent.hpp>
+#include <swiss/ebo.hpp>
 #include <swiss/math.hpp>
 #include <swiss/memory.hpp>
 #include <swiss/mixins.hpp>
@@ -395,7 +395,7 @@ class mpsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
   [[no_unique_address]] backoff_policy_type backoff_policy_;
 
   // NOLINTBEGIN(cppcoreguidelines-avoid-const-or-ref-data-members)
-  [[no_unique_address]] swiss::conditionally_runtime<
+  [[no_unique_address]] swiss::ebo<
       index_type, Capacity == swiss::kDynamicExtent<index_type>, Capacity> const
       capacity_;
   block_type * const ring_buffer_;

@@ -7,8 +7,8 @@
 #include <stop_token>
 
 #include <swiss/aligned.hpp>
-#include <swiss/conditionally_runtime.hpp>
 #include <swiss/dynamic_extent.hpp>
+#include <swiss/ebo.hpp>
 #include <swiss/manual_lifetime.hpp>
 #include <swiss/mixins.hpp>
 #include <swiss/predicates.hpp>
@@ -244,7 +244,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     std::atomic<index_type> index = 0;
     index_type cache              = 0;
     // NOLINTBEGIN(cppcoreguidelines-avoid-const-or-ref-data-members)
-    [[no_unique_address]] swiss::conditionally_runtime<
+    [[no_unique_address]] swiss::ebo<
         index_type, Capacity == swiss::kDynamicExtent<index_type>,
         Capacity> const capacity;
     aligned_entry_type * const ring_buffer;

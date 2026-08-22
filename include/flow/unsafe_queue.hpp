@@ -3,8 +3,8 @@
 #include <memory>
 #include <stdexcept>
 
-#include <swiss/conditionally_runtime.hpp>
 #include <swiss/dynamic_extent.hpp>
+#include <swiss/ebo.hpp>
 #include <swiss/mixins.hpp>
 #include <swiss/scope_exit.hpp>
 
@@ -159,7 +159,7 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
   index_type size_     = 0;
 
   // NOLINTBEGIN(cppcoreguidelines-avoid-const-or-ref-data-members)
-  [[no_unique_address]] swiss::conditionally_runtime<
+  [[no_unique_address]] swiss::ebo<
       index_type, Capacity == swiss::kDynamicExtent<index_type>, Capacity> const
       capacity_;
   value_type * const ring_buffer_;

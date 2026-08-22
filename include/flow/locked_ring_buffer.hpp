@@ -7,8 +7,8 @@
 #include <stop_token>
 
 #include <swiss/aligned.hpp>
-#include <swiss/conditionally_runtime.hpp>
 #include <swiss/dynamic_extent.hpp>
+#include <swiss/ebo.hpp>
 #include <swiss/manual_lifetime.hpp>
 #include <swiss/mixins.hpp>
 #include <swiss/predicates.hpp>
@@ -207,7 +207,7 @@ class locked_ring_buffer : public swiss::non_copyable,
   [[no_unique_address]] allocator_type allocator_;
 
   // NOLINTBEGIN(cppcoreguidelines-avoid-const-or-ref-data-members)
-  [[no_unique_address]] swiss::conditionally_runtime<
+  [[no_unique_address]] swiss::ebo<
       index_type, Capacity == swiss::kDynamicExtent<index_type>, Capacity> const
       capacity_;
   aligned_entry_type * const ring_buffer_;

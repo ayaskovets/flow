@@ -21,18 +21,14 @@ template <typename Value, std::unsigned_integral Index = std::size_t,
           typename Allocator = std::allocator<Value>>
 // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
- private:
-  template <typename T>
-  static constexpr bool is_callback = std::invocable<T, Value *>;
-
-  template <typename T>
-  static constexpr bool is_nothrow_callback =
-      std::is_nothrow_invocable_v<T, Value *>;
-
  public:
-  using value_type     = Value;
-  using index_type     = Index;
-  using allocator_type = Allocator;
+  using value_type      = Value;
+  using reference       = Value &;
+  using const_reference = Value const &;
+  using pointer         = Value *;
+  using const_pointer   = Value const *;
+  using index_type      = Index;
+  using allocator_type  = Allocator;
 
  private:
   [[nodiscard]] static constexpr auto valid(index_type capacity) noexcept
@@ -56,7 +52,7 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
     requires(Capacity == swiss::kDynamicExtent<index_type>)
       : allocator_(std::move(allocator)),
         capacity_(capacity),
-        ring_buffer_([&] -> value_type * {
+        ring_buffer_([&] -> pointer {
           if (!valid(capacity)) {
             throw std::invalid_argument(
                 "unsafe_queue::unsafe_queue(): invalid capacity");
@@ -76,13 +72,13 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
     requires(std::constructible_from<value_type, Args...>)
   constexpr auto try_emplace(Args &&... args) noexcept(
       std::is_nothrow_constructible_v<value_type, Args...>) -> bool {
-    return try_push([&](value_type * front) -> void {
+    return try_push([&](pointer front) -> void {
       std::allocator_traits<allocator_type>::construct(
           allocator_, front, std::forward<Args>(args)...);
     });
   }
 
-  constexpr auto try_push(value_type const & value) noexcept(
+  constexpr auto try_push(const_reference value) noexcept(
       std::is_nothrow_copy_constructible_v<value_type>) -> bool {
     return try_emplace(value);
   }
@@ -95,7 +91,7 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
   constexpr auto try_pop(auto & value) noexcept(
       std::is_nothrow_assignable_v<decltype(value), value_type> &&
       std::is_nothrow_destructible_v<value_type>) -> bool {
-    return try_pop([&](value_type * front) -> void {
+    return try_pop([&](pointer front) -> void {
       swiss::scope_exit const scope_exit([&]() noexcept -> void {
         std::allocator_traits<allocator_type>::destroy(allocator_, front);
       });
@@ -107,18 +103,18 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
   template <typename... Args>
     requires(std::constructible_from<value_type, Args...>)
   constexpr void emplace(Args &&... args) {
-    push([&](value_type * front) -> void {
+    push([&](pointer front) -> void {
       std::allocator_traits<allocator_type>::construct(
           allocator_, front, std::forward<Args>(args)...);
     });
   }
 
-  constexpr void push(value_type const & value) { emplace(value); }
+  constexpr void push(const_reference value) { emplace(value); }
 
   constexpr void push(value_type && value) { emplace(std::move(value)); }
 
   constexpr void pop(auto & value) {
-    pop([&](value_type * front) -> void {
+    pop([&](pointer front) -> void {
       swiss::scope_exit const scope_exit([&]() noexcept -> void {
         std::allocator_traits<allocator_type>::destroy(allocator_, front);
       });
@@ -140,7 +136,7 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
   }
 
   constexpr void clear() noexcept {
-    while (try_pop([&](value_type * front) noexcept -> void {
+    while (try_pop([&](pointer front) noexcept -> void {
       std::allocator_traits<allocator_type>::destroy(allocator_, front);
     })) {
     }
@@ -180,6 +176,14 @@ class unsafe_queue : public swiss::non_copyable, public swiss::non_movable {
     index_type const postfix = *capacity_ - index;
     return (postfix > distance) ? (index + distance) : (distance - postfix);
   }
+
+ private:
+  template <typename Callback>
+  static constexpr bool is_callback = std::invocable<Callback, Value *>;
+
+  template <typename Callback>
+  static constexpr bool is_nothrow_callback =
+      std::is_nothrow_invocable_v<Callback, Value *>;
 
  private:
   template <typename Callback>

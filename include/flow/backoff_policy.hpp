@@ -1,27 +1,20 @@
 #pragma once
 
-#include <swiss/concepts.hpp>
+#include <concepts>
 
 namespace flow::concepts {
 
 /**
- * @brief Customizable backoff strategy for lock-free containers
+ * @brief Customizable backoff strategy for lock-free containers. Implementation
+ * should not block
  */
 template <typename T>
-concept backoff_policy = requires(T policy) {
-  /**
-   * @brief Backoff implementation for relaxing CPU usage in hot loops. Should
-   * not block
-   */
-  { policy.backoff_token() } -> swiss::not_convertible_to<void>;
+concept backoff_policy = requires(T policy, T::token_type backoff_token) {
+  { policy.backoff_token() } -> std::same_as<typename T::token_type>;
+  { policy.backoff(backoff_token) } -> std::same_as<void>;
 
   requires noexcept(policy.backoff_token());
-
-  requires requires(decltype(policy.backoff_token()) backoff_token) {
-    policy.backoff(backoff_token);
-
-    requires noexcept(policy.backoff(backoff_token));
-  };
+  requires noexcept(policy.backoff(backoff_token));
 };
 
 }  // namespace flow::concepts

@@ -33,18 +33,18 @@ template <typename Value, std::unsigned_integral Index = std::size_t,
 class locked_ring_buffer : public swiss::non_copyable,
                            public swiss::non_movable {
  private:
-  template <typename T>
-  static constexpr bool is_callback = std::invocable<T, Value *>;
-
- private:
   using entry_type         = swiss::manual_lifetime<Value>;
   using aligned_entry_type = swiss::aligned<entry_type, Alignment>;
 
  public:
-  using value_type     = Value;
-  using index_type     = Index;
-  using allocator_type = std::allocator_traits<
-      Allocator>::template rebind_alloc<aligned_entry_type>;
+  using value_type      = Value;
+  using reference       = Value &;
+  using const_reference = Value const &;
+  using pointer         = Value *;
+  using const_pointer   = Value const *;
+  using index_type      = Index;
+  using allocator_type  = std::allocator_traits<
+       Allocator>::template rebind_alloc<aligned_entry_type>;
 
  private:
   [[nodiscard]] static constexpr auto valid(index_type capacity) noexcept
@@ -105,13 +105,13 @@ class locked_ring_buffer : public swiss::non_copyable,
   template <typename... Args>
     requires(std::constructible_from<value_type, Args...>)
   constexpr auto try_emplace(Args &&... args) -> bool {
-    return try_push([&](value_type * front) -> void {
+    return try_push([&](pointer front) -> void {
       std::construct_at(front, std::forward<Args>(args)...);
     });
   }
 
-  constexpr auto try_push(value_type const & value) -> bool {
-    return try_emplace<value_type const &>(value);
+  constexpr auto try_push(const_reference value) -> bool {
+    return try_emplace<const_reference>(value);
   }
 
   constexpr auto try_push(value_type && value) -> bool {
@@ -119,7 +119,7 @@ class locked_ring_buffer : public swiss::non_copyable,
   }
 
   constexpr auto try_pop(auto & value) -> bool {
-    return try_pop([&](value_type * front) -> void {
+    return try_pop([&](pointer front) -> void {
       swiss::scope_exit const scope_exit(
           [&]() noexcept -> void { std::destroy_at(at(pop_from_)); });
       value = std::move(*front);
@@ -131,13 +131,13 @@ class locked_ring_buffer : public swiss::non_copyable,
     requires(std::constructible_from<value_type, Args...>)
   constexpr auto emplace(std::stop_token const & stop_token, Args &&... args)
       -> bool {
-    return push(stop_token, [&](value_type * front) -> void {
+    return push(stop_token, [&](pointer front) -> void {
       std::construct_at(front, std::forward<Args>(args)...);
     });
   }
 
-  constexpr auto push(std::stop_token const & stop_token,
-                      value_type const & value) -> bool {
+  constexpr auto push(std::stop_token const & stop_token, const_reference value)
+      -> bool {
     return emplace(stop_token, value);
   }
 
@@ -147,7 +147,7 @@ class locked_ring_buffer : public swiss::non_copyable,
   }
 
   constexpr auto pop(std::stop_token const & stop_token, auto & value) -> bool {
-    return pop(stop_token, [&](value_type * front) -> void {
+    return pop(stop_token, [&](pointer front) -> void {
       swiss::scope_exit const scope_exit(
           [&]() noexcept -> void { std::destroy_at(at(pop_from_)); });
       value = std::move(*front);
@@ -161,9 +161,7 @@ class locked_ring_buffer : public swiss::non_copyable,
     emplace(std::stop_token{}, std::forward<Args>(args)...);
   }
 
-  constexpr void push(value_type const & value) {
-    push(std::stop_token{}, value);
-  }
+  constexpr void push(const_reference value) { push(std::stop_token{}, value); }
 
   constexpr void push(value_type && value) {
     push(std::stop_token{}, std::move(value));
@@ -243,10 +241,13 @@ class locked_ring_buffer : public swiss::non_copyable,
     return ring_buffer_ + slot;
   }
 
-  [[nodiscard]] constexpr auto at(index_type index) const noexcept
-      -> value_type * {
+  [[nodiscard]] constexpr auto at(index_type index) const noexcept -> pointer {
     return &***aligned_at(index);
   }
+
+ private:
+  template <typename Callback>
+  static constexpr bool is_callback = std::invocable<Callback, pointer>;
 
  private:
   template <typename Callback>

@@ -7,8 +7,10 @@ namespace flow {
  * cooperative yields or rescheduling
  */
 struct noop_backoff_policy final {
-  static constexpr auto backoff_token() noexcept -> int { return {}; }
-  static constexpr void backoff(int &) noexcept {}
+  using token_type = bool;
+
+  static constexpr auto backoff_token() noexcept -> token_type { return {}; }
+  static constexpr void backoff(bool &) noexcept {}
 };
 
 }  // namespace flow

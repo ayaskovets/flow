@@ -36,27 +36,19 @@ template <typename Value, std::unsigned_integral Index = std::size_t,
 // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
  private:
-  /**
-   * @note It is impossible to implement an exception safe constructor without
-   * value being nothrow destructible
-   */
-  static_assert(std::is_nothrow_destructible_v<Value>);
-
- private:
-  template <typename T>
-  static constexpr bool is_nothrow_callback =
-      std::is_nothrow_invocable_v<T, Value *>;
-
- private:
   using entry_type =
       std::pair<swiss::manual_lifetime<Value>, std::atomic<Index>>;
   using aligned_entry_type = swiss::aligned<entry_type, Alignment>;
 
  public:
-  using value_type     = Value;
-  using index_type     = Index;
-  using allocator_type = std::allocator_traits<
-      Allocator>::template rebind_alloc<aligned_entry_type>;
+  using value_type      = Value;
+  using reference       = Value &;
+  using const_reference = Value const &;
+  using pointer         = Value *;
+  using const_pointer   = Value const *;
+  using index_type      = Index;
+  using allocator_type  = std::allocator_traits<
+       Allocator>::template rebind_alloc<aligned_entry_type>;
   using wait_policy_type    = WaitPolicy;
   using backoff_policy_type = BackoffPolicy;
 
@@ -120,6 +112,12 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
   }
 
   constexpr ~mpmc_queue() noexcept {
+    /**
+     * @note It is impossible to implement an exception safe constructor without
+     * value being nothrow destructible
+     */
+    static_assert(std::is_nothrow_destructible_v<value_type>);
+
     clear();
     deinitialize();
     std::allocator_traits<allocator_type>::deallocate(allocator_, ring_buffer_,
@@ -130,12 +128,12 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
   template <typename... Args>
     requires(std::is_nothrow_constructible_v<value_type, Args...>)
   constexpr auto try_emplace(Args &&... args) noexcept -> bool {
-    return try_push([&](value_type * front) noexcept -> void {
+    return try_push([&](pointer front) noexcept -> void {
       std::construct_at(front, std::forward<Args>(args)...);
     });
   }
 
-  constexpr auto try_push(value_type const & value) noexcept -> bool
+  constexpr auto try_push(const_reference value) noexcept -> bool
     requires(std::is_nothrow_copy_constructible_v<value_type>)
   {
     return try_emplace(value);
@@ -150,7 +148,7 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
   constexpr auto try_pop(auto & value) noexcept -> bool
     requires(std::is_nothrow_assignable_v<decltype(value), value_type>)
   {
-    return try_pop([&](value_type * front) noexcept -> void {
+    return try_pop([&](pointer front) noexcept -> void {
       value = std::move(*front);
       std::destroy_at(front);
     });
@@ -161,13 +159,13 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
     requires(std::is_nothrow_constructible_v<value_type, Args...>)
   constexpr auto emplace(std::stop_token const & stop_token,
                          Args &&... args) noexcept -> bool {
-    return push(stop_token, [&](value_type * front) noexcept -> void {
+    return push(stop_token, [&](pointer front) noexcept -> void {
       std::construct_at(front, std::forward<Args>(args)...);
     });
   }
 
   constexpr auto push(std::stop_token const & stop_token,
-                      value_type const & value) noexcept -> bool
+                      const_reference value) noexcept -> bool
     requires(std::is_nothrow_copy_constructible_v<value_type>)
   {
     return emplace(stop_token, value);
@@ -184,7 +182,7 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
       -> bool
     requires(std::is_nothrow_assignable_v<decltype(value), value_type>)
   {
-    return pop(stop_token, [&](value_type * front) noexcept -> void {
+    return pop(stop_token, [&](pointer front) noexcept -> void {
       value = std::move(*front);
       std::destroy_at(front);
     });
@@ -194,12 +192,12 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
   template <typename... Args>
     requires(std::is_nothrow_constructible_v<value_type, Args...>)
   constexpr void emplace(Args &&... args) noexcept {
-    return push([&](value_type * front) noexcept -> void {
+    return push([&](pointer front) noexcept -> void {
       std::construct_at(front, std::forward<Args>(args)...);
     });
   }
 
-  constexpr void push(value_type const & value) noexcept
+  constexpr void push(const_reference value) noexcept
     requires(std::is_nothrow_copy_constructible_v<value_type>)
   {
     emplace(value);
@@ -214,7 +212,7 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
   constexpr void pop(auto & value) noexcept
     requires(std::is_nothrow_assignable_v<decltype(value), value_type>)
   {
-    return pop([&](value_type * front) noexcept -> void {
+    return pop([&](pointer front) noexcept -> void {
       value = std::move(*front);
       std::destroy_at(front);
     });
@@ -238,7 +236,7 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
 
   constexpr void clear() noexcept {
     while (try_pop(
-        [](value_type * front) noexcept -> void { std::destroy_at(front); })) {
+        [](pointer front) noexcept -> void { std::destroy_at(front); })) {
     }
   }
 
@@ -302,7 +300,7 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
   }
 
   [[nodiscard]] constexpr auto value(entry_type * entry) const noexcept
-      -> value_type * {
+      -> pointer {
     return &*entry->first;
   }
 
@@ -310,6 +308,11 @@ class mpmc_queue : public swiss::non_copyable, public swiss::non_movable {
       -> std::atomic<index_type> & {
     return entry->second;
   }
+
+ private:
+  template <typename Callback>
+  static constexpr bool is_nothrow_callback =
+      std::is_nothrow_invocable_v<Callback, pointer>;
 
  private:
   template <typename Callback>

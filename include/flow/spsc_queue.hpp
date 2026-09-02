@@ -32,22 +32,18 @@ template <typename Value, std::unsigned_integral Index = std::size_t,
 // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
  private:
-  template <typename T>
-  static constexpr bool is_callback = std::invocable<T, Value *>;
-
-  template <typename T>
-  static constexpr bool is_nothrow_callback =
-      std::is_nothrow_invocable_v<T, Value *>;
-
- private:
   using entry_type         = swiss::manual_lifetime<Value>;
   using aligned_entry_type = swiss::aligned<entry_type, Alignment>;
 
  public:
-  using value_type     = Value;
-  using index_type     = Index;
-  using allocator_type = std::allocator_traits<
-      Allocator>::template rebind_alloc<aligned_entry_type>;
+  using value_type      = Value;
+  using reference       = Value &;
+  using const_reference = Value const &;
+  using pointer         = Value *;
+  using const_pointer   = Value const *;
+  using index_type      = Index;
+  using allocator_type  = std::allocator_traits<
+       Allocator>::template rebind_alloc<aligned_entry_type>;
   using wait_policy_type = WaitPolicy;
 
  private:
@@ -119,12 +115,12 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     requires(std::constructible_from<value_type, Args...>)
   constexpr auto try_emplace(Args &&... args) noexcept(
       std::is_nothrow_constructible_v<value_type, Args...>) -> bool {
-    return try_push([&](value_type * front) -> void {
+    return try_push([&](pointer front) -> void {
       std::construct_at(front, std::forward<Args>(args)...);
     });
   }
 
-  constexpr auto try_push(value_type const & value) noexcept(
+  constexpr auto try_push(const_reference value) noexcept(
       std::is_nothrow_copy_constructible_v<value_type>) -> bool {
     return try_emplace(value);
   }
@@ -138,7 +134,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     requires(std::is_nothrow_assignable_v<decltype(value), value_type> &&
              std::is_nothrow_destructible_v<value_type>)
   {
-    return try_pop([&](value_type * front) noexcept -> void {
+    return try_pop([&](pointer front) noexcept -> void {
       swiss::scope_exit const scope_exit(
           [&]() noexcept -> void { std::destroy_at(front); });
       value = std::move(*front);
@@ -151,13 +147,13 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
   constexpr auto
   emplace(std::stop_token const & stop_token, Args &&... args) noexcept(
       std::is_nothrow_constructible_v<value_type, Args...>) -> bool {
-    return push(stop_token, [&](value_type * front) -> void {
+    return push(stop_token, [&](pointer front) -> void {
       std::construct_at(front, std::forward<Args>(args)...);
     });
   }
 
   constexpr auto
-  push(std::stop_token const & stop_token, value_type const & value) noexcept(
+  push(std::stop_token const & stop_token, const_reference value) noexcept(
       std::is_nothrow_copy_constructible_v<value_type>) -> bool {
     return emplace(stop_token, value);
   }
@@ -173,7 +169,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     requires(std::is_nothrow_assignable_v<decltype(value), value_type> &&
              std::is_nothrow_destructible_v<value_type>)
   {
-    return pop(stop_token, [&](value_type * front) noexcept -> void {
+    return pop(stop_token, [&](pointer front) noexcept -> void {
       swiss::scope_exit const scope_exit(
           [&]() noexcept -> void { std::destroy_at(front); });
       value = std::move(*front);
@@ -188,7 +184,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
     emplace(std::stop_token{}, std::forward<Args>(args)...);
   }
 
-  constexpr void push(value_type const & value) noexcept(
+  constexpr void push(const_reference value) noexcept(
       std::is_nothrow_copy_constructible_v<value_type>) {
     emplace(std::stop_token{}, value);
   }
@@ -223,7 +219,7 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
 
   constexpr void clear() noexcept {
     while (try_pop(
-        [](value_type * front) noexcept -> void { std::destroy_at(front); })) {
+        [](pointer front) noexcept -> void { std::destroy_at(front); })) {
     }
   }
 
@@ -286,10 +282,17 @@ class spsc_queue : public swiss::non_copyable, public swiss::non_movable {
 
   [[nodiscard]] constexpr auto at(aligned_entry_type * ring_buffer,
                                   index_type capacity,
-                                  index_type index) const noexcept
-      -> value_type * {
+                                  index_type index) const noexcept -> pointer {
     return &***aligned_at(ring_buffer, capacity, index);
   }
+
+ private:
+  template <typename Callback>
+  static constexpr bool is_callback = std::invocable<Callback, Value *>;
+
+  template <typename Callback>
+  static constexpr bool is_nothrow_callback =
+      std::is_nothrow_invocable_v<Callback, Value *>;
 
  private:
   template <typename Callback>

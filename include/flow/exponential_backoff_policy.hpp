@@ -15,17 +15,17 @@ namespace flow {
 template <std::uint16_t MaxSpins = 128, std::uint16_t MinSpins = 8>
   requires(swiss::is_power_of_two(MaxSpins) && swiss::is_power_of_two(MinSpins))
 struct exponential_backoff_policy {
-  struct backoff_token final {
+  struct token_type final {
     std::uint16_t max_spins;
     std::uint16_t spins;
   };
 
-  static constexpr auto backoff_token() noexcept -> backoff_token {
+  static constexpr auto backoff_token() noexcept -> token_type {
     return {.max_spins = MaxSpins, .spins = 0};
   }
 
-  static constexpr void backoff(struct backoff_token & token) noexcept {
-    if (token.spins < token.max_spins) {
+  static constexpr void backoff(struct token_type & token) noexcept {
+    if (token.spins < token.max_spins) [[likely]] {
       swiss::cpu_relax();
     } else if (token.spins == token.max_spins) {
       std::this_thread::yield();

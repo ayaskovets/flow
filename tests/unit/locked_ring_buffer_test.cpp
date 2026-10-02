@@ -38,10 +38,10 @@ TEST_T(locked_ring_buffer, blocking_smoke, flow::locked_ring_buffer<int>);
 
 TEST_T(locked_ring_buffer, mixed_smoke, flow::locked_ring_buffer<int>);
 
-using alignment_queue_t = flow::locked_ring_buffer<
+using alignment_queue_type = flow::locked_ring_buffer<
     int, std::size_t, swiss::kDynamicExtent<std::size_t>, alignof(int) * 2,
     swiss::leak_detector_allocator<int, true>>;
-TEST_T(locked_ring_buffer, mixed_smoke, alignment_queue_t);
+TEST_T(locked_ring_buffer, mixed_smoke, alignment_queue_type);
 
 TEST_T(locked_ring_buffer, blocking_push, flow::locked_ring_buffer<int>);
 
@@ -71,11 +71,11 @@ TEST_T(locked_ring_buffer, non_default_constructible_type,
 
 TEST_T(locked_ring_buffer, pop_assignable_type, flow::locked_ring_buffer<int>);
 
-using allocator_queue_t =
+using allocator_queue_type =
     flow::locked_ring_buffer<int, std::size_t,
                              swiss::kDynamicExtent<std::size_t>, alignof(int),
                              swiss::leak_detector_allocator<int, true>>;
-TEST_T(locked_ring_buffer, allocator, allocator_queue_t);
+TEST_T(locked_ring_buffer, allocator, allocator_queue_type);
 
 class locked_ring_buffer_workload
     : public ::testing::TestWithParam<std::tuple<
@@ -107,7 +107,7 @@ TEST_T(locked_ring_buffer, queued_consumers_nonblocking,
 TEST_T(locked_ring_buffer, queued_consumers_blocking,
        flow::locked_ring_buffer<int>);
 
-using uint8_index_queue_t = flow::locked_ring_buffer<int, std::uint8_t>;
-TEST_T(locked_ring_buffer, rollover, uint8_index_queue_t);
+using uint8_index_queue_type = flow::locked_ring_buffer<int, std::uint8_t>;
+TEST_T(locked_ring_buffer, rollover, uint8_index_queue_type);
 
 }  // namespace tests::unit

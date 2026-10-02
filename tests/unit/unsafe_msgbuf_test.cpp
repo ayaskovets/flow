@@ -44,17 +44,16 @@ TEST(unsafe_msgbuf, blocking_push_stop_token) { GTEST_SKIP(); }
 
 TEST(unsafe_msgbuf, blocking_pop_stop_token) { GTEST_SKIP(); }
 
-using allocator_msgbuf_t =
+using allocator_msgbuf_type =
     flow::unsafe_msgbuf<std::size_t, swiss::kDynamicExtent<std::size_t>,
                         swiss::leak_detector_allocator<std::byte, true>>;
-TEST_T(unsafe_msgbuf, allocator, allocator_msgbuf_t);
+TEST_T(unsafe_msgbuf, allocator, allocator_msgbuf_type);
 
 TEST(unsafe_msgbuf, nonblocking) { GTEST_SKIP(); }
 
 TEST(unsafe_msgbuf, blocking) { GTEST_SKIP(); }
 
-using uint8_index_msgbuf_t = flow::unsafe_msgbuf<std::uint8_t>;
-TEST_T(unsafe_msgbuf, rollover, uint8_index_msgbuf_t);
+TEST_T(unsafe_msgbuf, rollover, flow::unsafe_msgbuf<std::uint8_t>);
 
 TEST_T(unsafe_msgbuf, nonblocking_callback, flow::unsafe_msgbuf<>);
 

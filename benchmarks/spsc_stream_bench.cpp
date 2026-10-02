@@ -8,10 +8,10 @@
 namespace benchmarks {
 // NOLINTBEGIN(misc-use-internal-linkage,cppcoreguidelines-avoid-magic-numbers)
 
-using stream_t =
+using stream_type =
     flow::spsc_stream<std::size_t, swiss::kDynamicExtent<std::size_t>>;
 
-BENCHMARK_T(spsc_stream, nonblocking_throughput, stream_t)
+BENCHMARK_T(spsc_stream, nonblocking_throughput, stream_type)
     /* stream_capacity, producers, consumers, buffer_capacity */
     ->Args({128, 1, 1, 16})
     ->Args({512, 1, 1, 54})
@@ -19,7 +19,7 @@ BENCHMARK_T(spsc_stream, nonblocking_throughput, stream_t)
     ->UseRealTime()
     ->Threads(2);
 
-BENCHMARK_T(spsc_stream, blocking_throughput, stream_t)
+BENCHMARK_T(spsc_stream, blocking_throughput, stream_type)
     /* stream_capacity, producers, consumers, buffer_capacity */
     ->Args({128, 1, 1, 16})
     ->Args({512, 1, 1, 54})

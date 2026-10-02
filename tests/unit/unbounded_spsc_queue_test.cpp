@@ -70,11 +70,11 @@ TEST_T(unbounded_spsc_queue, non_default_constructible_type,
 TEST_T(unbounded_spsc_queue, pop_assignable_type,
        flow::unbounded_spsc_queue<int>);
 
-using allocator_queue_t =
+using allocator_queue_type =
     flow::unbounded_spsc_queue<int, std::size_t,
                                swiss::kDynamicExtent<std::size_t>, alignof(int),
                                swiss::leak_detector_allocator<int, true>>;
-TEST_T(unbounded_spsc_queue, allocator, allocator_queue_t);
+TEST_T(unbounded_spsc_queue, allocator, allocator_queue_type);
 
 class unbounded_spsc_queue_workload
     : public ::testing::TestWithParam<std::tuple<
@@ -103,8 +103,8 @@ TEST(unbounded_spsc_queue, queued_consumers_nonblocking) { GTEST_SKIP(); }
 
 TEST(unbounded_spsc_queue, queued_consumers_blocking) { GTEST_SKIP(); }
 
-using uint8_index_queue_t = flow::unbounded_spsc_queue<int, std::uint8_t>;
-TEST_T(unbounded_spsc_queue, rollover, uint8_index_queue_t);
+using uint8_index_queue_type = flow::unbounded_spsc_queue<int, std::uint8_t>;
+TEST_T(unbounded_spsc_queue, rollover, uint8_index_queue_type);
 
 // NOLINTEND(cppcoreguidelines-avoid-magic-numbers)
 }  // namespace tests::unit

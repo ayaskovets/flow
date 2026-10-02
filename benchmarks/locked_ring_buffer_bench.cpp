@@ -9,11 +9,11 @@ namespace benchmarks {
 // NOLINTBEGIN(misc-use-internal-linkage,cppcoreguidelines-avoid-magic-numbers)
 
 template <typename Value>
-using queue_t = flow::locked_ring_buffer<Value, std::size_t,
-                                         swiss::kDynamicExtent<std::size_t>>;
+using queue_type = flow::locked_ring_buffer<Value, std::size_t,
+                                            swiss::kDynamicExtent<std::size_t>>;
 
 BENCHMARK_TEMPLATE_T(locked_ring_buffer, nonblocking_throughput, int,
-                     queue_t<int>)
+                     queue_type<int>)
     /* queue_capacity, producers, consumers */
     ->Args({128, 2, 2})
     ->Args({512, 4, 4})
@@ -22,7 +22,8 @@ BENCHMARK_TEMPLATE_T(locked_ring_buffer, nonblocking_throughput, int,
     ->Threads(4)
     ->Threads(8);
 
-BENCHMARK_TEMPLATE_T(locked_ring_buffer, blocking_throughput, int, queue_t<int>)
+BENCHMARK_TEMPLATE_T(locked_ring_buffer, blocking_throughput, int,
+                     queue_type<int>)
     /* queue_capacity, producers, consumers */
     ->Args({128, 2, 2})
     ->Args({512, 4, 4})
@@ -32,7 +33,7 @@ BENCHMARK_TEMPLATE_T(locked_ring_buffer, blocking_throughput, int, queue_t<int>)
     ->Threads(8);
 
 BENCHMARK_TEMPLATE_T(locked_ring_buffer, nonblocking_throughput, shared_ptr,
-                     queue_t<std::shared_ptr<int>>)
+                     queue_type<std::shared_ptr<int>>)
     /* queue_capacity, producers, consumers */
     ->Args({128, 2, 2})
     ->Args({512, 4, 4})
@@ -42,7 +43,7 @@ BENCHMARK_TEMPLATE_T(locked_ring_buffer, nonblocking_throughput, shared_ptr,
     ->Threads(8);
 
 BENCHMARK_TEMPLATE_T(locked_ring_buffer, blocking_throughput, shared_ptr,
-                     queue_t<std::shared_ptr<int>>)
+                     queue_type<std::shared_ptr<int>>)
     /* queue_capacity, producers, consumers */
     ->Args({128, 2, 2})
     ->Args({512, 4, 4})

@@ -8,10 +8,10 @@
 namespace benchmarks {
 // NOLINTBEGIN(misc-use-internal-linkage,cppcoreguidelines-avoid-magic-numbers)
 
-using msgbuf_t =
+using msgbuf_type =
     flow::mpsc_msgbuf<std::size_t, swiss::kDynamicExtent<std::size_t>>;
 
-BENCHMARK_T(mpsc_msgbuf, nonblocking_throughput, msgbuf_t)
+BENCHMARK_T(mpsc_msgbuf, nonblocking_throughput, msgbuf_type)
     /* stream_capacity, producers, consumers, msg_size */
     ->Args({128, 1, 1, 16})
     ->Args({512, 1, 1, 54})
@@ -19,7 +19,7 @@ BENCHMARK_T(mpsc_msgbuf, nonblocking_throughput, msgbuf_t)
     ->UseRealTime()
     ->Threads(2);
 
-BENCHMARK_T(mpsc_msgbuf, blocking_throughput, msgbuf_t)
+BENCHMARK_T(mpsc_msgbuf, blocking_throughput, msgbuf_type)
     /* stream_capacity, producers, consumers, msg_size */
     ->Args({128, 1, 1, 16})
     ->Args({512, 1, 1, 54})

@@ -48,10 +48,10 @@ TEST_T(mpsc_msgbuf, blocking_push_stop_token, flow::mpsc_msgbuf<std::uint32_t>);
 
 TEST_T(mpsc_msgbuf, blocking_pop_stop_token, flow::mpsc_msgbuf<std::uint32_t>);
 
-using allocator_msgbuf_t =
+using allocator_msgbuf_type =
     flow::mpsc_msgbuf<std::uint32_t, swiss::kDynamicExtent<std::uint32_t>,
                       swiss::leak_detector_allocator<std::uint32_t, true>>;
-TEST_T(mpsc_msgbuf, allocator, allocator_msgbuf_t);
+TEST_T(mpsc_msgbuf, allocator, allocator_msgbuf_type);
 
 class mpsc_msgbuf_workload
     : public ::testing::TestWithParam<std::tuple<
@@ -68,8 +68,7 @@ INSTANTIATE_TEST_SUITE_P(mpsc_msgbuf_workload, mpsc_msgbuf_workload,
                                            std::make_tuple(1000, 64, 2, 1),
                                            std::make_tuple(1000, 128, 4, 1)));
 
-using uint8_index_msgbuf_t = flow::mpsc_msgbuf<std::uint8_t>;
-TEST_T(mpsc_msgbuf, rollover, uint8_index_msgbuf_t);
+TEST_T(mpsc_msgbuf, rollover, flow::mpsc_msgbuf<std::uint8_t>);
 
 TEST_T(mpsc_msgbuf, nonblocking_callback, flow::mpsc_msgbuf<std::uint32_t>);
 

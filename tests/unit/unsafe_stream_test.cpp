@@ -44,17 +44,16 @@ TEST(unsafe_stream, blocking_push_stop_token) { GTEST_SKIP(); }
 
 TEST(unsafe_stream, blocking_pop_stop_token) { GTEST_SKIP(); }
 
-using allocator_stream_t =
+using allocator_stream_type =
     flow::unsafe_stream<std::size_t, swiss::kDynamicExtent<std::size_t>,
                         swiss::leak_detector_allocator<std::byte, true>>;
-TEST_T(unsafe_stream, allocator, allocator_stream_t);
+TEST_T(unsafe_stream, allocator, allocator_stream_type);
 
 TEST(unsafe_stream, nonblocking) { GTEST_SKIP(); }
 
 TEST(unsafe_stream, blocking) { GTEST_SKIP(); }
 
-using uint8_index_stream_t = flow::unsafe_stream<std::uint8_t>;
-TEST_T(unsafe_stream, rollover, uint8_index_stream_t);
+TEST_T(unsafe_stream, rollover, flow::unsafe_stream<std::uint8_t>);
 
 TEST_T(unsafe_stream, nonblocking_callback, flow::unsafe_stream<>);
 

@@ -48,10 +48,10 @@ TEST_T(spsc_stream, blocking_push_stop_token, flow::spsc_stream<>);
 
 TEST_T(spsc_stream, blocking_pop_stop_token, flow::spsc_stream<>);
 
-using allocator_stream_t =
+using allocator_stream_type =
     flow::spsc_stream<std::size_t, swiss::kDynamicExtent<std::size_t>,
                       swiss::leak_detector_allocator<std::byte, true>>;
-TEST_T(spsc_stream, allocator, allocator_stream_t);
+TEST_T(spsc_stream, allocator, allocator_stream_type);
 
 class spsc_stream_workload
     : public ::testing::TestWithParam<std::tuple<
@@ -69,8 +69,7 @@ INSTANTIATE_TEST_SUITE_P(spsc_stream_workload, spsc_stream_workload,
                                            std::make_tuple(1000, 64, 1, 1),
                                            std::make_tuple(1000, 128, 1, 1)));
 
-using uint8_index_stream_t = flow::spsc_stream<std::uint8_t>;
-TEST_T(spsc_stream, rollover, uint8_index_stream_t);
+TEST_T(spsc_stream, rollover, flow::spsc_stream<std::uint8_t>);
 
 TEST_T(spsc_stream, nonblocking_callback, flow::spsc_stream<>);
 

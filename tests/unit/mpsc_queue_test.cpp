@@ -39,11 +39,11 @@ TEST_T(mpsc_queue, blocking_smoke, flow::mpsc_queue<int>);
 
 TEST_T(mpsc_queue, mixed_smoke, flow::mpsc_queue<int>);
 
-using alignment_queue_t =
+using alignment_queue_type =
     flow::mpsc_queue<int, std::size_t, swiss::kDynamicExtent<std::size_t>,
                      alignof(int) * 2,
                      swiss::leak_detector_allocator<int, true>>;
-TEST_T(mpsc_queue, mixed_smoke, alignment_queue_t);
+TEST_T(mpsc_queue, mixed_smoke, alignment_queue_type);
 
 TEST_T(mpsc_queue, blocking_push, flow::mpsc_queue<int>);
 
@@ -69,11 +69,11 @@ TEST_T(mpsc_queue, non_default_constructible_type,
 
 TEST_T(mpsc_queue, pop_assignable_type, flow::mpsc_queue<int>);
 
-using allocator_queue_t =
+using allocator_queue_type =
     flow::mpsc_queue<int, std::size_t, swiss::kDynamicExtent<std::size_t>,
                      alignof(std::pair<int, std::atomic<std::size_t>>),
                      swiss::leak_detector_allocator<int, true>>;
-TEST_T(mpsc_queue, allocator, allocator_queue_t);
+TEST_T(mpsc_queue, allocator, allocator_queue_type);
 
 class mpsc_queue_workload
     : public ::testing::TestWithParam<std::tuple<
@@ -99,7 +99,7 @@ TEST(mpsc_queue, queued_consumers_nonblocking) { GTEST_SKIP(); }
 
 TEST(mpsc_queue, queued_consumers_blocking) { GTEST_SKIP(); }
 
-using uint8_index_queue_t = flow::mpsc_queue<int, std::uint8_t>;
-TEST_T(mpsc_queue, rollover, uint8_index_queue_t);
+using uint8_index_queue_type = flow::mpsc_queue<int, std::uint8_t>;
+TEST_T(mpsc_queue, rollover, uint8_index_queue_type);
 
 }  // namespace tests::unit

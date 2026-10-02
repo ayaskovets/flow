@@ -39,11 +39,11 @@ TEST_T(spmc_queue, blocking_smoke, flow::spmc_queue<int>);
 
 TEST_T(spmc_queue, mixed_smoke, flow::spmc_queue<int>);
 
-using alignment_queue_t =
+using alignment_queue_type =
     flow::spmc_queue<int, std::size_t, swiss::kDynamicExtent<std::size_t>,
                      alignof(int) * 2,
                      swiss::leak_detector_allocator<int, true>>;
-TEST_T(spmc_queue, mixed_smoke, alignment_queue_t);
+TEST_T(spmc_queue, mixed_smoke, alignment_queue_type);
 
 TEST_T(spmc_queue, blocking_push, flow::spmc_queue<int>);
 
@@ -69,11 +69,11 @@ TEST_T(spmc_queue, non_default_constructible_type,
 
 TEST_T(spmc_queue, pop_assignable_type, flow::spmc_queue<int>);
 
-using allocator_queue_t =
+using allocator_queue_type =
     flow::spmc_queue<int, std::size_t, swiss::kDynamicExtent<std::size_t>,
                      alignof(std::pair<int, std::atomic<std::size_t>>),
                      swiss::leak_detector_allocator<int, true>>;
-TEST_T(spmc_queue, allocator, allocator_queue_t);
+TEST_T(spmc_queue, allocator, allocator_queue_type);
 
 class spmc_queue_workload
     : public ::testing::TestWithParam<std::tuple<
@@ -99,7 +99,7 @@ TEST_T(spmc_queue, queued_consumers_nonblocking, flow::spmc_queue<int>);
 
 TEST_T(spmc_queue, queued_consumers_blocking, flow::spmc_queue<int>);
 
-using uint8_index_queue_t = flow::spmc_queue<int, std::uint8_t>;
-TEST_T(spmc_queue, rollover, uint8_index_queue_t);
+using uint8_index_queue_type = flow::spmc_queue<int, std::uint8_t>;
+TEST_T(spmc_queue, rollover, uint8_index_queue_type);
 
 }  // namespace tests::unit

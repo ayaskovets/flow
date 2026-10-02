@@ -61,10 +61,10 @@ TEST_T(unsafe_queue, non_default_constructible_type,
 
 TEST_T(unsafe_queue, pop_assignable_type, flow::unsafe_queue<int>);
 
-using allocator_queue_t =
+using allocator_queue_type =
     flow::unsafe_queue<int, std::size_t, swiss::kDynamicExtent<std::size_t>,
                        swiss::leak_detector_allocator<int, true>>;
-TEST_T(unsafe_queue, allocator, allocator_queue_t);
+TEST_T(unsafe_queue, allocator, allocator_queue_type);
 
 TEST(unsafe_queue, nonblocking) { GTEST_SKIP(); }
 
@@ -78,7 +78,7 @@ TEST(unsafe_queue, queued_consumers_nonblocking) { GTEST_SKIP(); }
 
 TEST(unsafe_queue, queued_consumers_blocking) { GTEST_SKIP(); }
 
-using uint8_index_queue_t = flow::unsafe_queue<int, std::uint8_t>;
-TEST_T(unsafe_queue, rollover, uint8_index_queue_t);
+using uint8_index_queue_type = flow::unsafe_queue<int, std::uint8_t>;
+TEST_T(unsafe_queue, rollover, uint8_index_queue_type);
 
 }  // namespace tests::unit

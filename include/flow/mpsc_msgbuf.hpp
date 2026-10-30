@@ -121,7 +121,7 @@ class mpsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
         static_cast<index_type>(swiss::align_up(msg_size, alignof(index_type)));
     auto const [fits, push_to] = [&]() -> std::pair<bool, index_type> {
       index_type _push_to = push_to_.load(std::memory_order::relaxed);
-      index_type pop_from = pop_from_.load(std::memory_order::relaxed);
+      index_type pop_from = pop_from_.load(std::memory_order::acquire);
 
       auto backoff_token = backoff_policy_.backoff_token();
       while (true) {
@@ -131,7 +131,7 @@ class mpsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
         index_type chunk   = std::min(postfix, _free);
         if (chunk < header_size() + aligned_msg_size ||
             prefix < aligned_msg_size) {
-          pop_from = pop_from_.load(std::memory_order::relaxed);
+          pop_from = pop_from_.load(std::memory_order::acquire);
 
           prefix = slot(pop_from);
           _free  = free(_push_to, pop_from);
@@ -179,11 +179,10 @@ class mpsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
       return false;
     }
 
-    std::span<index_type> const blocks(
-        at(push_to + header_size()),
-        swiss::align_up(msg_size, alignof(index_type)));
+    std::span<index_type> const msg_blocks(at(push_to + header_size()),
+                                           blocks(aligned_msg_size));
     std::span<std::byte> const msg =
-        std::as_writable_bytes(blocks).subspan(0, msg_size);
+        std::as_writable_bytes(msg_blocks).subspan(0, msg_size);
     std::invoke(std::forward<Callback>(callback), msg);
 
     write_commited_header(push_to, msg_size);
@@ -221,9 +220,13 @@ class mpsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
       }
 
       if (_msg_size == padding_header_msg_size()) {
-        _pop_from = _pop_from + postfix;
+        index_type const padding_from = _pop_from;
+        _pop_from                     = _pop_from + postfix;
         if (!read_committed_msg_size(_pop_from, _msg_size)) {
           return {false, 0, 0};
+        }
+        if (postfix >= header_size()) {
+          header_seqnum(padding_from).store(0, std::memory_order::relaxed);
         }
       }
 
@@ -234,16 +237,19 @@ class mpsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
       return 0;
     }
 
-    std::span<index_type> const blocks(
-        at(pop_from), static_cast<index_type>(
-                          swiss::align_up(msg_size, alignof(index_type))));
+    auto const aligned_msg_size =
+        static_cast<index_type>(swiss::align_up(msg_size, alignof(index_type)));
+    std::span<index_type> const msg_blocks(at(pop_from),
+                                           blocks(aligned_msg_size));
     std::span<std::byte> const msg =
-        std::as_writable_bytes(blocks).subspan(0, msg_size);
+        std::as_writable_bytes(msg_blocks).subspan(0, msg_size);
     std::invoke(std::forward<Callback>(callback), msg);
 
-    pop_from_.store(pop_from + static_cast<index_type>(swiss::align_up(
-                                   msg_size, alignof(index_type))),
-                    std::memory_order::relaxed);
+    std::memset(msg.data(), 0, msg.size());
+    auto const header_from = static_cast<index_type>(pop_from - header_size());
+    header_msg_size(header_from) = 0;
+    header_seqnum(header_from).store(0, std::memory_order::relaxed);
+    pop_from_.store(pop_from + aligned_msg_size, std::memory_order::release);
 
     wait_policy_.notify_not_full();
 
@@ -431,7 +437,9 @@ class mpsc_msgbuf : public swiss::non_copyable, public swiss::non_movable {
   [[nodiscard]] constexpr auto free(index_type push_to,
                                     index_type pop_from) const noexcept
       -> index_type {
-    return *capacity_ - size_bytes(push_to, pop_from);
+    index_type const size = size_bytes(push_to, pop_from);
+    return (size <= *capacity_) ? static_cast<index_type>(*capacity_ - size)
+                                : 0;
   }
 
   [[nodiscard]] constexpr auto slot(index_type index) const noexcept

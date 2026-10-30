@@ -26,6 +26,7 @@ namespace flow {
  * @note Implemented as a list of contiguous chunks with a free-list for chunk
  * recycling for chunk recycling to achieve zero-allocation steady-state
  * @note ChunkCapacity must be a power of 2 for efficient division
+ * @warning Inserting more elements than the Index allows is UB
  */
 template <typename Value, std::unsigned_integral Index = std::size_t,
           // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
@@ -138,13 +139,13 @@ class unbounded_spsc_queue : public swiss::non_copyable,
       allocator_type allocator     = allocator_type(),
       wait_policy_type wait_policy = wait_policy_type())
     requires(ChunkCapacity != swiss::kDynamicExtent<index_type>)
-      : allocator_(std::move(allocator)),
-        wait_policy_(std::move(wait_policy)),
-        writer_{.chunk = allocate_chunk()},
-        reader_{.chunk = writer_.chunk} {
+      : allocator_(std::move(allocator)), wait_policy_(std::move(wait_policy)) {
     static_assert(
         valid(ChunkCapacity),
         "unbounded_spsc_queue::unbounded_spsc_queue(): invalid chunk capacity");
+
+    writer_.chunk = allocate_chunk();
+    reader_.chunk = writer_.chunk;
   }
 
   explicit constexpr unbounded_spsc_queue(
@@ -281,8 +282,9 @@ class unbounded_spsc_queue : public swiss::non_copyable,
   }
 
   constexpr void shrink_to_fit() noexcept {
-    deallocate_chain(writer_.freelist);
-    deallocate_chain(shared_.freelist.load(std::memory_order::relaxed));
+    deallocate_chain(std::exchange(writer_.freelist, nullptr));
+    deallocate_chain(
+        shared_.freelist.exchange(nullptr, std::memory_order::acquire));
   }
 
   [[nodiscard]] constexpr auto get_allocator() const

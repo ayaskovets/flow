@@ -161,7 +161,7 @@ class unsafe_stream : public swiss::non_copyable, public swiss::non_movable {
   template <typename Callback>
     requires(is_void_callback<Callback> && is_nothrow_callback<Callback>)
   constexpr void pop(std::size_t exact_size, Callback && callback) {
-    if (exact_size > std::min(size(), *capacity_)) {
+    if (exact_size > size()) {
       throw std::runtime_error("unsafe_stream::pop(): not enough data");
     }
     std::ignore = try_pop(std::forward<Callback>(callback), exact_size);

@@ -121,7 +121,7 @@ class locked_ring_buffer : public swiss::non_copyable,
   constexpr auto try_pop(auto & value) -> bool {
     return try_pop([&](pointer front) -> void {
       swiss::scope_exit const scope_exit(
-          [&]() noexcept -> void { std::destroy_at(at(pop_from_)); });
+          [&]() noexcept -> void { std::destroy_at(front); });
       value = std::move(*front);
     });
   }
@@ -149,7 +149,7 @@ class locked_ring_buffer : public swiss::non_copyable,
   constexpr auto pop(std::stop_token const & stop_token, auto & value) -> bool {
     return pop(stop_token, [&](pointer front) -> void {
       swiss::scope_exit const scope_exit(
-          [&]() noexcept -> void { std::destroy_at(at(pop_from_)); });
+          [&]() noexcept -> void { std::destroy_at(front); });
       value = std::move(*front);
     });
   }
@@ -193,6 +193,7 @@ class locked_ring_buffer : public swiss::non_copyable,
       std::destroy_at(at(pop_from_));
       ++pop_from_;
     }
+    push_available_cv_.notify_all();
   }
 
   [[nodiscard]] constexpr auto get_allocator() const
@@ -273,10 +274,13 @@ class locked_ring_buffer : public swiss::non_copyable,
       return false;
     }
 
+    swiss::scope_exit const scope_exit([&]() noexcept -> void {
+      ++pop_from_;
+      push_available_cv_.notify_one();
+    });
+
     std::invoke(std::forward<Callback>(callback), at(pop_from_));
 
-    ++pop_from_;
-    push_available_cv_.notify_one();
     return true;
   }
 
@@ -309,10 +313,13 @@ class locked_ring_buffer : public swiss::non_copyable,
       return false;
     }
 
+    swiss::scope_exit const scope_exit([&]() noexcept -> void {
+      ++pop_from_;
+      push_available_cv_.notify_one();
+    });
+
     std::invoke(std::forward<Callback>(callback), at(pop_from_));
 
-    ++pop_from_;
-    push_available_cv_.notify_one();
     return true;
   }
 };
